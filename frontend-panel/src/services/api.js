@@ -37,6 +37,7 @@ const mockRoutes = {
   'POST /ventas': (body) => mockApi.createVenta(body),
   'GET /dashboard': (params) => mockApi.getDashboard(params),
   'GET /comisiones': (params) => mockApi.getComisiones(params),
+  'GET /ventas': (params) => mockApi.getVentas(params),
 }
 
 async function request(method, url, data) {
@@ -64,6 +65,8 @@ export const catalogApi = {
 
 export const ventasApi = {
   createVenta: (payload) => request('POST', '/ventas', payload),
+  // Historial con paginación (Laravel-style). params: { periodo, sede_id?, empleado_id?, tipo?, page?, per_page? }
+  getHistorial: (params) => request('GET', '/ventas', params),
 }
 
 export const dashboardApi = {

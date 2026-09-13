@@ -271,6 +271,55 @@ async function getComisiones({ periodo = 'mes', sede_id } = {}) {
   return filtrada.sort((a, b) => b.total - a.total)
 }
 
+// Historial de ventas filtrable (sede de venta, vendedor, tipo, periodo).
+// Devuelve paginación con la MISMA forma que Laravel (data + meta), para
+// facilitar la conexión al backend real.
+async function getVentas(params = {}) {
+  await delay()
+
+  const {
+    periodo = 'mes',
+    sede_id,
+    empleado_id,
+    tipo,
+    page = 1,
+    per_page = 10,
+  } = params
+
+  const inicio = inicioPeriodo(periodo)
+  let filtradas = ventas.filter((v) => new Date(v.fecha) >= inicio)
+  if (sede_id) filtradas = filtradas.filter((v) => v.sede_venta_id === Number(sede_id))
+  if (empleado_id) filtradas = filtradas.filter((v) => v.empleado_id === Number(empleado_id))
+  if (tipo) filtradas = filtradas.filter((v) => v.tipo === tipo)
+
+  const total = filtradas.length
+  const last_page = Math.max(1, Math.ceil(total / per_page))
+  const current_page = Math.min(Math.max(1, Number(page)), last_page)
+  const start = (current_page - 1) * per_page
+  const totalVendido = filtradas.reduce((sum, v) => sum + v.total, 0)
+
+  const data = filtradas.slice(start, start + per_page).map((v) => {
+    const e = empleados.find((em) => em.id === v.empleado_id)
+    const sede = sedes.find((s) => s.id === v.sede_venta_id)
+    const factura = facturas.find((f) => f.venta_id === v.id)
+    return {
+      id: v.id,
+      factura: factura ? factura.numero_interno : null,
+      fecha: v.fecha,
+      empleado: { id: v.empleado_id, nombre: e ? e.nombre : '—' },
+      sede_venta: sede ? sede.nombre : '—',
+      tipo: v.tipo,
+      total: v.total,
+    }
+  })
+
+  return {
+    data,
+    meta: { total, per_page, current_page, last_page },
+    resumen: { totalVendido },
+  }
+}
+
 export default {
   login,
   getSedes,
@@ -279,4 +328,5 @@ export default {
   createVenta,
   getDashboard,
   getComisiones,
+  getVentas,
 }
