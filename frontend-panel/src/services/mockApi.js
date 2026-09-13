@@ -228,6 +228,49 @@ async function getDashboard({ periodo = 'mes' } = {}) {
   }
 }
 
+// Vista informativa de ventas por vendedor (NO calcula comisiones: solo muestra
+// cuánto vendió cada empleado en el periodo, con el detalle de sus ventas).
+async function getComisiones({ periodo = 'mes', sede_id } = {}) {
+  await delay()
+
+  const inicio = inicioPeriodo(periodo)
+  const filtradas = ventas.filter((v) => new Date(v.fecha) >= inicio)
+
+  const porEmpleado = {}
+  filtradas.forEach((v) => {
+    if (!porEmpleado[v.empleado_id]) {
+      porEmpleado[v.empleado_id] = { total: 0, numVentas: 0, ventas: [] }
+    }
+    porEmpleado[v.empleado_id].total += v.total
+    porEmpleado[v.empleado_id].numVentas += 1
+    const factura = facturas.find((f) => f.venta_id === v.id)
+    porEmpleado[v.empleado_id].ventas.push({
+      venta_id: v.id,
+      fecha: v.fecha,
+      sede_venta_id: v.sede_venta_id,
+      tipo: v.tipo,
+      total: v.total,
+      factura: factura ? factura.numero_interno : null,
+    })
+  })
+
+  const lista = Object.entries(porEmpleado).map(([empleado_id, stats]) => {
+    const e = empleados.find((em) => em.id === Number(empleado_id))
+    const sede = sedes.find((s) => s.id === e?.sede_id)
+    return {
+      empleado_id: Number(empleado_id),
+      nombre: e ? e.nombre : `Empleado ${empleado_id}`,
+      sede_id: e ? e.sede_id : null,
+      sede: sede ? sede.nombre : null,
+      ...stats,
+    }
+  })
+
+  // Filtro opcional por la sede del VENDEDOR (no por la sede de la venta)
+  const filtrada = sede_id ? lista.filter((l) => l.sede_id === Number(sede_id)) : lista
+  return filtrada.sort((a, b) => b.total - a.total)
+}
+
 export default {
   login,
   getSedes,
@@ -235,4 +278,5 @@ export default {
   getInventario,
   createVenta,
   getDashboard,
+  getComisiones,
 }

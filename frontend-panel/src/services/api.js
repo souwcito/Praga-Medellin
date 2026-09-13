@@ -36,6 +36,7 @@ const mockRoutes = {
   'GET /inventario': (params) => mockApi.getInventario(params),
   'POST /ventas': (body) => mockApi.createVenta(body),
   'GET /dashboard': (params) => mockApi.getDashboard(params),
+  'GET /comisiones': (params) => mockApi.getComisiones(params),
 }
 
 async function request(method, url, data) {
@@ -70,9 +71,16 @@ export const dashboardApi = {
   getResumen: (periodo) => request('GET', '/dashboard', { periodo }),
 }
 
+export const comisionesApi = {
+  // Ventas por vendedor (informativo, sin cálculo de comisión).
+  // params: { periodo, sede_id? }
+  getResumen: (params) => request('GET', '/comisiones', params),
+}
+
 export default {
   authApi,
   catalogApi,
   ventasApi,
   dashboardApi,
+  comisionesApi,
 }

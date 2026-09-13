@@ -152,3 +152,9 @@ export const AlertIcon = (p) => (
     <path d="M12 17h.01" />
   </Icon>
 )
+
+export const ChevronDownIcon = (p) => (
+  <Icon {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+)

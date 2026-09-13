@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { dashboardApi } from '../services/api'
 import { AlertIcon } from '../components/icons'
+import PeriodFilter from '../components/PeriodFilter'
 
 const formato = (n) =>
   new Intl.NumberFormat('es-CO', {
@@ -29,12 +30,6 @@ const tooltipStyle = {
   boxShadow: '0 8px 24px -12px rgba(10,10,10,0.18)',
   padding: '8px 12px',
 }
-
-const PERIODOS = [
-  { value: 'dia', label: 'Día' },
-  { value: 'semana', label: 'Semana' },
-  { value: 'mes', label: 'Mes' },
-]
 
 // Tarjeta base reutilizable (mismo estilo de marca en todo el dashboard)
 function Card({ title, subtitle, delay = 0, children, className = '' }) {
@@ -119,22 +114,7 @@ export default function Dashboard() {
             Resumen de ventas de las 4 sedes y métricas del periodo.
           </p>
         </div>
-        <div className="inline-flex rounded-lg border border-line bg-surface-2 p-0.5">
-          {PERIODOS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => cambiarPeriodo(p.value)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
-                periodo === p.value
-                  ? 'bg-ink text-white shadow-sm'
-                  : 'text-ink-2 hover:text-ink'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <PeriodFilter value={periodo} onChange={cambiarPeriodo} />
       </div>
 
       {/* KPIs */}
