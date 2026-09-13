@@ -1,0 +1,9 @@
+backend/vendor/
+backend/.env
+frontend-tienda/node_modules/
+frontend-tienda/dist/
+frontend-tienda/.env
+frontend-panel/node_modules/
+frontend-panel/dist/
+frontend-panel/.env
+.DS_Store
