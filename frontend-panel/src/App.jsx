@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
-import PlaceholderPage from './pages/PlaceholderPage'
 
 // Carga diferida (code-splitting): el Login queda liviano y las pantallas
 // pesadas (Dashboard con Recharts, POS) se descargan solo al entrar.
@@ -12,6 +11,7 @@ const Pos = lazy(() => import('./pages/Pos'))
 const Comisiones = lazy(() => import('./pages/Comisiones'))
 const Ventas = lazy(() => import('./pages/Ventas'))
 const Inventario = lazy(() => import('./pages/Inventario'))
+const Productos = lazy(() => import('./pages/Productos'))
 
 function PageFallback() {
   return (
@@ -41,10 +41,7 @@ export default function App() {
               path="/productos"
               element={
                 <ProtectedRoute requiresAdmin>
-                  <PlaceholderPage
-                    title="Productos"
-                    description="CRUD de productos, solo administradores."
-                  />
+                  <Productos />
                 </ProtectedRoute>
               }
             />

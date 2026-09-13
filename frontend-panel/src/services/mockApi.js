@@ -9,6 +9,7 @@ import {
   inventario,
   productos,
   sedes,
+  subcategorias,
   ventas,
 } from './mockData'
 
@@ -326,6 +327,98 @@ async function getCategorias() {
   return categorias
 }
 
+async function getSubcategorias() {
+  await delay()
+  return subcategorias
+}
+
+// Listado de productos con filtros opcionales por categoría/subcategoría.
+// Incluye el stock total sumando las 4 sedes (información útil para el CRUD).
+async function getProductos({ categoria_id, subcategoria_id } = {}) {
+  await delay()
+  let lista = productos
+  if (categoria_id) lista = lista.filter((p) => p.categoria_id === Number(categoria_id))
+  if (subcategoria_id) lista = lista.filter((p) => p.subcategoria_id === Number(subcategoria_id))
+  return lista.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    descripcion: p.descripcion,
+    precio: p.precio,
+    sku: p.sku,
+    codigo_barras: p.codigo_barras,
+    categoria_id: p.categoria_id,
+    categoria: categorias.find((c) => c.id === p.categoria_id)?.nombre || null,
+    subcategoria_id: p.subcategoria_id,
+    subcategoria: subcategorias.find((s) => s.id === p.subcategoria_id)?.nombre || null,
+    imagen_url: p.imagen_url,
+    stock_total: inventario
+      .filter((i) => i.producto_id === p.id)
+      .reduce((sum, i) => sum + i.cantidad, 0),
+  }))
+}
+
+// Crea un producto (SKU y código de barras únicos) e inicializa su stock en 0 en las 4 sedes.
+async function createProducto(body) {
+  await delay()
+  const { nombre, descripcion, precio, sku, codigo_barras, categoria_id, subcategoria_id, imagen_url } = body
+  if (!nombre || !precio) throw new Error('Nombre y precio son obligatorios')
+  if (sku && productos.some((p) => p.sku === sku)) throw new Error('El SKU ya existe')
+  if (codigo_barras && productos.some((p) => p.codigo_barras === codigo_barras)) {
+    throw new Error('El código de barras ya existe')
+  }
+
+  const nuevo = {
+    id: Math.max(...productos.map((p) => p.id), 0) + 1,
+    nombre,
+    descripcion: descripcion || '',
+    precio: Number(precio),
+    sku: sku || null,
+    codigo_barras: codigo_barras || null,
+    categoria_id: Number(categoria_id) || null,
+    subcategoria_id: Number(subcategoria_id) || null,
+    imagen_url: imagen_url || '/images/products/camiseta.svg',
+  }
+  productos.push(nuevo)
+  sedes.forEach((s) => inventario.push({ producto_id: nuevo.id, sede_id: s.id, cantidad: 0 }))
+  return nuevo
+}
+
+async function updateProducto(id, body) {
+  await delay()
+  const p = productos.find((pr) => pr.id === Number(id))
+  if (!p) throw new Error('Producto no encontrado')
+  const { nombre, descripcion, precio, sku, codigo_barras, categoria_id, subcategoria_id, imagen_url } = body
+  if (sku && productos.some((pr) => pr.sku === sku && pr.id !== p.id)) {
+    throw new Error('El SKU ya existe en otro producto')
+  }
+  if (codigo_barras && productos.some((pr) => pr.codigo_barras === codigo_barras && pr.id !== p.id)) {
+    throw new Error('El código de barras ya existe en otro producto')
+  }
+  Object.assign(p, {
+    nombre: nombre ?? p.nombre,
+    descripcion: descripcion ?? p.descripcion,
+    precio: precio !== undefined ? Number(precio) : p.precio,
+    sku: sku ?? p.sku,
+    codigo_barras: codigo_barras ?? p.codigo_barras,
+    categoria_id: categoria_id !== undefined ? Number(categoria_id) : p.categoria_id,
+    subcategoria_id: subcategoria_id !== undefined ? Number(subcategoria_id) : p.subcategoria_id,
+    imagen_url: imagen_url ?? p.imagen_url,
+  })
+  return p
+}
+
+async function deleteProducto(id) {
+  await delay()
+  const idx = productos.findIndex((pr) => pr.id === Number(id))
+  if (idx === -1) throw new Error('Producto no encontrado')
+  productos.splice(idx, 1)
+  // Retira también su stock de las 4 sedes
+  for (let i = inventario.length - 1; i >= 0; i -= 1) {
+    if (inventario[i].producto_id === Number(id)) inventario.splice(i, 1)
+  }
+  return { ok: true, id: Number(id) }
+}
+
 // Matriz completa de stock: cada producto con su cantidad por las 4 sedes.
 // Incluye los productos con 0 unidades (a diferencia de getInventario del POS).
 async function getInventarioCompleto() {
@@ -388,6 +481,11 @@ export default {
   getComisiones,
   getVentas,
   getCategorias,
+  getSubcategorias,
+  getProductos,
+  createProducto,
+  updateProducto,
+  deleteProducto,
   getInventarioCompleto,
   ajustarInventario,
 }

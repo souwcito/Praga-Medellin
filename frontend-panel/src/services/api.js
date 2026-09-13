@@ -39,15 +39,29 @@ const mockRoutes = {
   'GET /comisiones': (params) => mockApi.getComisiones(params),
   'GET /ventas': (params) => mockApi.getVentas(params),
   'GET /categorias': () => mockApi.getCategorias(),
+  'GET /subcategorias': () => mockApi.getSubcategorias(),
+  'GET /productos': (params) => mockApi.getProductos(params),
+  'POST /productos': (body) => mockApi.createProducto(body),
+  'PUT /productos/:id': (body, url) => mockApi.updateProducto(url.split('/').pop(), body),
+  'DELETE /productos/:id': (url) => mockApi.deleteProducto(url.split('/').pop()),
   'GET /inventario/completo': () => mockApi.getInventarioCompleto(),
   'POST /inventario/ajustes': (body) => mockApi.ajustarInventario(body),
 }
 
+// Busca el handler mock: primero coincidencia exacta; luego con :id dinámico
+// (p. ej. PUT /productos/5 -> 'PUT /productos/:id').
+function mockHandler(method, url) {
+  const exact = mockRoutes[`${method} ${url}`]
+  if (exact) return exact
+  const patron = url.replace(/\/\d+$/, '/:id')
+  return mockRoutes[`${method} ${patron}`]
+}
+
 async function request(method, url, data) {
   if (USE_MOCK) {
-    const handler = mockRoutes[`${method} ${url}`]
+    const handler = mockHandler(method, url)
     if (!handler) throw new Error(`[mock] Endpoint no implementado: ${method} ${url}`)
-    return handler(data)
+    return handler(data, url)
   }
   if (method === 'GET') return http.get(url, { params: data })
   return http.request({ method, url, data })
@@ -65,8 +79,16 @@ export const catalogApi = {
   // Stock disponible (>0) de una sede: { sede_id }
   getInventario: (sedeId) => request('GET', '/inventario', { sede_id: sedeId }),
   getCategorias: () => request('GET', '/categorias'),
+  getSubcategorias: () => request('GET', '/subcategorias'),
   // Matriz completa de stock por producto y sede (incluye 0)
   getInventarioCompleto: () => request('GET', '/inventario/completo'),
+}
+
+export const productosApi = {
+  list: (params) => request('GET', '/productos', params),
+  create: (payload) => request('POST', '/productos', payload),
+  update: (id, payload) => request('PUT', `/productos/${id}`, payload),
+  remove: (id) => request('DELETE', `/productos/${id}`),
 }
 
 export const inventarioApi = {
@@ -94,6 +116,8 @@ export const comisionesApi = {
 export default {
   authApi,
   catalogApi,
+  productosApi,
+  inventarioApi,
   ventasApi,
   dashboardApi,
   comisionesApi,
