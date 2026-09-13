@@ -38,6 +38,9 @@ const mockRoutes = {
   'GET /dashboard': (params) => mockApi.getDashboard(params),
   'GET /comisiones': (params) => mockApi.getComisiones(params),
   'GET /ventas': (params) => mockApi.getVentas(params),
+  'GET /categorias': () => mockApi.getCategorias(),
+  'GET /inventario/completo': () => mockApi.getInventarioCompleto(),
+  'POST /inventario/ajustes': (body) => mockApi.ajustarInventario(body),
 }
 
 async function request(method, url, data) {
@@ -61,6 +64,14 @@ export const catalogApi = {
   getEmpleados: () => request('GET', '/empleados'),
   // Stock disponible (>0) de una sede: { sede_id }
   getInventario: (sedeId) => request('GET', '/inventario', { sede_id: sedeId }),
+  getCategorias: () => request('GET', '/categorias'),
+  // Matriz completa de stock por producto y sede (incluye 0)
+  getInventarioCompleto: () => request('GET', '/inventario/completo'),
+}
+
+export const inventarioApi = {
+  // Ajuste manual: { producto_id, sede_id, tipo: entrada|salida, cantidad, motivo? }
+  ajustar: (payload) => request('POST', '/inventario/ajustes', payload),
 }
 
 export const ventasApi = {

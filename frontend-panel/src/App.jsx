@@ -11,6 +11,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Pos = lazy(() => import('./pages/Pos'))
 const Comisiones = lazy(() => import('./pages/Comisiones'))
 const Ventas = lazy(() => import('./pages/Ventas'))
+const Inventario = lazy(() => import('./pages/Inventario'))
 
 function PageFallback() {
   return (
@@ -47,7 +48,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/inventario" element={<PlaceholderPage title="Inventario" />} />
+            <Route path="/inventario" element={<Inventario />} />
             <Route path="/ventas" element={<Ventas />} />
             <Route path="/comisiones" element={<Comisiones />} />
           </Route>

@@ -2,6 +2,7 @@
 // Se usa solo cuando VITE_USE_MOCK=true (ver services/api.js).
 
 import {
+  categorias,
   detalleVentas,
   empleados,
   facturas,
@@ -320,6 +321,63 @@ async function getVentas(params = {}) {
   }
 }
 
+async function getCategorias() {
+  await delay()
+  return categorias
+}
+
+// Matriz completa de stock: cada producto con su cantidad por las 4 sedes.
+// Incluye los productos con 0 unidades (a diferencia de getInventario del POS).
+async function getInventarioCompleto() {
+  await delay()
+  return productos.map((p) => {
+    const stock = sedes.map((s) => {
+      const reg = inventario.find((i) => i.producto_id === p.id && i.sede_id === s.id)
+      return { sede_id: s.id, sede: s.nombre, cantidad: reg ? reg.cantidad : 0 }
+    })
+    return {
+      producto_id: p.id,
+      nombre: p.nombre,
+      sku: p.sku,
+      codigo_barras: p.codigo_barras,
+      categoria_id: p.categoria_id,
+      subcategoria_id: p.subcategoria_id,
+      imagen_url: p.imagen_url,
+      stock,
+    }
+  })
+}
+
+// Ajuste manual de stock por sede: entrada (suma) o salida (resta).
+// La salida se valida para no dejar el stock en negativo.
+async function ajustarInventario({ producto_id, sede_id, tipo, cantidad, motivo }) {
+  await delay()
+
+  const qty = Number(cantidad)
+  if (!qty || qty <= 0) throw new Error('La cantidad debe ser mayor a cero')
+
+  const reg = inventario.find(
+    (i) => i.producto_id === Number(producto_id) && i.sede_id === Number(sede_id),
+  )
+  if (!reg) throw new Error('Registro de inventario no encontrado')
+
+  if (tipo === 'salida') {
+    if (reg.cantidad - qty < 0) throw new Error('La salida supera el stock disponible')
+    reg.cantidad -= qty
+  } else {
+    reg.cantidad += qty
+  }
+
+  return {
+    producto_id: reg.producto_id,
+    sede_id: reg.sede_id,
+    cantidad: reg.cantidad,
+    tipo,
+    cantidad_ajustada: qty,
+    motivo: motivo || null,
+  }
+}
+
 export default {
   login,
   getSedes,
@@ -329,4 +387,7 @@ export default {
   getDashboard,
   getComisiones,
   getVentas,
+  getCategorias,
+  getInventarioCompleto,
+  ajustarInventario,
 }
