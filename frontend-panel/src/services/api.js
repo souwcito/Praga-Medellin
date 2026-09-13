@@ -35,6 +35,7 @@ const mockRoutes = {
   'GET /empleados': () => mockApi.getEmpleados(),
   'GET /inventario': (params) => mockApi.getInventario(params),
   'POST /ventas': (body) => mockApi.createVenta(body),
+  'GET /dashboard': (params) => mockApi.getDashboard(params),
 }
 
 async function request(method, url, data) {
@@ -64,8 +65,14 @@ export const ventasApi = {
   createVenta: (payload) => request('POST', '/ventas', payload),
 }
 
+export const dashboardApi = {
+  // Resumen del dashboard filtrado por periodo: dia | semana | mes
+  getResumen: (periodo) => request('GET', '/dashboard', { periodo }),
+}
+
 export default {
   authApi,
   catalogApi,
   ventasApi,
+  dashboardApi,
 }

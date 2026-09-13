@@ -93,3 +93,80 @@ export const inventario = [
   { producto_id: 10, sede_id: 3, cantidad: 15 },
   { producto_id: 10, sede_id: 4, cantidad: 18 },
 ]
+
+// ---------------------------------------------------------------------------
+// Ventas simuladas de los últimos 30 días (deterministas: misma seed por carga).
+// Se generan con fechas relativas a "hoy" para que los filtros día/semana/mes
+// del Dashboard siempre tengan datos. El POS (mockApi) agrega ventas reales a
+// estas mismas listas, así que el Dashboard también las refleja.
+// ---------------------------------------------------------------------------
+
+let seed = 20260913
+function rand() {
+  seed = (seed * 9301 + 49297) % 233280
+  return seed / 233280
+}
+function randInt(min, max) {
+  return min + Math.floor(rand() * (max - min + 1))
+}
+function pick(arr) {
+  return arr[Math.floor(rand() * arr.length)]
+}
+
+export const ventas = []
+export const detalleVentas = []
+export const facturas = []
+
+let ventaId = 1
+let facturaNum = 1000
+
+for (let offset = 29; offset >= 0; offset -= 1) {
+  const fecha = new Date()
+  fecha.setHours(randInt(9, 20), randInt(0, 59), 0, 0)
+  fecha.setDate(fecha.getDate() - offset)
+
+  // Hoy y fines de semana generan más ventas
+  const esFinSemana = [0, 6].includes(fecha.getDay())
+  const base = offset === 0 ? 4 : esFinSemana ? 3 : 2
+  const numVentas = base + randInt(0, 2)
+
+  for (let i = 0; i < numVentas; i += 1) {
+    const empleado = pick(empleados)
+    // La sede de venta suele ser la del empleado; a veces otra (stock cruzado)
+    const sedeVenta = rand() < 0.8 ? empleado.sede_id : randInt(1, 4)
+
+    const numItems = randInt(1, 3)
+    const items = []
+    for (let j = 0; j < numItems; j += 1) {
+      const producto = pick(productos)
+      const cantidad = randInt(1, 2)
+      items.push({ producto_id: producto.id, cantidad, precio_unitario: producto.precio })
+    }
+    const total = items.reduce((sum, it) => sum + it.cantidad * it.precio_unitario, 0)
+
+    const venta = {
+      id: ventaId,
+      empleado_id: empleado.id,
+      sede_venta_id: sedeVenta,
+      tipo: rand() < 0.9 ? 'presencial' : 'virtual',
+      fecha: fecha.toISOString(),
+      total,
+    }
+    ventas.push(venta)
+    items.forEach((it) =>
+      detalleVentas.push({
+        venta_id: venta.id,
+        producto_id: it.producto_id,
+        sede_stock_id: sedeVenta,
+        cantidad: it.cantidad,
+        precio_unitario: it.precio_unitario,
+      }),
+    )
+    facturas.push({
+      venta_id: venta.id,
+      numero_interno: `FAC-${String(++facturaNum).padStart(4, '0')}`,
+      fecha: venta.fecha,
+    })
+    ventaId += 1
+  }
+}

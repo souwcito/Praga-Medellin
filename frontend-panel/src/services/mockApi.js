@@ -1,18 +1,23 @@
 // Simulador del backend: devuelve promesas con la misma forma que responderá la API real.
 // Se usa solo cuando VITE_USE_MOCK=true (ver services/api.js).
 
-import { empleados, inventario, productos, sedes } from './mockData'
+import {
+  detalleVentas,
+  empleados,
+  facturas,
+  inventario,
+  productos,
+  sedes,
+  ventas,
+} from './mockData'
 
 const delay = (ms = 350) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Cuenta única del panel. Los vendedores son datos para facturar, no cuentas de acceso.
 const ADMIN = { email: 'admin@praga.co', password: 'admin123', nombre: 'Administrador' }
 
-// Estado en memoria para simular el registro de ventas, detalle y facturas internas.
-const ventas = []
-const detalleVentas = []
-const facturas = []
-let facturaCounter = 1000
+// La numeración de factura continúa donde terminan las facturas simuladas.
+let facturaCounter = 1000 + facturas.length
 
 async function login({ email, password }) {
   await delay()
@@ -132,10 +137,102 @@ async function createVenta(body) {
   }
 }
 
+// Inicio del periodo según el filtro: dia=hoy, semana=últimos 7 días, mes=últimos 30.
+function inicioPeriodo(periodo) {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  const dias = periodo === 'dia' ? 0 : periodo === 'semana' ? 6 : 29
+  d.setDate(d.getDate() - dias)
+  return d
+}
+
+// Resumen del Dashboard: totales, desglose por sede, top productos y empleado destacado.
+async function getDashboard({ periodo = 'mes' } = {}) {
+  await delay()
+
+  const inicio = inicioPeriodo(periodo)
+  const filtradas = ventas.filter((v) => new Date(v.fecha) >= inicio)
+
+  const total = filtradas.reduce((sum, v) => sum + v.total, 0)
+  const numVentas = filtradas.length
+  const ticketPromedio = numVentas ? Math.round(total / numVentas) : 0
+
+  // Desglose por las 4 sedes
+  const totalPorSede = sedes.map((s) => ({
+    sede_id: s.id,
+    sede: s.nombre,
+    total: filtradas
+      .filter((v) => v.sede_venta_id === s.id)
+      .reduce((sum, v) => sum + v.total, 0),
+  }))
+
+  // Productos más vendidos por cantidad de unidades en el periodo
+  const conteo = {}
+  detalleVentas.forEach((d) => {
+    if (!filtradas.some((v) => v.id === d.venta_id)) return
+    conteo[d.producto_id] = (conteo[d.producto_id] || 0) + d.cantidad
+  })
+  const productosMasVendidos = Object.entries(conteo)
+    .map(([producto_id, cantidad]) => {
+      const p = productos.find((pr) => pr.id === Number(producto_id))
+      return { producto: p ? p.nombre : `Producto ${producto_id}`, cantidad }
+    })
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 5)
+
+  // Empleado con más ventas (por total) del periodo
+  const porEmpleado = {}
+  filtradas.forEach((v) => {
+    if (!porEmpleado[v.empleado_id]) porEmpleado[v.empleado_id] = { total: 0, numVentas: 0 }
+    porEmpleado[v.empleado_id].total += v.total
+    porEmpleado[v.empleado_id].numVentas += 1
+  })
+  const destacado = Object.entries(porEmpleado)
+    .map(([empleado_id, stats]) => {
+      const e = empleados.find((em) => em.id === Number(empleado_id))
+      const sede = sedes.find((s) => s.id === e?.sede_id)
+      return {
+        nombre: e ? e.nombre : `Empleado ${empleado_id}`,
+        sede: sede ? sede.nombre : null,
+        ...stats,
+      }
+    })
+    .sort((a, b) => b.total - a.total)[0]
+
+  // Tendencia de ventas por día (1, 7 o 15 días según el periodo)
+  const numDias = periodo === 'dia' ? 1 : periodo === 'semana' ? 7 : 15
+  const ventasPorDia = []
+  for (let i = numDias - 1; i >= 0; i -= 1) {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    d.setDate(d.getDate() - i)
+    const clave = d.toDateString()
+    const diaTotal = filtradas
+      .filter((v) => new Date(v.fecha).toDateString() === clave)
+      .reduce((sum, v) => sum + v.total, 0)
+    ventasPorDia.push({
+      fecha: d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }),
+      total: diaTotal,
+    })
+  }
+
+  return {
+    periodo,
+    total,
+    numVentas,
+    ticketPromedio,
+    totalPorSede,
+    productosMasVendidos,
+    empleadoDestacado: destacado || null,
+    ventasPorDia,
+  }
+}
+
 export default {
   login,
   getSedes,
   getEmpleados,
   getInventario,
   createVenta,
+  getDashboard,
 }
