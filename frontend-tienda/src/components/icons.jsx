@@ -72,6 +72,12 @@ export const ChevronDownIcon = (p) => (
   </Icon>
 )
 
+export const ZapIcon = (p) => (
+  <Icon {...p}>
+    <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+  </Icon>
+)
+
 export const PlusIcon = (p) => (
   <Icon {...p}>
     <path d="M5 12h14" />

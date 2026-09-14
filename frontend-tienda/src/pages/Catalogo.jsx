@@ -9,14 +9,14 @@ const inputCls =
   'w-full rounded-2xl border border-line bg-white py-3 pl-11 pr-4 text-sm placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
 
 export default function Catalogo() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const categoria = searchParams.get('categoria') || ''
   const subcategoria = searchParams.get('subcategoria') || ''
+  const q = searchParams.get('q') || ''
 
   const [categorias, setCategorias] = useState([])
   const [subcategorias, setSubcategorias] = useState([])
   const [productos, setProductos] = useState([])
-  const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -53,6 +53,14 @@ export default function Catalogo() {
   const categoriaActual = categorias.find((c) => c.id === Number(categoria))
   const subcategoriaActual = subcategorias.find((s) => s.id === Number(subcategoria))
 
+  // La búsqueda vive en la URL (q): escribir actualiza el enlace sin estado extra
+  function setQ(valor) {
+    const next = new URLSearchParams(searchParams)
+    if (valor) next.set('q', valor)
+    else next.delete('q')
+    setSearchParams(next, { replace: true })
+  }
+
   return (
     <>
       <Seo
@@ -67,7 +75,7 @@ export default function Catalogo() {
             {categoriaActual ? categoriaActual.nombre : 'Catálogo'}
           </h1>
           <p className="mt-2 text-sm text-ink-2">
-            {productos.length} {productos.length === 1 ? 'producto' : 'productos'}
+            {filtrados.length} {filtrados.length === 1 ? 'producto' : 'productos'}
             {subcategoriaActual ? ` · ${subcategoriaActual.nombre}` : ''}
           </p>
         </div>
@@ -94,7 +102,7 @@ export default function Catalogo() {
         {loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <div key={i} className="h-72 animate-pulse rounded-2xl border border-line bg-surface-2" />
+              <div key={i} className="h-80 animate-pulse rounded-2xl border border-line bg-surface-2" />
             ))}
           </div>
         ) : filtrados.length === 0 ? (

@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
 import logoPraga from '../assets/logo-praga.png'
+import SearchOverlay from './SearchOverlay'
 import { CartIcon, ChevronDownIcon, MenuIcon, SearchIcon, XIcon } from './icons'
 
 export default function Header() {
   const { count, abrirCarrito } = useCart()
   const navigate = useNavigate()
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [busquedaAbierta, setBusquedaAbierta] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [subcategorias, setSubcategorias] = useState([])
   const [expandida, setExpandida] = useState(null)
@@ -77,13 +79,14 @@ export default function Header() {
 
           {/* Acciones */}
           <div className="flex items-center gap-1">
-            <Link
-              to="/catalogo"
+            <button
+              type="button"
+              onClick={() => setBusquedaAbierta(true)}
               className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
               aria-label="Buscar productos"
             >
               <SearchIcon className="h-5 w-5" />
-            </Link>
+            </button>
 
             <button
               type="button"
@@ -144,13 +147,6 @@ export default function Header() {
                   className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
                 >
                   Inicio
-                </button>
-                <button
-                  type="button"
-                  onClick={() => irA('/catalogo')}
-                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
-                >
-                  Ver todo el catálogo
                 </button>
               </div>
 
@@ -225,6 +221,9 @@ export default function Header() {
           </div>
         </div>
       )}
+
+      {/* Buscador en vivo */}
+      {busquedaAbierta && <SearchOverlay cerrar={() => setBusquedaAbierta(false)} />}
     </header>
   )
 }
