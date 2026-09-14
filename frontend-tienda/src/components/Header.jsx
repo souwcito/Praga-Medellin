@@ -52,9 +52,9 @@ export default function Header() {
       </div>
 
       <div className="border-b border-line bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 md:h-20 lg:px-8">
-          {/* Menú hamburguesa + logo */}
-          <div className="flex items-center gap-2">
+<div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 md:h-20 lg:px-8">
+          {/* Menú hamburguesa (izquierda) */}
+          <div className="flex items-center">
             <button
               type="button"
               onClick={() => setMenuAbierto(true)}
@@ -63,21 +63,30 @@ export default function Header() {
             >
               <MenuIcon className="h-6 w-6" />
             </button>
-
-            <Link to="/" className="flex items-center gap-2.5" aria-label="Praga Medellín — inicio">
-              <img src={logoPraga} alt="Praga Medellín" className="h-10 w-10 rounded-full object-cover md:h-11 md:w-11" />
-              <span className="hidden sm:block">
-                <span className="block font-display text-lg font-semibold leading-none tracking-wide text-ink">
-                  PRAGA
-                </span>
-                <span className="block text-[10px] font-medium uppercase tracking-[0.3em] text-ink-2">
-                  Medellín
-                </span>
-              </span>
-            </Link>
           </div>
 
-          {/* Acciones */}
+          {/* Marca centrada: logo más grande + wordmark (header no crece) */}
+          <Link
+            to="/"
+            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-3"
+            aria-label="Praga Medellín — inicio"
+          >
+            <img
+              src={logoPraga}
+              alt="Praga Medellín"
+              className="h-12 w-12 rounded-full object-cover md:h-14 md:w-14"
+            />
+            <span className="hidden sm:block">
+              <span className="block font-display text-xl font-semibold leading-none tracking-wide text-ink">
+                PRAGA
+              </span>
+              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.3em] text-ink-2">
+                Medellín
+              </span>
+            </span>
+          </Link>
+
+          {/* Acciones (derecha) */}
           <div className="flex items-center gap-1">
             <button
               type="button"
