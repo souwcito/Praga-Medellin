@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
+import { useFavorites } from '../hooks/useFavorites'
 import logoPraga from '../assets/logo-praga.png'
 import SearchOverlay from './SearchOverlay'
-import { CartIcon, ChevronDownIcon, MenuIcon, SearchIcon, XIcon } from './icons'
+import { CartIcon, ChevronDownIcon, HeartIcon, MenuIcon, SearchIcon, XIcon } from './icons'
 
 export default function Header() {
   const { count, abrirCarrito } = useCart()
+  const { count: favCount } = useFavorites()
   const navigate = useNavigate()
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [busquedaAbierta, setBusquedaAbierta] = useState(false)
@@ -88,6 +90,19 @@ export default function Header() {
             >
               <SearchIcon className="h-5 w-5" />
             </button>
+
+            <Link
+              to="/favoritos"
+              className="relative flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+              aria-label={`Favoritos, ${favCount} artículos`}
+            >
+              <HeartIcon className="h-5 w-5" />
+              {favCount > 0 && (
+                <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ink px-1 text-[10px] font-bold text-white">
+                  {favCount}
+                </span>
+              )}
+            </Link>
 
             <button
               type="button"

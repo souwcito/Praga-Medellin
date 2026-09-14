@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { formato } from '../utils/formato'
 import { useCart } from '../hooks/useCart'
-import { CartIcon, CheckIcon, MinusIcon, PlusIcon, XIcon, ZapIcon } from './icons'
+import { useFavorites } from '../hooks/useFavorites'
+import { CartIcon, CheckIcon, HeartIcon, MinusIcon, PlusIcon, XIcon, ZapIcon } from './icons'
 
 // Tarjeta de producto del catálogo/portada.
 // Incluye dos acciones: "Agregar al carrito" y "Comprar ahora". Si el producto
@@ -10,11 +11,14 @@ import { CartIcon, CheckIcon, MinusIcon, PlusIcon, XIcon, ZapIcon } from './icon
 export default function ProductCard({ producto }) {
   const navigate = useNavigate()
   const { agregar, abrirCarrito } = useCart()
+  const { esFavorito, toggle } = useFavorites()
 
   const [modalAbierto, setModalAbierto] = useState(false)
   const [modo, setModo] = useState('agregar') // 'agregar' | 'comprar'
   const [talla, setTalla] = useState(null)
   const [cantidad, setCantidad] = useState(1)
+
+  const favorito = esFavorito(producto.id)
 
   const disponibles = producto.variantes.filter((v) => v.stock > 0)
   const tallas = disponibles.map((v) => v.talla).filter(Boolean)
@@ -47,19 +51,33 @@ export default function ProductCard({ producto }) {
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white transition-all duration-300 hover:-translate-y-1 hover:border-metal hover:shadow-[0_16px_40px_-16px_rgba(10,10,10,0.25)]">
       {/* Imagen */}
-      <Link to={`/producto/${producto.id}`} className="relative aspect-square overflow-hidden bg-surface-2">
-        <img
-          src={producto.imagen_url}
-          alt={producto.nombre}
-          loading="lazy"
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-        />
+      <div className="relative aspect-square overflow-hidden bg-surface-2">
+        <Link to={`/producto/${producto.id}`} className="absolute inset-0">
+          <img
+            src={producto.imagen_url}
+            alt={producto.nombre}
+            loading="lazy"
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          />
+        </Link>
         {producto.destacado && (
           <span className="absolute left-3 top-3 rounded-full bg-ink/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">
             Destacado
           </span>
         )}
-      </Link>
+        <button
+          type="button"
+          onClick={() => toggle(producto)}
+          aria-label={favorito ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+          className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 active:scale-90 ${
+            favorito
+              ? 'bg-ink text-white'
+              : 'bg-white/85 text-ink backdrop-blur hover:text-red-700'
+          }`}
+        >
+          <HeartIcon filled={favorito} className="h-4 w-4" />
+        </button>
+      </div>
 
       {/* Contenido */}
       <div className="flex flex-1 flex-col p-4">
