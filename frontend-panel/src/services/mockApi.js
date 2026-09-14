@@ -45,6 +45,18 @@ async function login({ email, password }) {
   throw new Error('Credenciales incorrectas')
 }
 
+// Subida de imagen simulada: convierte el archivo a data URL para mostrarla
+// de inmediato (en el backend real se sube a storage y se devuelve la URL).
+async function subirImagen(file) {
+  await delay(150)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve({ imagen_url: reader.result })
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'))
+    reader.readAsDataURL(file)
+  })
+}
+
 async function getSedes() {
   await delay()
   return sedes
@@ -556,6 +568,7 @@ async function getVentas(params = {}) {
 
 export default {
   login,
+  subirImagen,
   getSedes,
   getEmpleados,
   getCategorias,

@@ -96,6 +96,19 @@ export const inventarioApi = {
   ajustar: (payload) => request('POST', '/inventario/ajustes', payload),
 }
 
+export const imagenesApi = {
+  // Sube una imagen. En modo mock devuelve la imagen como data URL (se guarda en
+  // la sesión); en producción hace multipart POST al backend, que responde { imagen_url }.
+  subir: async (file) => {
+    if (USE_MOCK) return mockApi.subirImagen(file)
+    const formData = new FormData()
+    formData.append('imagen', file)
+    return http.post('/imagenes', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
 export const ventasApi = {
   createVenta: (payload) => request('POST', '/ventas', payload),
   // Historial con paginación (Laravel-style). params: { periodo, sede_id?, empleado_id?, tipo?, page?, per_page? }
@@ -118,6 +131,7 @@ export default {
   catalogApi,
   productosApi,
   inventarioApi,
+  imagenesApi,
   ventasApi,
   dashboardApi,
   comisionesApi,

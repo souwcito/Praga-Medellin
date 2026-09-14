@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { catalogApi, productosApi } from '../services/api'
 import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
+import ImageUpload from '../components/ImageUpload'
 import {
   AlertIcon,
   CheckIcon,
@@ -136,7 +137,7 @@ export default function Productos() {
   }
 
   function abrirCrear() {
-    setCampos({ ...CAMPOS_INICIALES, imagen_url: '/images/products/camiseta.svg' })
+    setCampos({ ...CAMPOS_INICIALES })
     setVariantesForm([])
     setForm({})
     setFormError(null)
@@ -601,26 +602,13 @@ export default function Productos() {
               )}
 
               <div>
-                <label htmlFor="p-imagen" className="mb-1.5 block text-sm font-medium text-ink">
-                  URL de la imagen
+                <label className="mb-1.5 block text-sm font-medium text-ink">
+                  Imagen del producto
                 </label>
-                <div className="flex items-center gap-3">
-                  {campos.imagen_url && (
-                    <img
-                      src={campos.imagen_url}
-                      alt="Vista previa"
-                      className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
-                    />
-                  )}
-                  <input
-                    id="p-imagen"
-                    type="text"
-                    value={campos.imagen_url}
-                    onChange={(e) => setCampo('imagen_url', e.target.value)}
-                    placeholder="/images/products/camiseta.svg"
-                    className={inputCls}
-                  />
-                </div>
+                <ImageUpload
+                  value={campos.imagen_url}
+                  onChange={(url) => setCampo('imagen_url', url)}
+                />
               </div>
             </div>
 
