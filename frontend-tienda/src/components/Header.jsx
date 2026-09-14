@@ -74,7 +74,7 @@ export default function Header() {
             <img
               src={logoPraga}
               alt="Praga Medellín"
-              className="h-14 w-14 rounded-full object-cover md:h-16 md:w-16"
+              className="h-16 w-16 rounded-full object-cover md:h-20 md:w-20"
             />
           </Link>
 
