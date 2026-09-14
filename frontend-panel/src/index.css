@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Poppins es la tipografía PRINCIPAL (texto y títulos); Inter se usa como
+     soporte/fallback y para textos secundarios cuando conviene. */
+  --font-sans: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Poppins', 'Inter', sans-serif;
 
   /* Identidad Praga Medellín — solo negro, blanco y gris */
