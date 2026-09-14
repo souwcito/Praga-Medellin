@@ -14,10 +14,14 @@ function leerFavoritos() {
 
 export function FavoritesProvider({ children }) {
   const [favoritos, setFavoritos] = useState(leerFavoritos)
+  const [drawerAbierto, setDrawerAbierto] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(favoritos))
   }, [favoritos])
+
+  const abrirDrawer = useCallback(() => setDrawerAbierto(true), [])
+  const cerrarDrawer = useCallback(() => setDrawerAbierto(false), [])
 
   const esFavorito = useCallback(
     (id) => favoritos.some((f) => f.id === Number(id)),
@@ -38,8 +42,17 @@ export function FavoritesProvider({ children }) {
   )
 
   const value = useMemo(
-    () => ({ favoritos, esFavorito, toggle, quitar, count: favoritos.length }),
-    [favoritos, esFavorito, toggle, quitar],
+    () => ({
+      favoritos,
+      esFavorito,
+      toggle,
+      quitar,
+      count: favoritos.length,
+      drawerAbierto,
+      abrirDrawer,
+      cerrarDrawer,
+    }),
+    [favoritos, esFavorito, toggle, quitar, drawerAbierto, abrirDrawer, cerrarDrawer],
   )
 
   return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>

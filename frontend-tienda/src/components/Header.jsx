@@ -9,7 +9,7 @@ import { CartIcon, ChevronDownIcon, HeartIcon, MenuIcon, SearchIcon, XIcon } fro
 
 export default function Header() {
   const { count, abrirCarrito } = useCart()
-  const { count: favCount } = useFavorites()
+  const { count: favCount, abrirDrawer } = useFavorites()
   const navigate = useNavigate()
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [busquedaAbierta, setBusquedaAbierta] = useState(false)
@@ -91,10 +91,11 @@ export default function Header() {
               <SearchIcon className="h-5 w-5" />
             </button>
 
-            <Link
-              to="/favoritos"
+            <button
+              type="button"
+              onClick={abrirDrawer}
               className="relative flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-              aria-label={`Favoritos, ${favCount} artículos`}
+              aria-label={`Abrir favoritos, ${favCount} artículos`}
             >
               <HeartIcon className="h-5 w-5" />
               {favCount > 0 && (
@@ -102,7 +103,7 @@ export default function Header() {
                   {favCount}
                 </span>
               )}
-            </Link>
+            </button>
 
             <button
               type="button"

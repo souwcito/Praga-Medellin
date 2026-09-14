@@ -10,7 +10,6 @@ const Catalogo = lazy(() => import('./pages/Catalogo'))
 const Producto = lazy(() => import('./pages/Producto'))
 const Carrito = lazy(() => import('./pages/Carrito'))
 const Checkout = lazy(() => import('./pages/Checkout'))
-const Favoritos = lazy(() => import('./pages/Favoritos'))
 
 function PageFallback() {
   return (
@@ -33,7 +32,6 @@ export default function App() {
                 <Route path="/producto/:id" element={<Producto />} />
                 <Route path="/carrito" element={<Carrito />} />
                 <Route path="/checkout" element={<Checkout />} />
-                <Route path="/favoritos" element={<Favoritos />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
