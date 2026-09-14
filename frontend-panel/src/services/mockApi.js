@@ -1,5 +1,8 @@
 // Simulador del backend: devuelve promesas con la misma forma que responderá la API real.
 // Se usa solo cuando VITE_USE_MOCK=true (ver services/api.js).
+//
+// El inventario y las ventas ahora se manejan por VARIANTE (producto + talla),
+// cada una con su propio código de barras único.
 
 import {
   categorias,
@@ -10,16 +13,26 @@ import {
   productos,
   sedes,
   subcategorias,
+  tallasPara,
+  variantes,
   ventas,
 } from './mockData'
 
 const delay = (ms = 350) => new Promise((resolve) => setTimeout(resolve, ms))
 
-// Cuenta única del panel. Los vendedores son datos para facturar, no cuentas de acceso.
 const ADMIN = { email: 'admin@praga.co', password: 'admin123', nombre: 'Administrador' }
 
-// La numeración de factura continúa donde terminan las facturas simuladas.
 let facturaCounter = 1000 + facturas.length
+let _barraSeq = variantes.reduce((m, v) => Math.max(m, Number(v.codigo_barras) || 0), 0)
+
+function siguienteBarra() {
+  _barraSeq += 1
+  return String(_barraSeq)
+}
+
+function nextVarianteId() {
+  return Math.max(...variantes.map((v) => v.id), 0) + 1
+}
 
 async function login({ email, password }) {
   await delay()
@@ -39,7 +52,6 @@ async function getSedes() {
 
 async function getEmpleados() {
   await delay()
-  // Sin email/password: solo lo que necesita el POS y las comisiones
   return empleados.map((e) => {
     const sede = sedes.find((s) => s.id === e.sede_id)
     return {
@@ -52,28 +64,254 @@ async function getEmpleados() {
   })
 }
 
-// Productos con stock > 0 en la sede elegida: el POS solo vende stock de esa sede.
+async function getCategorias() {
+  await delay()
+  return categorias
+}
+
+async function getSubcategorias() {
+  await delay()
+  return subcategorias
+}
+
+// Stock disponible (>0) de una sede, a nivel de VARIANTE: el POS vende la
+// unidad exacta (producto + talla) que está físicamente en esa sede.
 async function getInventario({ sede_id }) {
   await delay()
   return inventario
     .filter((i) => i.sede_id === Number(sede_id) && i.cantidad > 0)
     .map((i) => {
-      const p = productos.find((pr) => pr.id === i.producto_id)
+      const v = variantes.find((x) => x.id === i.variante_id)
+      const p = productos.find((pr) => pr.id === v.producto_id)
       return {
+        variante_id: v.id,
         producto_id: p.id,
         nombre: p.nombre,
+        talla: v.talla,
         precio: p.precio,
         sku: p.sku,
-        codigo_barras: p.codigo_barras,
+        codigo_barras: v.codigo_barras,
         imagen_url: p.imagen_url,
         stock: i.cantidad,
       }
     })
 }
 
-// Registra la venta: valida/descarta stock de la sede de venta, crea Venta + DetalleVenta
-// y genera la factura interna (numero_interno). La comisión se registra más adelante
-// cuando se defina la regla exacta (pendiente con el socio).
+// Listado de productos base con sus VARIANTES embebidas (para el CRUD).
+async function getProductos({ categoria_id, subcategoria_id } = {}) {
+  await delay()
+  let lista = productos
+  if (categoria_id) lista = lista.filter((p) => p.categoria_id === Number(categoria_id))
+  if (subcategoria_id) lista = lista.filter((p) => p.subcategoria_id === Number(subcategoria_id))
+
+  return lista.map((p) => {
+    const vars = variantes.filter((v) => v.producto_id === p.id)
+    const stockTotal = (varianteId) =>
+      inventario.filter((i) => i.variante_id === varianteId).reduce((s, i) => s + i.cantidad, 0)
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      descripcion: p.descripcion,
+      precio: p.precio,
+      sku: p.sku,
+      categoria_id: p.categoria_id,
+      categoria: categorias.find((c) => c.id === p.categoria_id)?.nombre || null,
+      subcategoria_id: p.subcategoria_id,
+      subcategoria: subcategorias.find((s) => s.id === p.subcategoria_id)?.nombre || null,
+      imagen_url: p.imagen_url,
+      variantes: vars.map((v) => ({
+        id: v.id,
+        talla: v.talla,
+        codigo_barras: v.codigo_barras,
+        stock_total: stockTotal(v.id),
+      })),
+      stock_total: vars.reduce((sum, v) => sum + stockTotal(v.id), 0),
+    }
+  })
+}
+
+// Elimina las variantes (y su inventario) de un producto.
+function eliminarVariantesDe(productoId) {
+  const ids = variantes.filter((v) => v.producto_id === productoId).map((v) => v.id)
+  for (let i = variantes.length - 1; i >= 0; i -= 1) {
+    if (variantes[i].producto_id === productoId) variantes.splice(i, 1)
+  }
+  for (let i = inventario.length - 1; i >= 0; i -= 1) {
+    if (ids.includes(inventario[i].variante_id)) inventario.splice(i, 1)
+  }
+}
+
+// Crea el producto y sus variantes automáticamente según las tallas de la
+// combinación categoría+subcategoría. Cada variante recibe código de barras
+// único y su stock inicia (0 o el valor inicial) en las 4 sedes.
+async function createProducto(body) {
+  await delay()
+  const {
+    nombre,
+    descripcion,
+    precio,
+    sku,
+    categoria_id,
+    subcategoria_id,
+    imagen_url,
+    variantes: variantesForm = [],
+  } = body
+
+  if (!nombre || !precio) throw new Error('Nombre y precio son obligatorios')
+  if (sku && productos.some((p) => p.sku === sku)) throw new Error('El SKU ya existe')
+
+  const nuevo = {
+    id: Math.max(...productos.map((p) => p.id), 0) + 1,
+    nombre,
+    descripcion: descripcion || '',
+    precio: Number(precio),
+    sku: sku || null,
+    categoria_id: Number(categoria_id) || null,
+    subcategoria_id: Number(subcategoria_id) || null,
+    imagen_url: imagen_url || '/images/products/camiseta.svg',
+  }
+  productos.push(nuevo)
+
+  const tallas = tallasPara(categoria_id, subcategoria_id)
+  const listaTallas = tallas.length ? tallas : [null]
+  listaTallas.forEach((t, idx) => {
+    const f = variantesForm[idx] || {}
+    const variante = {
+      id: nextVarianteId(),
+      producto_id: nuevo.id,
+      talla: t,
+      codigo_barras: f.codigo_barras || siguienteBarra(),
+    }
+    variantes.push(variante)
+    const inicial = Number(f.stock_inicial) || 0
+    sedes.forEach((s) => inventario.push({ variante_id: variante.id, sede_id: s.id, cantidad: inicial }))
+  })
+  return nuevo
+}
+
+async function updateProducto(id, body) {
+  await delay()
+  const p = productos.find((pr) => pr.id === Number(id))
+  if (!p) throw new Error('Producto no encontrado')
+
+  const {
+    nombre,
+    descripcion,
+    precio,
+    sku,
+    categoria_id,
+    subcategoria_id,
+    imagen_url,
+    variantes: variantesForm = [],
+  } = body
+
+  if (sku && productos.some((pr) => pr.sku === sku && pr.id !== p.id)) {
+    throw new Error('El SKU ya existe en otro producto')
+  }
+
+  const comboCambio =
+    (categoria_id !== undefined && Number(categoria_id) !== p.categoria_id) ||
+    (subcategoria_id !== undefined && Number(subcategoria_id) !== p.subcategoria_id)
+
+  Object.assign(p, {
+    nombre: nombre ?? p.nombre,
+    descripcion: descripcion ?? p.descripcion,
+    precio: precio !== undefined ? Number(precio) : p.precio,
+    sku: sku ?? p.sku,
+    categoria_id: categoria_id !== undefined ? Number(categoria_id) : p.categoria_id,
+    subcategoria_id: subcategoria_id !== undefined ? Number(subcategoria_id) : p.subcategoria_id,
+    imagen_url: imagen_url ?? p.imagen_url,
+  })
+
+  if (comboCambio) {
+    // Cambió la combinación: se regeneran las variantes según las nuevas tallas
+    // (se reinicia el stock a 0 y se asignan códigos de barras nuevos).
+    eliminarVariantesDe(p.id)
+    const tallas = tallasPara(p.categoria_id, p.subcategoria_id)
+    const lista = tallas.length ? tallas : [null]
+    lista.forEach((t) => {
+      const variante = {
+        id: nextVarianteId(),
+        producto_id: p.id,
+        talla: t,
+        codigo_barras: siguienteBarra(),
+      }
+      variantes.push(variante)
+      sedes.forEach((s) => inventario.push({ variante_id: variante.id, sede_id: s.id, cantidad: 0 }))
+    })
+  } else if (variantesForm.length) {
+    // Misma combinación: solo se actualizan los códigos de barras de las variantes
+    const lista = variantes.filter((v) => v.producto_id === p.id)
+    variantesForm.forEach((f, idx) => {
+      if (f && f.codigo_barras && lista[idx]) lista[idx].codigo_barras = f.codigo_barras
+    })
+  }
+  return p
+}
+
+async function deleteProducto(id) {
+  await delay()
+  const idx = productos.findIndex((pr) => pr.id === Number(id))
+  if (idx === -1) throw new Error('Producto no encontrado')
+  productos.splice(idx, 1)
+  eliminarVariantesDe(Number(id))
+  return { ok: true, id: Number(id) }
+}
+
+// Matriz completa de stock por VARIANTE y sede (incluye las de 0 unidades).
+async function getInventarioCompleto() {
+  await delay()
+  return variantes.map((v) => {
+    const p = productos.find((pr) => pr.id === v.producto_id)
+    const stock = sedes.map((s) => {
+      const reg = inventario.find((i) => i.variante_id === v.id && i.sede_id === s.id)
+      return { sede_id: s.id, sede: s.nombre, cantidad: reg ? reg.cantidad : 0 }
+    })
+    return {
+      variante_id: v.id,
+      producto_id: p.id,
+      nombre: p.nombre,
+      talla: v.talla,
+      sku: p.sku,
+      codigo_barras: v.codigo_barras,
+      categoria_id: p.categoria_id,
+      subcategoria_id: p.subcategoria_id,
+      imagen_url: p.imagen_url,
+      stock,
+    }
+  })
+}
+
+// Ajuste manual de stock por VARIANTE y sede: entrada (suma) o salida (resta).
+async function ajustarInventario({ variante_id, sede_id, tipo, cantidad, motivo }) {
+  await delay()
+
+  const qty = Number(cantidad)
+  if (!qty || qty <= 0) throw new Error('La cantidad debe ser mayor a cero')
+
+  const reg = inventario.find(
+    (i) => i.variante_id === Number(variante_id) && i.sede_id === Number(sede_id),
+  )
+  if (!reg) throw new Error('Registro de inventario no encontrado')
+
+  if (tipo === 'salida') {
+    if (reg.cantidad - qty < 0) throw new Error('La salida supera el stock disponible')
+    reg.cantidad -= qty
+  } else {
+    reg.cantidad += qty
+  }
+
+  return {
+    variante_id: reg.variante_id,
+    sede_id: reg.sede_id,
+    cantidad: reg.cantidad,
+    tipo,
+    cantidad_ajustada: qty,
+    motivo: motivo || null,
+  }
+}
+
+// Registra la venta por VARIANTE: valida/descuenta el stock de la sede de venta.
 async function createVenta(body) {
   await delay()
 
@@ -84,15 +322,14 @@ async function createVenta(body) {
 
   const detalle = items.map((item) => {
     const reg = inventario.find(
-      (i) => i.sede_id === Number(sede_venta_id) && i.producto_id === item.producto_id,
+      (i) => i.sede_id === Number(sede_venta_id) && i.variante_id === item.variante_id,
     )
     if (!reg || reg.cantidad < item.cantidad) {
-      throw new Error(`Stock insuficiente en la sede para el producto ${item.producto_id}`)
+      throw new Error('Stock insuficiente en la sede para la variante solicitada')
     }
-    // Descuento el stock de la sede de la que sale el producto
     reg.cantidad -= item.cantidad
     return {
-      producto_id: item.producto_id,
+      variante_id: item.variante_id,
       sede_stock_id: Number(sede_venta_id),
       cantidad: item.cantidad,
       precio_unitario: item.precio_unitario,
@@ -124,10 +361,12 @@ async function createVenta(body) {
     venta,
     factura,
     items: detalle.map((d) => {
-      const p = productos.find((pr) => pr.id === d.producto_id)
+      const v = variantes.find((x) => x.id === d.variante_id)
+      const p = productos.find((pr) => pr.id === v.producto_id)
       return {
-        producto_id: d.producto_id,
-        nombre: p ? p.nombre : `Producto ${d.producto_id}`,
+        variante_id: d.variante_id,
+        nombre: p ? p.nombre : `Producto ${d.variante_id}`,
+        talla: v ? v.talla : null,
         cantidad: d.cantidad,
         precio_unitario: d.precio_unitario,
         subtotal: d.cantidad * d.precio_unitario,
@@ -139,7 +378,6 @@ async function createVenta(body) {
   }
 }
 
-// Inicio del periodo según el filtro: dia=hoy, semana=últimos 7 días, mes=últimos 30.
 function inicioPeriodo(periodo) {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
@@ -148,7 +386,6 @@ function inicioPeriodo(periodo) {
   return d
 }
 
-// Resumen del Dashboard: totales, desglose por sede, top productos y empleado destacado.
 async function getDashboard({ periodo = 'mes' } = {}) {
   await delay()
 
@@ -159,7 +396,6 @@ async function getDashboard({ periodo = 'mes' } = {}) {
   const numVentas = filtradas.length
   const ticketPromedio = numVentas ? Math.round(total / numVentas) : 0
 
-  // Desglose por las 4 sedes
   const totalPorSede = sedes.map((s) => ({
     sede_id: s.id,
     sede: s.nombre,
@@ -168,11 +404,13 @@ async function getDashboard({ periodo = 'mes' } = {}) {
       .reduce((sum, v) => sum + v.total, 0),
   }))
 
-  // Productos más vendidos por cantidad de unidades en el periodo
+  // Productos más vendidos: agrega por producto a partir de la variante vendida
   const conteo = {}
   detalleVentas.forEach((d) => {
     if (!filtradas.some((v) => v.id === d.venta_id)) return
-    conteo[d.producto_id] = (conteo[d.producto_id] || 0) + d.cantidad
+    const v = variantes.find((x) => x.id === d.variante_id)
+    const productoId = v ? v.producto_id : d.variante_id
+    conteo[productoId] = (conteo[productoId] || 0) + d.cantidad
   })
   const productosMasVendidos = Object.entries(conteo)
     .map(([producto_id, cantidad]) => {
@@ -182,7 +420,6 @@ async function getDashboard({ periodo = 'mes' } = {}) {
     .sort((a, b) => b.cantidad - a.cantidad)
     .slice(0, 5)
 
-  // Empleado con más ventas (por total) del periodo
   const porEmpleado = {}
   filtradas.forEach((v) => {
     if (!porEmpleado[v.empleado_id]) porEmpleado[v.empleado_id] = { total: 0, numVentas: 0 }
@@ -201,7 +438,6 @@ async function getDashboard({ periodo = 'mes' } = {}) {
     })
     .sort((a, b) => b.total - a.total)[0]
 
-  // Tendencia de ventas por día (1, 7 o 15 días según el periodo)
   const numDias = periodo === 'dia' ? 1 : periodo === 'semana' ? 7 : 15
   const ventasPorDia = []
   for (let i = numDias - 1; i >= 0; i -= 1) {
@@ -230,8 +466,7 @@ async function getDashboard({ periodo = 'mes' } = {}) {
   }
 }
 
-// Vista informativa de ventas por vendedor (NO calcula comisiones: solo muestra
-// cuánto vendió cada empleado en el periodo, con el detalle de sus ventas).
+// Vista informativa de ventas por vendedor (sin cálculo de comisión).
 async function getComisiones({ periodo = 'mes', sede_id } = {}) {
   await delay()
 
@@ -268,14 +503,11 @@ async function getComisiones({ periodo = 'mes', sede_id } = {}) {
     }
   })
 
-  // Filtro opcional por la sede del VENDEDOR (no por la sede de la venta)
   const filtrada = sede_id ? lista.filter((l) => l.sede_id === Number(sede_id)) : lista
   return filtrada.sort((a, b) => b.total - a.total)
 }
 
-// Historial de ventas filtrable (sede de venta, vendedor, tipo, periodo).
-// Devuelve paginación con la MISMA forma que Laravel (data + meta), para
-// facilitar la conexión al backend real.
+// Historial de ventas con paginación estilo Laravel.
 async function getVentas(params = {}) {
   await delay()
 
@@ -322,170 +554,21 @@ async function getVentas(params = {}) {
   }
 }
 
-async function getCategorias() {
-  await delay()
-  return categorias
-}
-
-async function getSubcategorias() {
-  await delay()
-  return subcategorias
-}
-
-// Listado de productos con filtros opcionales por categoría/subcategoría.
-// Incluye el stock total sumando las 4 sedes (información útil para el CRUD).
-async function getProductos({ categoria_id, subcategoria_id } = {}) {
-  await delay()
-  let lista = productos
-  if (categoria_id) lista = lista.filter((p) => p.categoria_id === Number(categoria_id))
-  if (subcategoria_id) lista = lista.filter((p) => p.subcategoria_id === Number(subcategoria_id))
-  return lista.map((p) => ({
-    id: p.id,
-    nombre: p.nombre,
-    descripcion: p.descripcion,
-    precio: p.precio,
-    sku: p.sku,
-    codigo_barras: p.codigo_barras,
-    categoria_id: p.categoria_id,
-    categoria: categorias.find((c) => c.id === p.categoria_id)?.nombre || null,
-    subcategoria_id: p.subcategoria_id,
-    subcategoria: subcategorias.find((s) => s.id === p.subcategoria_id)?.nombre || null,
-    imagen_url: p.imagen_url,
-    stock_total: inventario
-      .filter((i) => i.producto_id === p.id)
-      .reduce((sum, i) => sum + i.cantidad, 0),
-  }))
-}
-
-// Crea un producto (SKU y código de barras únicos) e inicializa su stock en 0 en las 4 sedes.
-async function createProducto(body) {
-  await delay()
-  const { nombre, descripcion, precio, sku, codigo_barras, categoria_id, subcategoria_id, imagen_url } = body
-  if (!nombre || !precio) throw new Error('Nombre y precio son obligatorios')
-  if (sku && productos.some((p) => p.sku === sku)) throw new Error('El SKU ya existe')
-  if (codigo_barras && productos.some((p) => p.codigo_barras === codigo_barras)) {
-    throw new Error('El código de barras ya existe')
-  }
-
-  const nuevo = {
-    id: Math.max(...productos.map((p) => p.id), 0) + 1,
-    nombre,
-    descripcion: descripcion || '',
-    precio: Number(precio),
-    sku: sku || null,
-    codigo_barras: codigo_barras || null,
-    categoria_id: Number(categoria_id) || null,
-    subcategoria_id: Number(subcategoria_id) || null,
-    imagen_url: imagen_url || '/images/products/camiseta.svg',
-  }
-  productos.push(nuevo)
-  sedes.forEach((s) => inventario.push({ producto_id: nuevo.id, sede_id: s.id, cantidad: 0 }))
-  return nuevo
-}
-
-async function updateProducto(id, body) {
-  await delay()
-  const p = productos.find((pr) => pr.id === Number(id))
-  if (!p) throw new Error('Producto no encontrado')
-  const { nombre, descripcion, precio, sku, codigo_barras, categoria_id, subcategoria_id, imagen_url } = body
-  if (sku && productos.some((pr) => pr.sku === sku && pr.id !== p.id)) {
-    throw new Error('El SKU ya existe en otro producto')
-  }
-  if (codigo_barras && productos.some((pr) => pr.codigo_barras === codigo_barras && pr.id !== p.id)) {
-    throw new Error('El código de barras ya existe en otro producto')
-  }
-  Object.assign(p, {
-    nombre: nombre ?? p.nombre,
-    descripcion: descripcion ?? p.descripcion,
-    precio: precio !== undefined ? Number(precio) : p.precio,
-    sku: sku ?? p.sku,
-    codigo_barras: codigo_barras ?? p.codigo_barras,
-    categoria_id: categoria_id !== undefined ? Number(categoria_id) : p.categoria_id,
-    subcategoria_id: subcategoria_id !== undefined ? Number(subcategoria_id) : p.subcategoria_id,
-    imagen_url: imagen_url ?? p.imagen_url,
-  })
-  return p
-}
-
-async function deleteProducto(id) {
-  await delay()
-  const idx = productos.findIndex((pr) => pr.id === Number(id))
-  if (idx === -1) throw new Error('Producto no encontrado')
-  productos.splice(idx, 1)
-  // Retira también su stock de las 4 sedes
-  for (let i = inventario.length - 1; i >= 0; i -= 1) {
-    if (inventario[i].producto_id === Number(id)) inventario.splice(i, 1)
-  }
-  return { ok: true, id: Number(id) }
-}
-
-// Matriz completa de stock: cada producto con su cantidad por las 4 sedes.
-// Incluye los productos con 0 unidades (a diferencia de getInventario del POS).
-async function getInventarioCompleto() {
-  await delay()
-  return productos.map((p) => {
-    const stock = sedes.map((s) => {
-      const reg = inventario.find((i) => i.producto_id === p.id && i.sede_id === s.id)
-      return { sede_id: s.id, sede: s.nombre, cantidad: reg ? reg.cantidad : 0 }
-    })
-    return {
-      producto_id: p.id,
-      nombre: p.nombre,
-      sku: p.sku,
-      codigo_barras: p.codigo_barras,
-      categoria_id: p.categoria_id,
-      subcategoria_id: p.subcategoria_id,
-      imagen_url: p.imagen_url,
-      stock,
-    }
-  })
-}
-
-// Ajuste manual de stock por sede: entrada (suma) o salida (resta).
-// La salida se valida para no dejar el stock en negativo.
-async function ajustarInventario({ producto_id, sede_id, tipo, cantidad, motivo }) {
-  await delay()
-
-  const qty = Number(cantidad)
-  if (!qty || qty <= 0) throw new Error('La cantidad debe ser mayor a cero')
-
-  const reg = inventario.find(
-    (i) => i.producto_id === Number(producto_id) && i.sede_id === Number(sede_id),
-  )
-  if (!reg) throw new Error('Registro de inventario no encontrado')
-
-  if (tipo === 'salida') {
-    if (reg.cantidad - qty < 0) throw new Error('La salida supera el stock disponible')
-    reg.cantidad -= qty
-  } else {
-    reg.cantidad += qty
-  }
-
-  return {
-    producto_id: reg.producto_id,
-    sede_id: reg.sede_id,
-    cantidad: reg.cantidad,
-    tipo,
-    cantidad_ajustada: qty,
-    motivo: motivo || null,
-  }
-}
-
 export default {
   login,
   getSedes,
   getEmpleados,
-  getInventario,
-  createVenta,
-  getDashboard,
-  getComisiones,
-  getVentas,
   getCategorias,
   getSubcategorias,
+  getInventario,
   getProductos,
   createProducto,
   updateProducto,
   deleteProducto,
   getInventarioCompleto,
   ajustarInventario,
+  createVenta,
+  getDashboard,
+  getComisiones,
+  getVentas,
 }

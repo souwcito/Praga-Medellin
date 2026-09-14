@@ -18,7 +18,7 @@ export function imprimirComprobante(data) {
     .map(
       (i) => `
       <tr>
-        <td>${i.nombre}</td>
+        <td>${i.nombre}${i.talla ? ` (${i.talla})` : ''}</td>
         <td class="c">${i.cantidad}</td>
         <td class="r">${formato(i.precio_unitario)}</td>
         <td class="r">${formato(i.subtotal)}</td>

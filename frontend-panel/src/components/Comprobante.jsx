@@ -46,8 +46,11 @@ export function Comprobante({ data }) {
         </div>
         <ul className="space-y-2 border-t border-line pt-3">
           {data.items.map((item) => (
-            <li key={item.producto_id} className="flex items-center gap-3 text-sm">
-              <span className="min-w-0 flex-1 truncate text-ink">{item.nombre}</span>
+            <li key={item.variante_id ?? item.producto_id} className="flex items-center gap-3 text-sm">
+              <span className="min-w-0 flex-1 truncate text-ink">
+                {item.nombre}
+                {item.talla ? <span className="text-ink-2"> · {item.talla}</span> : null}
+              </span>
               <span className="w-12 shrink-0 text-center text-ink-2">
                 {item.cantidad} × {formato(item.precio_unitario)}
               </span>

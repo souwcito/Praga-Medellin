@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { catalogApi, productosApi } from '../services/api'
+import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
 import {
   AlertIcon,
   CheckIcon,
@@ -28,10 +29,15 @@ const CAMPOS_INICIALES = {
   descripcion: '',
   precio: '',
   sku: '',
-  codigo_barras: '',
   categoria_id: '',
   subcategoria_id: '',
   imagen_url: '',
+}
+
+// Código de barras sugerido (editable). El backend real asignará los definitivos.
+function sugerirBarra(idx) {
+  const base = (Date.now() + idx * 1000) % 100000000
+  return '770' + String(base).padStart(10, '0')
 }
 
 export default function Productos() {
@@ -50,6 +56,7 @@ export default function Productos() {
   // Formulario crear/editar: form = null (cerrado), {} (crear) o {producto} (editar)
   const [form, setForm] = useState(null)
   const [campos, setCampos] = useState(CAMPOS_INICIALES)
+  const [variantesForm, setVariantesForm] = useState([])
   const [guardando, setGuardando] = useState(false)
   const [formError, setFormError] = useState(null)
 
@@ -80,8 +87,7 @@ export default function Productos() {
       if (
         q &&
         !p.nombre.toLowerCase().includes(q) &&
-        !(p.sku || '').toLowerCase().includes(q) &&
-        !(p.codigo_barras || '').toLowerCase().includes(q)
+        !(p.sku || '').toLowerCase().includes(q)
       ) {
         return false
       }
@@ -89,13 +95,20 @@ export default function Productos() {
     })
   }, [productos, busqueda, filtroCategoria, filtroSubcategoria])
 
-  // Subcategorías disponibles según la categoría elegida (en filtros y formulario)
   const subcatsFiltro = subcategorias.filter(
     (s) => !filtroCategoria || s.categoria_id === Number(filtroCategoria),
   )
+
+  // En el formulario: subcategorías y tallas de la combinación elegida
   const subcatsForm = subcategorias.filter(
     (s) => !campos.categoria_id || s.categoria_id === Number(campos.categoria_id),
   )
+  const necesitaSubcategoria =
+    campos.categoria_id && categoriaTieneSubcategorias(campos.categoria_id, subcategorias)
+  const tallasActivas =
+    campos.categoria_id && !(necesitaSubcategoria && !campos.subcategoria_id)
+      ? tallasPara(campos.categoria_id, campos.subcategoria_id, categorias, subcategorias)
+      : null
 
   async function refrescar() {
     const lista = await productosApi.list({})
@@ -107,12 +120,24 @@ export default function Productos() {
     setFiltroSubcategoria('')
   }
 
-  function abrirCrear() {
-    setCampos({
-      ...CAMPOS_INICIALES,
-      categoria_id: String(categorias[0]?.id || ''),
-      imagen_url: '/images/products/camiseta.svg',
+  // Construye la lista de variantes (talla + código + stock inicial) según la
+  // combinación elegida. Si hay tallas las usa; si no, crea una variante única.
+  function construirVariantes(categoriaId, subcategoriaId, existentes = []) {
+    const tallas = tallasPara(categoriaId, subcategoriaId, categorias, subcategorias)
+    const lista = tallas.length ? tallas : [null]
+    return lista.map((t, idx) => {
+      const ex = existentes[idx]
+      return {
+        talla: t,
+        codigo_barras: ex ? ex.codigo_barras : sugerirBarra(idx),
+        stock_inicial: ex ? ex.stock_total : '',
+      }
     })
+  }
+
+  function abrirCrear() {
+    setCampos({ ...CAMPOS_INICIALES, imagen_url: '/images/products/camiseta.svg' })
+    setVariantesForm([])
     setForm({})
     setFormError(null)
   }
@@ -123,11 +148,11 @@ export default function Productos() {
       descripcion: p.descripcion || '',
       precio: String(p.precio),
       sku: p.sku || '',
-      codigo_barras: p.codigo_barras || '',
       categoria_id: String(p.categoria_id || ''),
       subcategoria_id: String(p.subcategoria_id || ''),
       imagen_url: p.imagen_url || '',
     })
+    setVariantesForm(construirVariantes(p.categoria_id, p.subcategoria_id, p.variantes))
     setForm(p)
     setFormError(null)
   }
@@ -141,9 +166,36 @@ export default function Productos() {
     setCampos((c) => ({ ...c, [clave]: valor }))
   }
 
+  function cambiarCategoria(e) {
+    const value = e.target.value
+    setCampos((c) => ({ ...c, categoria_id: value, subcategoria_id: '' }))
+    setVariantesForm([])
+  }
+
+  function cambiarSubcategoria(e) {
+    const value = e.target.value
+    setCampos((c) => ({ ...c, subcategoria_id: value }))
+    // Genera automáticamente los campos de stock/código por cada talla válida
+    if (value) {
+      setVariantesForm(construirVariantes(campos.categoria_id, value))
+    } else {
+      setVariantesForm([])
+    }
+  }
+
+  function cambiarVariante(idx, clave, valor) {
+    setVariantesForm((prev) =>
+      prev.map((v, i) => (i === idx ? { ...v, [clave]: valor } : v)),
+    )
+  }
+
   async function guardar() {
     if (!campos.nombre.trim() || !Number(campos.precio)) {
       setFormError('Nombre y precio son obligatorios')
+      return
+    }
+    if (necesitaSubcategoria && !campos.subcategoria_id) {
+      setFormError('Selecciona la subcategoría para definir las tallas')
       return
     }
     setGuardando(true)
@@ -154,17 +206,21 @@ export default function Productos() {
         descripcion: campos.descripcion.trim(),
         precio: Number(campos.precio),
         sku: campos.sku.trim() || null,
-        codigo_barras: campos.codigo_barras.trim() || null,
         categoria_id: campos.categoria_id ? Number(campos.categoria_id) : null,
         subcategoria_id: campos.subcategoria_id ? Number(campos.subcategoria_id) : null,
         imagen_url: campos.imagen_url.trim() || '/images/products/camiseta.svg',
+        variantes: variantesForm.map((v) => ({
+          talla: v.talla,
+          codigo_barras: v.codigo_barras,
+          stock_inicial: v.stock_inicial,
+        })),
       }
       if (form.id) {
         await productosApi.update(form.id, payload)
         setAviso('Producto actualizado.')
       } else {
         await productosApi.create(payload)
-        setAviso('Producto creado.')
+        setAviso('Producto creado con sus variantes.')
       }
       setForm(null)
       await refrescar()
@@ -220,7 +276,7 @@ export default function Productos() {
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Productos</h1>
           <p className="mt-1 text-sm text-ink-2">
-            Catálogo de productos: crea, edita o elimina (solo administradores).
+            Catálogo por categoría → subcategoría → tallas. Cada talla es una variante con su código de barras.
           </p>
         </div>
         <button
@@ -248,7 +304,7 @@ export default function Productos() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre, SKU o código…"
+            placeholder="Buscar por nombre o SKU…"
             className={`${inputCls} pl-9`}
           />
         </div>
@@ -256,7 +312,7 @@ export default function Productos() {
         <select
           value={filtroCategoria}
           onChange={cambiarFiltroCategoria}
-          className={`${selectCls} w-48`}
+          className={`${selectCls} w-52`}
         >
           <option value="">Todas las categorías</option>
           {categorias.map((c) => (
@@ -269,8 +325,8 @@ export default function Productos() {
         <select
           value={filtroSubcategoria}
           onChange={(e) => setFiltroSubcategoria(e.target.value)}
-          className={`${selectCls} w-48`}
-          disabled={!filtroCategoria}
+          className={`${selectCls} w-52`}
+          disabled={!filtroCategoria || subcatsFiltro.length === 0}
         >
           <option value="">Todas las subcategorías</option>
           {subcatsFiltro.map((s) => (
@@ -288,10 +344,10 @@ export default function Productos() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[minmax(14rem,1fr)_6rem_7.5rem_7.5rem_6rem_4rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
+          <div className="grid grid-cols-[minmax(14rem,1fr)_6rem_7rem_8rem_6rem_4rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Producto</span>
             <span>SKU</span>
-            <span>Código</span>
+            <span>Variantes</span>
             <span>Categoría</span>
             <span className="text-right">Precio</span>
             <span className="text-center">Stock</span>
@@ -302,7 +358,7 @@ export default function Productos() {
             {filtrados.map((p) => (
               <li
                 key={p.id}
-                className="grid grid-cols-[minmax(14rem,1fr)_6rem_7.5rem_7.5rem_6rem_4rem_7rem] items-center gap-4 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
+                className="grid grid-cols-[minmax(14rem,1fr)_6rem_7rem_8rem_6rem_4rem_7rem] items-center gap-4 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <img
@@ -313,7 +369,13 @@ export default function Productos() {
                   <p className="truncate font-medium text-ink">{p.nombre}</p>
                 </div>
                 <span className="truncate text-ink-2">{p.sku || '—'}</span>
-                <span className="truncate text-ink-2">{p.codigo_barras || '—'}</span>
+                <span className="text-ink-2">
+                  {p.variantes.length === 1
+                    ? p.variantes[0].talla
+                      ? `1 talla`
+                      : 'Única'
+                    : `${p.variantes.length} tallas`}
+                </span>
                 <span className="truncate text-ink-2">
                   {p.categoria || '—'}
                   {p.subcategoria ? ` · ${p.subcategoria}` : ''}
@@ -353,7 +415,7 @@ export default function Productos() {
       {/* Formulario crear/editar */}
       {form !== null && (
         <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
-          <div className="animate-scale-in max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6">
+          <div className="animate-scale-in max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
                 {form.id ? 'Editar producto' : 'Nuevo producto'}
@@ -383,7 +445,7 @@ export default function Productos() {
                   type="text"
                   value={campos.nombre}
                   onChange={(e) => setCampo('nombre', e.target.value)}
-                  placeholder="Ej. Camiseta Original Negra"
+                  placeholder="Ej. Camiseta Premium 1.1 Boxeada"
                   className={inputCls}
                 />
               </div>
@@ -427,41 +489,24 @@ export default function Productos() {
                     type="text"
                     value={campos.sku}
                     onChange={(e) => setCampo('sku', e.target.value)}
-                    placeholder="Ej. CAM-001"
+                    placeholder="Ej. CAM-P11-01"
                     className={inputCls}
                   />
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="p-codigo" className="mb-1.5 block text-sm font-medium text-ink">
-                  Código de barras
-                </label>
-                <input
-                  id="p-codigo"
-                  type="text"
-                  value={campos.codigo_barras}
-                  onChange={(e) => setCampo('codigo_barras', e.target.value)}
-                  placeholder="Único, para el lector del POS"
-                  className={inputCls}
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="p-categoria" className="mb-1.5 block text-sm font-medium text-ink">
-                    Categoría
+                    Categoría <span className="text-red-700">*</span>
                   </label>
                   <select
                     id="p-categoria"
                     value={campos.categoria_id}
-                    onChange={(e) => {
-                      setCampo('categoria_id', e.target.value)
-                      setCampo('subcategoria_id', '')
-                    }}
+                    onChange={cambiarCategoria}
                     className={selectCls}
                   >
-                    <option value="">Sin categoría</option>
+                    <option value="">Selecciona…</option>
                     {categorias.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nombre}
@@ -476,11 +521,13 @@ export default function Productos() {
                   <select
                     id="p-subcategoria"
                     value={campos.subcategoria_id}
-                    onChange={(e) => setCampo('subcategoria_id', e.target.value)}
+                    onChange={cambiarSubcategoria}
                     className={selectCls}
-                    disabled={!campos.categoria_id}
+                    disabled={subcatsForm.length === 0}
                   >
-                    <option value="">Sin subcategoría</option>
+                    <option value="">
+                      {subcatsForm.length === 0 ? 'Sin subcategorías' : 'Selecciona…'}
+                    </option>
                     {subcatsForm.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.nombre}
@@ -489,6 +536,69 @@ export default function Productos() {
                   </select>
                 </div>
               </div>
+
+              {/* Variantes auto-generadas */}
+              {campos.categoria_id ? (
+                necesitaSubcategoria && !campos.subcategoria_id ? (
+                  <div className="rounded-xl border border-dashed border-line bg-surface-2/50 p-4 text-sm text-ink-2">
+                    Esta categoría tiene subcategorías: selecciónala para generar las tallas/variantes.
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-line bg-surface-2/40 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-ink">Tallas / variantes</p>
+                      <span className="text-xs text-ink-2">
+                        {tallasActivas.length === 0 ? 'Talla única' : `${tallasActivas.length} tallas`}
+                      </span>
+                    </div>
+                    <p className="mb-3 text-xs text-ink-2">
+                      Cada variante lleva su propio código de barras (inventario por unidad exacta).
+                    </p>
+                    <div className="grid grid-cols-[4.5rem_1fr_7rem] items-center gap-3 px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                      <span>Talla</span>
+                      <span>Código de barras</span>
+                      <span className="text-right">{form.id ? 'Stock total' : 'Stock inicial'}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {variantesForm.map((v, idx) => (
+                        <div
+                          key={idx}
+                          className="grid grid-cols-[4.5rem_1fr_7rem] items-center gap-3"
+                        >
+                          <span className="rounded-lg bg-white px-2 py-2 text-center text-sm font-semibold text-ink ring-1 ring-line">
+                            {v.talla || 'Única'}
+                          </span>
+                          <input
+                            type="text"
+                            value={v.codigo_barras}
+                            onChange={(e) => cambiarVariante(idx, 'codigo_barras', e.target.value)}
+                            placeholder="Código de barras"
+                            className={inputCls}
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            value={v.stock_inicial}
+                            onChange={(e) => cambiarVariante(idx, 'stock_inicial', e.target.value)}
+                            disabled={Boolean(form.id)}
+                            placeholder="0"
+                            className={`${inputCls} text-right disabled:opacity-50`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {form.id && (
+                      <p className="mt-3 text-xs text-ink-2">
+                        El stock se ajusta desde Inventario; aquí solo se edita el código de barras.
+                      </p>
+                    )}
+                  </div>
+                )
+              ) : (
+                <div className="rounded-xl border border-dashed border-line p-4 text-sm text-ink-2/70">
+                  Elige la categoría para generar automáticamente las tallas/variantes.
+                </div>
+              )}
 
               <div>
                 <label htmlFor="p-imagen" className="mb-1.5 block text-sm font-medium text-ink">
@@ -544,8 +654,8 @@ export default function Productos() {
               ¿Eliminar producto?
             </h3>
             <p className="mt-2 text-sm text-ink-2">
-              Se eliminará <span className="font-medium text-ink">{modalDelete.nombre}</span> y su
-              stock en las 4 sedes. Esta acción no se puede deshacer.
+              Se eliminará <span className="font-medium text-ink">{modalDelete.nombre}</span>, sus
+              variantes y el stock en las 4 sedes. Esta acción no se puede deshacer.
             </p>
             <div className="mt-5 flex gap-2">
               <button

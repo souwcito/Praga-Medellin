@@ -35,7 +35,7 @@ export default function Pos() {
   const [sedeId, setSedeId] = useState('')
   const [vendedorId, setVendedorId] = useState('')
 
-  const [productos, setProductos] = useState([])
+  const [variantes, setVariantes] = useState([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState(null)
 
@@ -58,27 +58,28 @@ export default function Pos() {
       .catch((err) => setError(err?.message || 'Error cargando datos'))
   }, [])
 
-  // Al elegir sede, carga SOLO los productos con stock en esa sede.
+  // Al elegir sede, carga SOLO las variantes con stock en esa sede.
   // El estado "cargando" se activa en cambiarSede (evento) para no usar setState síncrono aquí.
   useEffect(() => {
     if (!sedeId) return
     catalogApi
       .getInventario(sedeId)
-      .then(setProductos)
+      .then(setVariantes)
       .catch((err) => setError(err?.message || 'Error cargando inventario'))
       .finally(() => setCargando(false))
   }, [sedeId])
 
-  const productosFiltrados = useMemo(() => {
+  const variantesFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    if (!q) return productos
-    return productos.filter(
-      (p) =>
-        p.nombre.toLowerCase().includes(q) ||
-        p.codigo_barras.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q),
+    if (!q) return variantes
+    return variantes.filter(
+      (v) =>
+        v.nombre.toLowerCase().includes(q) ||
+        v.codigo_barras.toLowerCase().includes(q) ||
+        (v.talla || '').toLowerCase().includes(q) ||
+        v.sku.toLowerCase().includes(q),
     )
-  }, [productos, busqueda])
+  }, [variantes, busqueda])
 
   const total = useMemo(
     () => cart.reduce((sum, i) => sum + i.precio * i.cantidad, 0),
@@ -95,7 +96,7 @@ export default function Pos() {
     if (value) {
       setCargando(true)
     } else {
-      setProductos([])
+      setVariantes([])
     }
     // Al cambiar de sede se limpia la venta: evita mezclar stock de sedes distintas
     setCart([])
@@ -103,32 +104,32 @@ export default function Pos() {
     searchRef.current?.focus()
   }
 
-  function agregar(producto) {
+  function agregar(variante) {
     setCart((prev) => {
-      const existente = prev.find((i) => i.producto_id === producto.producto_id)
+      const existente = prev.find((i) => i.variante_id === variante.variante_id)
       if (existente) {
-        if (existente.cantidad >= producto.stock) return prev
+        if (existente.cantidad >= variante.stock) return prev
         return prev.map((i) =>
-          i.producto_id === producto.producto_id ? { ...i, cantidad: i.cantidad + 1 } : i,
+          i.variante_id === variante.variante_id ? { ...i, cantidad: i.cantidad + 1 } : i,
         )
       }
-      return [...prev, { ...producto, cantidad: 1 }]
+      return [...prev, { ...variante, cantidad: 1 }]
     })
     searchRef.current?.focus()
   }
 
-  function cambiarCantidad(producto_id, cantidad) {
+  function cambiarCantidad(variante_id, cantidad) {
     setCart((prev) =>
       prev.map((i) =>
-        i.producto_id === producto_id
+        i.variante_id === variante_id
           ? { ...i, cantidad: Math.max(1, Math.min(i.stock, cantidad)) }
           : i,
       ),
     )
   }
 
-  function eliminar(producto_id) {
-    setCart((prev) => prev.filter((i) => i.producto_id !== producto_id))
+  function eliminar(variante_id) {
+    setCart((prev) => prev.filter((i) => i.variante_id !== variante_id))
   }
 
   async function confirmarVenta() {
@@ -141,7 +142,7 @@ export default function Pos() {
         sede_venta_id: Number(sedeId),
         tipo: 'presencial',
         items: cart.map((i) => ({
-          producto_id: i.producto_id,
+          variante_id: i.variante_id,
           cantidad: i.cantidad,
           precio_unitario: i.precio,
         })),
@@ -152,7 +153,7 @@ export default function Pos() {
       setCart([])
       setBusqueda('')
       // Refresca el stock visible de la sede tras el descuento
-      catalogApi.getInventario(sedeId).then(setProductos).catch(() => {})
+      catalogApi.getInventario(sedeId).then(setVariantes).catch(() => {})
     } catch (err) {
       setError(err?.message || 'No se pudo registrar la venta')
     } finally {
@@ -169,7 +170,7 @@ export default function Pos() {
             Punto de venta
           </h1>
           <p className="mt-1 text-sm text-ink-2">
-            Busca por nombre o código de barras y registra la venta.
+            Busca por nombre, talla o código de barras y registra la venta.
           </p>
         </div>
         <span className="flex items-center gap-2 rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-medium text-ink-2">
@@ -234,7 +235,7 @@ export default function Pos() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
-        {/* Catálogo filtrado por stock de la sede */}
+        {/* Catálogo de variantes con stock en la sede */}
         <section>
           <div className="relative mb-4">
             <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-2/60" />
@@ -243,7 +244,7 @@ export default function Pos() {
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por nombre o código de barras… (el lector escribe y da Enter)"
+              placeholder="Buscar por nombre, talla o código de barras… (el lector escribe y da Enter)"
               autoFocus
               className={inputCls}
             />
@@ -260,7 +261,7 @@ export default function Pos() {
             <div className="animate-fade-in grid h-64 place-items-center rounded-2xl border border-dashed border-line text-sm text-ink-2/70">
               Selecciona una sede para cargar los productos disponibles.
             </div>
-          ) : productosFiltrados.length === 0 ? (
+          ) : variantesFiltradas.length === 0 ? (
             <div className="animate-fade-in grid h-64 place-items-center rounded-2xl border border-dashed border-line text-sm text-ink-2/70">
               {busqueda
                 ? 'Sin resultados para esa búsqueda.'
@@ -268,31 +269,36 @@ export default function Pos() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {productosFiltrados.map((p, i) => (
+              {variantesFiltradas.map((v, i) => (
                 <button
-                  key={p.producto_id}
+                  key={v.variante_id}
                   type="button"
-                  onClick={() => agregar(p)}
+                  onClick={() => agregar(v)}
                   style={{ animationDelay: `${Math.min(i, 14) * 35}ms` }}
                   className="animate-fade-up group flex flex-col overflow-hidden rounded-2xl border border-line bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:border-metal hover:shadow-[0_12px_32px_-12px_rgba(10,10,10,0.18)]"
                 >
                   <div className="relative aspect-square overflow-hidden bg-surface-2">
                     <img
-                      src={p.imagen_url}
-                      alt={p.nombre}
+                      src={v.imagen_url}
+                      alt={v.nombre}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     />
-                    {p.stock <= 5 && (
+                    {v.stock <= 5 && (
                       <span className="absolute right-2 top-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                        Quedan {p.stock}
+                        Quedan {v.stock}
+                      </span>
+                    )}
+                    {v.talla && (
+                      <span className="absolute left-2 top-2 rounded-full bg-ink/85 px-2 py-0.5 text-[11px] font-semibold text-white">
+                        {v.talla}
                       </span>
                     )}
                   </div>
                   <div className="flex flex-1 flex-col p-3">
-                    <p className="line-clamp-2 text-sm font-medium text-ink">{p.nombre}</p>
-                    <p className="mt-0.5 text-[11px] text-ink-2/70">Cód. {p.codigo_barras}</p>
+                    <p className="line-clamp-2 text-sm font-medium text-ink">{v.nombre}</p>
+                    <p className="mt-0.5 text-[11px] text-ink-2/70">Cód. {v.codigo_barras}</p>
                     <div className="mt-auto flex items-center justify-between pt-3">
-                      <span className="text-sm font-bold text-ink">{formato(p.precio)}</span>
+                      <span className="text-sm font-bold text-ink">{formato(v.precio)}</span>
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-white transition-all duration-200 group-hover:bg-metal group-active:scale-90">
                         <PlusIcon className="h-4 w-4" />
                       </span>
@@ -345,7 +351,7 @@ export default function Pos() {
             ) : (
               cart.map((item) => (
                 <div
-                  key={item.producto_id}
+                  key={item.variante_id}
                   className="animate-slide-right flex gap-3 rounded-xl border border-line p-2.5 transition-colors hover:bg-surface-2/60"
                 >
                   <img
@@ -356,13 +362,14 @@ export default function Pos() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">{item.nombre}</p>
                     <p className="mt-0.5 text-xs text-ink-2/70">
+                      {item.talla ? `Talla ${item.talla} · ` : ''}
                       {formato(item.precio)} · stock {item.stock}
                     </p>
                     <div className="mt-2 flex items-center justify-between">
                       <div className="flex items-center rounded-lg border border-line bg-white">
                         <button
                           type="button"
-                          onClick={() => cambiarCantidad(item.producto_id, item.cantidad - 1)}
+                          onClick={() => cambiarCantidad(item.variante_id, item.cantidad - 1)}
                           className="flex h-8 w-8 items-center justify-center text-ink-2 transition-colors hover:text-ink active:scale-90"
                         >
                           <MinusIcon className="h-4 w-4" />
@@ -374,7 +381,7 @@ export default function Pos() {
                           max={item.stock}
                           onChange={(e) =>
                             cambiarCantidad(
-                              item.producto_id,
+                              item.variante_id,
                               parseInt(e.target.value, 10) || 1,
                             )
                           }
@@ -382,7 +389,7 @@ export default function Pos() {
                         />
                         <button
                           type="button"
-                          onClick={() => cambiarCantidad(item.producto_id, item.cantidad + 1)}
+                          onClick={() => cambiarCantidad(item.variante_id, item.cantidad + 1)}
                           disabled={item.cantidad >= item.stock}
                           className="flex h-8 w-8 items-center justify-center text-ink-2 transition-colors hover:text-ink active:scale-90 disabled:opacity-30"
                         >
@@ -391,7 +398,7 @@ export default function Pos() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => eliminar(item.producto_id)}
+                        onClick={() => eliminar(item.variante_id)}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/40 transition-colors hover:bg-red-50 hover:text-red-700"
                       >
                         <TrashIcon className="h-4 w-4" />
@@ -409,10 +416,7 @@ export default function Pos() {
           <footer className="border-t border-line p-4">
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-sm text-ink-2">Total</span>
-              <span
-                key={total}
-                className="animate-pop text-2xl font-bold text-ink"
-              >
+              <span key={total} className="animate-pop text-2xl font-bold text-ink">
                 {formato(total)}
               </span>
             </div>

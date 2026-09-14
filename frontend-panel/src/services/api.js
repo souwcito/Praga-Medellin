@@ -92,7 +92,7 @@ export const productosApi = {
 }
 
 export const inventarioApi = {
-  // Ajuste manual: { producto_id, sede_id, tipo: entrada|salida, cantidad, motivo? }
+  // Ajuste manual por VARIANTE: { variante_id, sede_id, tipo: entrada|salida, cantidad, motivo? }
   ajustar: (payload) => request('POST', '/inventario/ajustes', payload),
 }
 

@@ -1,5 +1,8 @@
 // Datos simulados con la MISMA forma que expondrá el backend real (Laravel).
 // Cuando el backend exista, estos datos solo se usan con VITE_USE_MOCK=true.
+//
+// La jerarquía del catálogo (categorías > subcategorías > tallas/variantes) debe
+// vivir como datos semilla en la base de datos real. Aquí se replica como seed.
 
 export const sedes = [
   { id: 1, nombre: 'Praga Medellín - Aranjuez', direccion: 'Calle 78 # 54-20, Aranjuez' },
@@ -18,137 +21,168 @@ export const empleados = [
   { id: 5, nombre: 'Sara', sede_id: 4, rol: 'cajero' },
 ]
 
+// ---------------------------------------------------------------------------
+// Catálogo real de Praga Medellín (seed).
+// Las tallas van en la subcategoría; si la categoría no tiene subcategorías
+// (Jeans, Mochos, Pantalonetas) van directo en la categoría. Las categorías
+// con `tallas: []` o sin tallas (Bolsos, Gorras, Perfumes) son talla única.
+// ---------------------------------------------------------------------------
+
+const TALLAS_ROPA = ['S', 'M', 'L', 'XL', 'XXL']
+const TALLAS_TENIS = ['7-40', '8-41', '9-42', '10-43', '11-44']
+const TALLAS_CHANCLAS = ['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']
+
 export const categorias = [
-  { id: 1, nombre: 'Camisetas' },
-  { id: 2, nombre: 'Pantalones' },
-  { id: 3, nombre: 'Chaquetas' },
-  { id: 4, nombre: 'Accesorios' },
+  { id: 1, nombre: 'Bolsos' },
+  { id: 2, nombre: 'Buzos' },
+  { id: 3, nombre: 'Camisetas' },
+  { id: 4, nombre: 'Chanclas' },
+  { id: 5, nombre: 'Conjuntos' },
+  { id: 6, nombre: 'Gorras' },
+  { id: 7, nombre: 'Jeans', tallas: ['30', '32', '34', '36', '38'] },
+  { id: 8, nombre: 'Mochos', tallas: ['28', '30', '32', '34', '36', '38'] },
+  { id: 9, nombre: 'Pantalonetas', tallas: ['L', 'M', 'XL', 'XXL'] },
+  { id: 10, nombre: 'Perfumes' },
+  { id: 11, nombre: 'Sudaderas' },
+  { id: 12, nombre: 'Tenis' },
 ]
 
 export const subcategorias = [
-  { id: 1, categoria_id: 1, nombre: 'Original' },
-  { id: 2, categoria_id: 1, nombre: '1.1' },
-  { id: 3, categoria_id: 2, nombre: 'Slim' },
-  { id: 4, categoria_id: 2, nombre: 'Regular' },
-  { id: 5, categoria_id: 3, nombre: 'Rompevientos' },
-  { id: 6, categoria_id: 3, nombre: 'Canguro' },
-  { id: 7, categoria_id: 4, nombre: 'Gorras' },
-  { id: 8, categoria_id: 4, nombre: 'Medias' },
+  { id: 1, categoria_id: 1, nombre: 'Bolsos Premium 1.1', tallas: [] },
+  { id: 2, categoria_id: 1, nombre: 'Bolsos Turcos', tallas: [] },
+  { id: 3, categoria_id: 2, nombre: 'Buzos Premium 1.1', tallas: TALLAS_ROPA },
+  { id: 4, categoria_id: 2, nombre: 'Buzos Turcos', tallas: TALLAS_ROPA },
+  { id: 5, categoria_id: 3, nombre: 'Camisetas Originales', tallas: TALLAS_ROPA },
+  { id: 6, categoria_id: 3, nombre: 'Camisetas Premium 1.1', tallas: TALLAS_ROPA },
+  { id: 7, categoria_id: 3, nombre: 'Camisetas Turcas', tallas: TALLAS_ROPA },
+  { id: 8, categoria_id: 4, nombre: 'Chanclas Premium 1.1', tallas: TALLAS_CHANCLAS },
+  { id: 9, categoria_id: 4, nombre: 'Chanclas Turcas', tallas: TALLAS_CHANCLAS },
+  { id: 10, categoria_id: 5, nombre: 'Conjuntos Premium 1.1', tallas: TALLAS_ROPA },
+  { id: 11, categoria_id: 5, nombre: 'Conjuntos Turcos', tallas: TALLAS_ROPA },
+  { id: 12, categoria_id: 6, nombre: 'Gorras Originales', tallas: [] },
+  { id: 13, categoria_id: 6, nombre: 'Gorras Premium 1.1', tallas: [] },
+  { id: 14, categoria_id: 6, nombre: 'Gorras Turcas', tallas: [] },
+  { id: 15, categoria_id: 10, nombre: 'Perfumes Originales', tallas: [] },
+  { id: 16, categoria_id: 10, nombre: 'Perfumes Premium 1.1', tallas: [] },
+  { id: 17, categoria_id: 11, nombre: 'Sudaderas Premium 1.1', tallas: TALLAS_ROPA },
+  { id: 18, categoria_id: 12, nombre: 'Tenis Originales', tallas: TALLAS_TENIS },
+  { id: 19, categoria_id: 12, nombre: 'Tenis Premium 1.1', tallas: TALLAS_TENIS },
+  { id: 20, categoria_id: 12, nombre: 'Tenis Turcos', tallas: TALLAS_TENIS },
 ]
 
+// Tallas válidas para una combinación categoría+subcategoría.
+// Regla: si hay subcategoría usa sus tallas; si no, las de la categoría.
+export function tallasPara(categoriaId, subcategoriaId) {
+  if (subcategoriaId) {
+    const s = subcategorias.find((x) => x.id === Number(subcategoriaId))
+    if (s) return s.tallas
+  }
+  const c = categorias.find((x) => x.id === Number(categoriaId))
+  return c ? c.tallas || [] : []
+}
+
+// Productos base (la variante es producto + talla). Precios de referencia.
 export const productos = [
-  { id: 1, nombre: 'Camiseta Original Negra', descripcion: 'Camiseta básica de algodón, corte clásico', precio: 89000, sku: 'CAM-001', codigo_barras: '770100000001', categoria_id: 1, subcategoria_id: 1, imagen_url: '/images/products/camiseta.svg' },
-  { id: 2, nombre: 'Camiseta Original Blanca', descripcion: 'Camiseta básica de algodón, corte clásico', precio: 89000, sku: 'CAM-002', codigo_barras: '770100000002', categoria_id: 1, subcategoria_id: 1, imagen_url: '/images/products/camiseta.svg' },
-  { id: 3, nombre: 'Camiseta 1.1 Oversize Gris', descripcion: 'Camiseta oversize con estampado 1.1', precio: 95000, sku: 'CAM-003', codigo_barras: '770100000003', categoria_id: 1, subcategoria_id: 2, imagen_url: '/images/products/camiseta.svg' },
-  { id: 4, nombre: 'Camiseta 1.1 Boxeada Azul', descripcion: 'Camiseta de manga corta boxeada, edición 1.1', precio: 98000, sku: 'CAM-004', codigo_barras: '770100000004', categoria_id: 1, subcategoria_id: 2, imagen_url: '/images/products/camiseta.svg' },
-  { id: 5, nombre: 'Pantalón Cargo Slim Verde Oliva', descripcion: 'Pantalón cargo de corte slim con bolsillos laterales', precio: 149000, sku: 'PAN-001', codigo_barras: '770100000005', categoria_id: 2, subcategoria_id: 3, imagen_url: '/images/products/pantalon.svg' },
-  { id: 6, nombre: 'Pantalón Regular Beige', descripcion: 'Pantalón de corte regular, tela de mezclilla', precio: 135000, sku: 'PAN-002', codigo_barras: '770100000006', categoria_id: 2, subcategoria_id: 4, imagen_url: '/images/products/pantalon.svg' },
-  { id: 7, nombre: 'Rompevientos Reflectivo', descripcion: 'Chaqueta rompevientos con detalles reflectivos', precio: 220000, sku: 'CHA-001', codigo_barras: '770100000007', categoria_id: 3, subcategoria_id: 5, imagen_url: '/images/products/chaqueta.svg' },
-  { id: 8, nombre: 'Canguro Negro', descripcion: 'Sudadera canguro con capucha, unisex', precio: 180000, sku: 'CHA-002', codigo_barras: '770100000008', categoria_id: 3, subcategoria_id: 6, imagen_url: '/images/products/chaqueta.svg' },
-  { id: 9, nombre: 'Gorra Negra Bordada', descripcion: 'Gorra negra con bordado frontal', precio: 69000, sku: 'ACC-001', codigo_barras: '770100000009', categoria_id: 4, subcategoria_id: 7, imagen_url: '/images/products/accesorio.svg' },
-  { id: 10, nombre: 'Medias 3 Pack', descripcion: 'Paquete de 3 medias tobilleras', precio: 39000, sku: 'ACC-002', codigo_barras: '770100000010', categoria_id: 4, subcategoria_id: 8, imagen_url: '/images/products/accesorio.svg' },
+  { id: 1, nombre: 'Buzo Premium 1.1 Negro', descripcion: 'Buzo premium con estampado 1.1', precio: 159000, sku: 'BUZ-P11-01', categoria_id: 2, subcategoria_id: 3, imagen_url: '/images/products/chaqueta.svg' },
+  { id: 2, nombre: 'Buzo Turco Gris', descripcion: 'Buzo turco de tela suave', precio: 129000, sku: 'BUZ-TUR-01', categoria_id: 2, subcategoria_id: 4, imagen_url: '/images/products/chaqueta.svg' },
+  { id: 3, nombre: 'Camiseta Original Negra', descripcion: 'Camiseta básica de algodón', precio: 85000, sku: 'CAM-ORI-01', categoria_id: 3, subcategoria_id: 5, imagen_url: '/images/products/camiseta.svg' },
+  { id: 4, nombre: 'Camiseta Premium 1.1 Boxeada', descripcion: 'Manga boxeada edición 1.1', precio: 99000, sku: 'CAM-P11-01', categoria_id: 3, subcategoria_id: 6, imagen_url: '/images/products/camiseta.svg' },
+  { id: 5, nombre: 'Camiseta Turca Básica', descripcion: 'Camiseta turca de corte clásico', precio: 75000, sku: 'CAM-TUR-01', categoria_id: 3, subcategoria_id: 7, imagen_url: '/images/products/camiseta.svg' },
+  { id: 6, nombre: 'Chancla Premium 1.1', descripcion: 'Chancla premium con logo 1.1', precio: 45000, sku: 'CHA-P11-01', categoria_id: 4, subcategoria_id: 8, imagen_url: '/images/products/accesorio.svg' },
+  { id: 7, nombre: 'Conjunto Premium 1.1', descripcion: 'Conjunto dos piezas premium', precio: 219000, sku: 'CON-P11-01', categoria_id: 5, subcategoria_id: 10, imagen_url: '/images/products/chaqueta.svg' },
+  { id: 8, nombre: 'Gorra Original Negra', descripcion: 'Gorra negra con bordado', precio: 60000, sku: 'GOR-ORI-01', categoria_id: 6, subcategoria_id: 12, imagen_url: '/images/products/accesorio.svg' },
+  { id: 9, nombre: 'Jean Cargo Negro', descripcion: 'Jean cargo de corte recto', precio: 139000, sku: 'JEA-CAR-01', categoria_id: 7, subcategoria_id: null, imagen_url: '/images/products/pantalon.svg' },
+  { id: 10, nombre: 'Mocho Pata de Gallo', descripcion: 'Pantalón mocho pata de gallo', precio: 149000, sku: 'MOC-PDG-01', categoria_id: 8, subcategoria_id: null, imagen_url: '/images/products/pantalon.svg' },
+  { id: 11, nombre: 'Pantaloneta Deportiva', descripcion: 'Pantaloneta corta deportiva', precio: 95000, sku: 'PAN-DEP-01', categoria_id: 9, subcategoria_id: null, imagen_url: '/images/products/pantalon.svg' },
+  { id: 12, nombre: 'Perfume Original 1.1', descripcion: 'Perfume edición original', precio: 159000, sku: 'PER-ORI-01', categoria_id: 10, subcategoria_id: 15, imagen_url: '/images/products/accesorio.svg' },
+  { id: 13, nombre: 'Sudadera Premium 1.1', descripcion: 'Sudadera con capucha premium', precio: 169000, sku: 'SUD-P11-01', categoria_id: 11, subcategoria_id: 17, imagen_url: '/images/products/chaqueta.svg' },
+  { id: 14, nombre: 'Tenis Original Blanco', descripcion: 'Tenis blanco corte original', precio: 189000, sku: 'TEN-ORI-01', categoria_id: 12, subcategoria_id: 18, imagen_url: '/images/products/chaqueta.svg' },
+  { id: 15, nombre: 'Bolso Premium 1.1', descripcion: 'Bolso premium con logo', precio: 120000, sku: 'BOL-P11-01', categoria_id: 1, subcategoria_id: 1, imagen_url: '/images/products/accesorio.svg' },
 ]
 
-// Inventario por sede: producto_id + sede_id + cantidad.
-// Se dejan algunos productos en 0 en algunas sedes para probar el filtro por stock.
-export const inventario = [
-  { producto_id: 1, sede_id: 1, cantidad: 12 },
-  { producto_id: 1, sede_id: 2, cantidad: 6 },
-  { producto_id: 1, sede_id: 3, cantidad: 9 },
-  { producto_id: 1, sede_id: 4, cantidad: 0 },
-  { producto_id: 2, sede_id: 1, cantidad: 8 },
-  { producto_id: 2, sede_id: 2, cantidad: 0 },
-  { producto_id: 2, sede_id: 3, cantidad: 5 },
-  { producto_id: 2, sede_id: 4, cantidad: 7 },
-  { producto_id: 3, sede_id: 1, cantidad: 4 },
-  { producto_id: 3, sede_id: 2, cantidad: 10 },
-  { producto_id: 3, sede_id: 3, cantidad: 0 },
-  { producto_id: 3, sede_id: 4, cantidad: 3 },
-  { producto_id: 4, sede_id: 1, cantidad: 0 },
-  { producto_id: 4, sede_id: 2, cantidad: 2 },
-  { producto_id: 4, sede_id: 3, cantidad: 6 },
-  { producto_id: 4, sede_id: 4, cantidad: 11 },
-  { producto_id: 5, sede_id: 1, cantidad: 7 },
-  { producto_id: 5, sede_id: 2, cantidad: 0 },
-  { producto_id: 5, sede_id: 3, cantidad: 4 },
-  { producto_id: 5, sede_id: 4, cantidad: 5 },
-  { producto_id: 6, sede_id: 1, cantidad: 3 },
-  { producto_id: 6, sede_id: 2, cantidad: 8 },
-  { producto_id: 6, sede_id: 3, cantidad: 2 },
-  { producto_id: 6, sede_id: 4, cantidad: 0 },
-  { producto_id: 7, sede_id: 1, cantidad: 5 },
-  { producto_id: 7, sede_id: 2, cantidad: 4 },
-  { producto_id: 7, sede_id: 3, cantidad: 3 },
-  { producto_id: 7, sede_id: 4, cantidad: 2 },
-  { producto_id: 8, sede_id: 1, cantidad: 9 },
-  { producto_id: 8, sede_id: 2, cantidad: 0 },
-  { producto_id: 8, sede_id: 3, cantidad: 1 },
-  { producto_id: 8, sede_id: 4, cantidad: 6 },
-  { producto_id: 9, sede_id: 1, cantidad: 14 },
-  { producto_id: 9, sede_id: 2, cantidad: 5 },
-  { producto_id: 9, sede_id: 3, cantidad: 7 },
-  { producto_id: 9, sede_id: 4, cantidad: 9 },
-  { producto_id: 10, sede_id: 1, cantidad: 20 },
-  { producto_id: 10, sede_id: 2, cantidad: 12 },
-  { producto_id: 10, sede_id: 3, cantidad: 15 },
-  { producto_id: 10, sede_id: 4, cantidad: 18 },
-]
+// Variantes: producto + talla (null = talla única). Cada variante tiene su
+// propio código de barras ÚNICO (unidad exacta de control de inventario).
+export const variantes = []
+let _varianteId = 1
+let _barra = 770100000000
+productos.forEach((p) => {
+  const tallas = tallasPara(p.categoria_id, p.subcategoria_id)
+  if (tallas.length === 0) {
+    variantes.push({ id: _varianteId++, producto_id: p.id, talla: null, codigo_barras: String(++_barra) })
+  } else {
+    tallas.forEach((t) => {
+      variantes.push({ id: _varianteId++, producto_id: p.id, talla: t, codigo_barras: String(++_barra) })
+    })
+  }
+})
+
+// Inventario por VARIANTE y por sede. Se genera con una semilla fija para que
+// la demo sea estable (cada carga muestra los mismos stocks).
+let _seedInv = 20260913
+function _randInv() {
+  _seedInv = (_seedInv * 9301 + 49297) % 233280
+  return _seedInv / 233280
+}
+export const inventario = []
+variantes.forEach((v) => {
+  sedes.forEach((s) => {
+    // Algunas variantes quedan en 0 para probar el flujo de stock en el POS
+    const cantidad = _randInv() < 0.18 ? 0 : Math.floor(_randInv() * 12) + 1
+    inventario.push({ variante_id: v.id, sede_id: s.id, cantidad })
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Ventas simuladas de los últimos 30 días (deterministas: misma seed por carga).
-// Se generan con fechas relativas a "hoy" para que los filtros día/semana/mes
-// del Dashboard siempre tengan datos. El POS (mockApi) agrega ventas reales a
-// estas mismas listas, así que el Dashboard también las refleja.
 // ---------------------------------------------------------------------------
 
-let seed = 20260913
-function rand() {
-  seed = (seed * 9301 + 49297) % 233280
-  return seed / 233280
+let _seed = 20260913
+function _rand() {
+  _seed = (_seed * 9301 + 49297) % 233280
+  return _seed / 233280
 }
-function randInt(min, max) {
-  return min + Math.floor(rand() * (max - min + 1))
+function _randInt(min, max) {
+  return min + Math.floor(_rand() * (max - min + 1))
 }
-function pick(arr) {
-  return arr[Math.floor(rand() * arr.length)]
+function _pick(arr) {
+  return arr[Math.floor(_rand() * arr.length)]
 }
 
 export const ventas = []
 export const detalleVentas = []
 export const facturas = []
 
-let ventaId = 1
-let facturaNum = 1000
+let _ventaId = 1
+let _facturaNum = 1000
 
 for (let offset = 29; offset >= 0; offset -= 1) {
   const fecha = new Date()
-  fecha.setHours(randInt(9, 20), randInt(0, 59), 0, 0)
+  fecha.setHours(_randInt(9, 20), _randInt(0, 59), 0, 0)
   fecha.setDate(fecha.getDate() - offset)
 
-  // Hoy y fines de semana generan más ventas
   const esFinSemana = [0, 6].includes(fecha.getDay())
   const base = offset === 0 ? 4 : esFinSemana ? 3 : 2
-  const numVentas = base + randInt(0, 2)
+  const numVentas = base + _randInt(0, 2)
 
   for (let i = 0; i < numVentas; i += 1) {
-    const empleado = pick(empleados)
-    // La sede de venta suele ser la del empleado; a veces otra (stock cruzado)
-    const sedeVenta = rand() < 0.8 ? empleado.sede_id : randInt(1, 4)
+    const empleado = _pick(empleados)
+    const sedeVenta = _rand() < 0.8 ? empleado.sede_id : _randInt(1, 4)
 
-    const numItems = randInt(1, 3)
+    const numItems = _randInt(1, 3)
     const items = []
     for (let j = 0; j < numItems; j += 1) {
-      const producto = pick(productos)
-      const cantidad = randInt(1, 2)
-      items.push({ producto_id: producto.id, cantidad, precio_unitario: producto.precio })
+      const variante = _pick(variantes)
+      const producto = productos.find((p) => p.id === variante.producto_id)
+      const cantidad = _randInt(1, 2)
+      items.push({ variante_id: variante.id, cantidad, precio_unitario: producto.precio })
     }
     const total = items.reduce((sum, it) => sum + it.cantidad * it.precio_unitario, 0)
 
     const venta = {
-      id: ventaId,
+      id: _ventaId,
       empleado_id: empleado.id,
       sede_venta_id: sedeVenta,
-      tipo: rand() < 0.9 ? 'presencial' : 'virtual',
+      tipo: _rand() < 0.9 ? 'presencial' : 'virtual',
       fecha: fecha.toISOString(),
       total,
     }
@@ -156,7 +190,7 @@ for (let offset = 29; offset >= 0; offset -= 1) {
     items.forEach((it) =>
       detalleVentas.push({
         venta_id: venta.id,
-        producto_id: it.producto_id,
+        variante_id: it.variante_id,
         sede_stock_id: sedeVenta,
         cantidad: it.cantidad,
         precio_unitario: it.precio_unitario,
@@ -164,9 +198,9 @@ for (let offset = 29; offset >= 0; offset -= 1) {
     )
     facturas.push({
       venta_id: venta.id,
-      numero_interno: `FAC-${String(++facturaNum).padStart(4, '0')}`,
+      numero_interno: `FAC-${String(++_facturaNum).padStart(4, '0')}`,
       fecha: venta.fecha,
     })
-    ventaId += 1
+    _ventaId += 1
   }
 }

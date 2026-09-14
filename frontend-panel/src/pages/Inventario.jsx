@@ -17,7 +17,7 @@ const selectCls =
 
 export default function Inventario() {
   const [categorias, setCategorias] = useState([])
-  const [productos, setProductos] = useState([])
+  const [variantes, setVariantes] = useState([])
 
   const [busqueda, setBusqueda] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
@@ -28,7 +28,7 @@ export default function Inventario() {
   const [aviso, setAviso] = useState(null)
 
   // Modal de ajuste
-  const [modal, setModal] = useState(null) // { producto, sede }
+  const [modal, setModal] = useState(null) // { variante, sede }
   const [tipo, setTipo] = useState('entrada')
   const [cantidad, setCantidad] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -39,7 +39,7 @@ export default function Inventario() {
     Promise.all([catalogApi.getCategorias(), catalogApi.getInventarioCompleto()])
       .then(([c, inv]) => {
         setCategorias(c)
-        setProductos(inv)
+        setVariantes(inv)
         setError(null)
       })
       .catch((err) => setError(err?.message || 'Error cargando el inventario'))
@@ -48,24 +48,25 @@ export default function Inventario() {
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    return productos.filter((p) => {
-      if (categoriaId && p.categoria_id !== Number(categoriaId)) return false
-      const total = p.stock.reduce((sum, s) => sum + s.cantidad, 0)
+    return variantes.filter((v) => {
+      if (categoriaId && v.categoria_id !== Number(categoriaId)) return false
+      const total = v.stock.reduce((sum, s) => sum + s.cantidad, 0)
       if (soloBajo && total > 5) return false
       if (
         q &&
-        !p.nombre.toLowerCase().includes(q) &&
-        !p.sku.toLowerCase().includes(q) &&
-        !p.codigo_barras.toLowerCase().includes(q)
+        !v.nombre.toLowerCase().includes(q) &&
+        !(v.talla || '').toLowerCase().includes(q) &&
+        !v.sku.toLowerCase().includes(q) &&
+        !v.codigo_barras.toLowerCase().includes(q)
       ) {
         return false
       }
       return true
     })
-  }, [productos, busqueda, categoriaId, soloBajo])
+  }, [variantes, busqueda, categoriaId, soloBajo])
 
-  function abrirModal(producto, sede) {
-    setModal({ producto, sede })
+  function abrirModal(variante, sede) {
+    setModal({ variante, sede })
     setTipo('entrada')
     setCantidad('')
     setMotivo('')
@@ -83,14 +84,14 @@ export default function Inventario() {
     setAjusteError(null)
     try {
       await inventarioApi.ajustar({
-        producto_id: modal.producto.producto_id,
+        variante_id: modal.variante.variante_id,
         sede_id: modal.sede.sede_id,
         tipo,
         cantidad: Number(cantidad),
         motivo: motivo || undefined,
       })
       const inv = await catalogApi.getInventarioCompleto()
-      setProductos(inv)
+      setVariantes(inv)
       setAviso(`Stock actualizado: ${tipo} de ${Number(cantidad)} en ${modal.sede.sede}.`)
       setModal(null)
       window.setTimeout(() => setAviso(null), 4000)
@@ -127,11 +128,9 @@ export default function Inventario() {
       {/* Encabezado */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
-            Inventario
-          </h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Inventario</h1>
           <p className="mt-1 text-sm text-ink-2">
-            Stock de cada producto desglosado por las 4 sedes. Haz clic en una celda para ajustar.
+            Stock por variante (producto + talla) desglosado por las 4 sedes. Haz clic en una celda para ajustar.
           </p>
         </div>
       </div>
@@ -143,13 +142,6 @@ export default function Inventario() {
         </div>
       )}
 
-      {error && (
-        <div className="animate-fade-in mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertIcon className="h-5 w-5 shrink-0" />
-          {error}
-        </div>
-      )}
-
       {/* Filtros */}
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-white p-4">
         <div className="relative min-w-64 flex-1">
@@ -158,7 +150,7 @@ export default function Inventario() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre, SKU o código…"
+            placeholder="Buscar por nombre, talla, SKU o código…"
             className={`${inputCls} pl-9`}
           />
         </div>
@@ -190,16 +182,16 @@ export default function Inventario() {
         </button>
       </div>
 
-      {/* Matriz de stock */}
+      {/* Matriz por variante */}
       {filtrados.length === 0 ? (
         <div className="grid h-48 place-items-center rounded-2xl border border-dashed border-line text-sm text-ink-2/70">
-          Sin productos para los filtros seleccionados.
+          Sin variantes para los filtros seleccionados.
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line bg-white">
           <div className="grid grid-cols-[minmax(16rem,1fr)_repeat(4,6.5rem)_5.5rem] items-center gap-2 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
-            <span>Producto</span>
-            {productos[0]?.stock.map((s) => (
+            <span>Variante</span>
+            {variantes[0]?.stock.map((s) => (
               <span key={s.sede_id} className="truncate text-center" title={s.sede}>
                 {s.sede.split(' - ').pop()}
               </span>
@@ -208,32 +200,35 @@ export default function Inventario() {
           </div>
 
           <ul className="divide-y divide-line">
-            {filtrados.map((p) => {
-              const total = p.stock.reduce((sum, s) => sum + s.cantidad, 0)
+            {filtrados.map((v) => {
+              const total = v.stock.reduce((sum, s) => sum + s.cantidad, 0)
               return (
                 <li
-                  key={p.producto_id}
+                  key={v.variante_id}
                   className="grid grid-cols-[minmax(16rem,1fr)_repeat(4,6.5rem)_5.5rem] items-center gap-2 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <img
-                      src={p.imagen_url}
-                      alt={p.nombre}
+                      src={v.imagen_url}
+                      alt={v.nombre}
                       className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
                     />
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-ink">{p.nombre}</p>
+                      <p className="truncate font-medium text-ink">
+                        {v.nombre}
+                        {v.talla ? <span className="ml-1 text-ink-2">· {v.talla}</span> : null}
+                      </p>
                       <p className="truncate text-xs text-ink-2/70">
-                        {p.sku} · {p.codigo_barras}
+                        {v.sku} · {v.codigo_barras}
                       </p>
                     </div>
                   </div>
 
-                  {p.stock.map((s) => (
+                  {v.stock.map((s) => (
                     <div key={s.sede_id} className="flex justify-center">
                       <button
                         type="button"
-                        onClick={() => abrirModal(p, s)}
+                        onClick={() => abrirModal(v, s)}
                         title={`Ajustar stock en ${s.sede}`}
                         className="group flex w-full flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-white"
                       >
@@ -288,12 +283,15 @@ export default function Inventario() {
 
             <div className="mb-4 flex items-center gap-3 rounded-xl bg-surface-2 p-3">
               <img
-                src={modal.producto.imagen_url}
-                alt={modal.producto.nombre}
+                src={modal.variante.imagen_url}
+                alt={modal.variante.nombre}
                 className="h-12 w-12 shrink-0 rounded-lg bg-white object-cover"
               />
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-ink">{modal.producto.nombre}</p>
+                <p className="truncate text-sm font-medium text-ink">
+                  {modal.variante.nombre}
+                  {modal.variante.talla ? ` · ${modal.variante.talla}` : ''}
+                </p>
                 <p className="truncate text-xs text-ink-2">
                   {modal.sede.sede} · stock actual: {modal.sede.cantidad}
                 </p>
