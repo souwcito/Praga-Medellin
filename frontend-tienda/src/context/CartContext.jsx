@@ -14,10 +14,14 @@ function leerCarrito() {
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState(leerCarrito)
+  const [cartAbierto, setCartAbierto] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
   }, [items])
+
+  const abrirCarrito = useCallback(() => setCartAbierto(true), [])
+  const cerrarCarrito = useCallback(() => setCartAbierto(false), [])
 
   // Agrega un producto+talla al carrito (respeta el stock disponible).
   const agregar = useCallback((producto, variante, cantidad = 1) => {
@@ -70,8 +74,19 @@ export function CartProvider({ children }) {
   const count = useMemo(() => items.reduce((sum, i) => sum + i.cantidad, 0), [items])
 
   const value = useMemo(
-    () => ({ items, agregar, cambiarCantidad, quitar, vaciar, total, count }),
-    [items, agregar, cambiarCantidad, quitar, vaciar, total, count],
+    () => ({
+      items,
+      agregar,
+      cambiarCantidad,
+      quitar,
+      vaciar,
+      total,
+      count,
+      cartAbierto,
+      abrirCarrito,
+      cerrarCarrito,
+    }),
+    [items, agregar, cambiarCantidad, quitar, vaciar, total, count, cartAbierto, abrirCarrito, cerrarCarrito],
   )
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>

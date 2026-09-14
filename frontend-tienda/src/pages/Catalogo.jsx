@@ -9,7 +9,7 @@ const inputCls =
   'w-full rounded-2xl border border-line bg-white py-3 pl-11 pr-4 text-sm placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
 
 export default function Catalogo() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const categoria = searchParams.get('categoria') || ''
   const subcategoria = searchParams.get('subcategoria') || ''
 
@@ -51,27 +51,13 @@ export default function Catalogo() {
   }, [productos, q])
 
   const categoriaActual = categorias.find((c) => c.id === Number(categoria))
-  const subsDeCategoria = subcategorias.filter((s) => s.categoria_id === Number(categoria))
-
-  function elegirCategoria(id) {
-    setQ('')
-    setLoading(true)
-    if (!id) setSearchParams({})
-    else setSearchParams({ categoria: String(id) })
-  }
-
-  function elegirSubcategoria(id) {
-    setQ('')
-    setLoading(true)
-    if (!id) setSearchParams({ categoria })
-    else setSearchParams({ categoria, subcategoria: String(id) })
-  }
+  const subcategoriaActual = subcategorias.find((s) => s.id === Number(subcategoria))
 
   return (
     <>
       <Seo
         title={categoriaActual ? categoriaActual.nombre : 'Catálogo'}
-        description="Explora el catálogo de Praga Medellín: camisetas, buzos, tenis, gorras y más por categoría."
+        description="Explora el catálogo de Praga Medellín: camisetas, buzos, tenis, gorras y más."
       />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -82,14 +68,12 @@ export default function Catalogo() {
           </h1>
           <p className="mt-2 text-sm text-ink-2">
             {productos.length} {productos.length === 1 ? 'producto' : 'productos'}
-            {subcategoria
-              ? ` · ${subcategorias.find((s) => s.id === Number(subcategoria))?.nombre || ''}`
-              : ''}
+            {subcategoriaActual ? ` · ${subcategoriaActual.nombre}` : ''}
           </p>
         </div>
 
         {/* Búsqueda */}
-        <div className="relative mb-6 max-w-md">
+        <div className="relative mb-8 max-w-md">
           <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-2/50" />
           <input
             type="text"
@@ -100,66 +84,12 @@ export default function Catalogo() {
           />
         </div>
 
-        {/* Filtros de categoría */}
-        <div className="mb-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => elegirCategoria('')}
-            className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-              !categoria ? 'border-ink bg-ink text-white' : 'border-line text-ink-2 hover:border-ink-2/50 hover:text-ink'
-            }`}
-          >
-            Todos
-          </button>
-          {categorias.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => elegirCategoria(c.id)}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                Number(categoria) === c.id
-                  ? 'border-ink bg-ink text-white'
-                  : 'border-line text-ink-2 hover:border-ink-2/50 hover:text-ink'
-              }`}
-            >
-              {c.nombre}
-            </button>
-          ))}
-        </div>
-
-        {/* Filtros de subcategoría */}
-        {categoria && subsDeCategoria.length > 0 && (
-          <div className="mb-6 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => elegirSubcategoria('')}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                !subcategoria
-                  ? 'bg-surface-2 text-ink ring-1 ring-line'
-                  : 'text-ink-2 hover:text-ink'
-              }`}
-            >
-              Todas
-            </button>
-            {subsDeCategoria.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => elegirSubcategoria(s.id)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                  Number(subcategoria) === s.id
-                    ? 'bg-surface-2 text-ink ring-1 ring-line'
-                    : 'text-ink-2 hover:text-ink'
-                }`}
-              >
-                {s.nombre}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Grid de productos */}
-        {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        {error && (
+          <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </p>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

@@ -6,7 +6,7 @@ import logoPraga from '../assets/logo-praga.png'
 import { CartIcon, ChevronDownIcon, MenuIcon, SearchIcon, XIcon } from './icons'
 
 export default function Header() {
-  const { count } = useCart()
+  const { count, abrirCarrito } = useCart()
   const navigate = useNavigate()
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [categorias, setCategorias] = useState([])
@@ -85,10 +85,11 @@ export default function Header() {
               <SearchIcon className="h-5 w-5" />
             </Link>
 
-            <Link
-              to="/carrito"
+            <button
+              type="button"
+              onClick={abrirCarrito}
               className="relative flex h-11 items-center gap-2 rounded-lg px-3 text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-              aria-label={`Carrito, ${count} artículos`}
+              aria-label={`Abrir carrito, ${count} artículos`}
             >
               <CartIcon className="h-5 w-5" />
               {count > 0 && (
@@ -97,7 +98,7 @@ export default function Header() {
                 </span>
               )}
               <span className="hidden text-sm font-medium lg:block">Carrito</span>
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -209,14 +210,17 @@ export default function Header() {
 
             {/* Pie del menú */}
             <div className="border-t border-line px-6 py-4">
-              <Link
-                to="/carrito"
-                onClick={cerrar}
+              <button
+                type="button"
+                onClick={() => {
+                  cerrar()
+                  abrirCarrito()
+                }}
                 className="flex items-center gap-2 text-sm font-medium text-ink-2 transition-colors hover:text-ink"
               >
                 <CartIcon className="h-5 w-5" />
                 Carrito {count > 0 && `(${count})`}
-              </Link>
+              </button>
             </div>
           </div>
         </div>

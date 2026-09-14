@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
 import { formato } from '../utils/formato'
@@ -13,8 +13,7 @@ export default function Producto() {
 }
 
 function ProductoDetalle({ productoId }) {
-  const navigate = useNavigate()
-  const { agregar } = useCart()
+  const { agregar, abrirCarrito } = useCart()
 
   const [producto, setProducto] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -56,7 +55,7 @@ function ProductoDetalle({ productoId }) {
     if (!producto || !variante) return
     agregar(producto, variante, cantidad)
     setAgregado(true)
-    window.setTimeout(() => navigate('/carrito'), 350)
+    abrirCarrito()
   }
 
   if (loading) {
