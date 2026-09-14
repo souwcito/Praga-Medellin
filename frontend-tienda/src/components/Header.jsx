@@ -1,17 +1,46 @@
-import { useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
 import logoPraga from '../assets/logo-praga.png'
-import { CartIcon, MenuIcon, SearchIcon, XIcon } from './icons'
-
-const NAV = [
-  { to: '/', label: 'Inicio' },
-  { to: '/catalogo', label: 'Catálogo' },
-]
+import { CartIcon, ChevronDownIcon, MenuIcon, SearchIcon, XIcon } from './icons'
 
 export default function Header() {
   const { count } = useCart()
+  const navigate = useNavigate()
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [categorias, setCategorias] = useState([])
+  const [subcategorias, setSubcategorias] = useState([])
+  const [expandida, setExpandida] = useState(null)
+
+  useEffect(() => {
+    Promise.all([catalogApi.getCategorias(), catalogApi.getSubcategorias()])
+      .then(([c, s]) => {
+        setCategorias(c)
+        setSubcategorias(s)
+      })
+      .catch(() => {})
+  }, [])
+
+  function cerrar() {
+    setMenuAbierto(false)
+    setExpandida(null)
+  }
+
+  function irA(path) {
+    cerrar()
+    navigate(path)
+  }
+
+  // Categoría sin subcategorías navega directo; con subcategorías despliega.
+  function clicCategoria(cat) {
+    const subs = subcategorias.filter((s) => s.categoria_id === cat.id)
+    if (subs.length === 0) {
+      irA(`/catalogo?categoria=${cat.id}`)
+    } else {
+      setExpandida((prev) => (prev === cat.id ? null : cat.id))
+    }
+  }
 
   return (
     <header className="sticky top-0 z-40">
@@ -22,13 +51,13 @@ export default function Header() {
 
       <div className="border-b border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 md:h-20 lg:px-8">
-          {/* Menú móvil + logo */}
+          {/* Menú hamburguesa + logo */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setMenuAbierto(true)}
-              className="-ml-2 flex h-10 w-10 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink md:hidden"
-              aria-label="Abrir menú"
+              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface-2"
+              aria-label="Abrir menú de categorías"
             >
               <MenuIcon className="h-6 w-6" />
             </button>
@@ -46,29 +75,11 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* Navegación escritorio */}
-          <nav className="hidden items-center gap-1 md:flex">
-            {NAV.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                    isActive ? 'bg-ink text-white' : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
-                  }`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-
           {/* Acciones */}
           <div className="flex items-center gap-1">
             <Link
               to="/catalogo"
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
               aria-label="Buscar productos"
             >
               <SearchIcon className="h-5 w-5" />
@@ -76,7 +87,7 @@ export default function Header() {
 
             <Link
               to="/carrito"
-              className="relative flex h-10 items-center gap-2 rounded-lg px-3 text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+              className="relative flex h-11 items-center gap-2 rounded-lg px-3 text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
               aria-label={`Carrito, ${count} artículos`}
             >
               <CartIcon className="h-5 w-5" />
@@ -91,42 +102,122 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Menú móvil (drawer) */}
+      {/* Menú lateral de categorías */}
       {menuAbierto && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="animate-fade-in absolute inset-0 bg-dark/60" onClick={() => setMenuAbierto(false)} />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50">
+          <div
+            className="animate-fade-in absolute inset-0 bg-dark/60"
+            onClick={cerrar}
+            aria-hidden="true"
+          />
+          <div className="animate-slide-left absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col bg-white shadow-2xl">
+            {/* Encabezado del menú */}
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
-              <span className="font-display text-lg font-semibold tracking-wide text-ink">PRAGA</span>
+              <div className="flex items-center gap-2.5">
+                <img src={logoPraga} alt="Praga Medellín" className="h-9 w-9 rounded-full object-cover" />
+                <div>
+                  <p className="font-display text-base font-semibold leading-none tracking-wide text-ink">
+                    PRAGA
+                  </p>
+                  <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-ink-2">
+                    Medellín
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => setMenuAbierto(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink"
+                onClick={cerrar}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
                 aria-label="Cerrar menú"
               >
                 <XIcon className="h-5 w-5" />
               </button>
             </div>
-            <nav className="flex flex-col gap-1 p-4">
-              {NAV.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMenuAbierto(false)}
-                  className="rounded-lg px-4 py-3 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+
+            {/* Contenido navegable */}
+            <nav className="flex-1 overflow-y-auto pb-6">
+              <div className="border-b border-line px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => irA('/')}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
                 >
-                  {item.label}
-                </Link>
-              ))}
+                  Inicio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => irA('/catalogo')}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
+                >
+                  Ver todo el catálogo
+                </button>
+              </div>
+
+              <p className="px-6 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-ink-2">
+                Categorías
+              </p>
+
+              <div className="divide-y divide-line/70">
+                {categorias.map((cat) => {
+                  const subs = subcategorias.filter((s) => s.categoria_id === cat.id)
+                  const abierta = expandida === cat.id
+                  return (
+                    <div key={cat.id}>
+                      <button
+                        type="button"
+                        onClick={() => clicCategoria(cat)}
+                        className={`flex w-full items-center justify-between px-5 py-3.5 text-left text-sm font-medium transition-colors ${
+                          abierta ? 'bg-surface-2 text-ink' : 'text-ink hover:bg-surface-2'
+                        }`}
+                      >
+                        {cat.nombre}
+                        {subs.length > 0 && (
+                          <ChevronDownIcon
+                            className={`h-4 w-4 shrink-0 text-ink-2 transition-transform duration-200 ${
+                              abierta ? 'rotate-180' : ''
+                            }`}
+                          />
+                        )}
+                      </button>
+
+                      {abierta && (
+                        <div className="animate-fade-in space-y-0.5 bg-surface-2/60 pb-3">
+                          <Link
+                            to={`/catalogo?categoria=${cat.id}`}
+                            onClick={cerrar}
+                            className="block px-8 py-2 text-sm font-medium text-ink transition-colors hover:text-metal-2"
+                          >
+                            Ver todos
+                          </Link>
+                          {subs.map((s) => (
+                            <Link
+                              key={s.id}
+                              to={`/catalogo?categoria=${cat.id}&subcategoria=${s.id}`}
+                              onClick={cerrar}
+                              className="block px-8 py-2 text-sm text-ink-2 transition-colors hover:text-ink"
+                            >
+                              {s.nombre}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </nav>
+
+            {/* Pie del menú */}
+            <div className="border-t border-line px-6 py-4">
               <Link
                 to="/carrito"
-                onClick={() => setMenuAbierto(false)}
-                className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+                onClick={cerrar}
+                className="flex items-center gap-2 text-sm font-medium text-ink-2 transition-colors hover:text-ink"
               >
                 <CartIcon className="h-5 w-5" />
                 Carrito {count > 0 && `(${count})`}
               </Link>
-            </nav>
+            </div>
           </div>
         </div>
       )}
