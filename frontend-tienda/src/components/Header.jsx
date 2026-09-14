@@ -65,25 +65,17 @@ export default function Header() {
             </button>
           </div>
 
-          {/* Marca centrada: logo más grande + wordmark (header no crece) */}
+          {/* Logo centrado: solo el logo, más grande (el header no crece) */}
           <Link
             to="/"
-            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-3"
+            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center"
             aria-label="Praga Medellín — inicio"
           >
             <img
               src={logoPraga}
               alt="Praga Medellín"
-              className="h-12 w-12 rounded-full object-cover md:h-14 md:w-14"
+              className="h-14 w-14 rounded-full object-cover md:h-16 md:w-16"
             />
-            <span className="hidden sm:block">
-              <span className="block font-display text-xl font-semibold leading-none tracking-wide text-ink">
-                PRAGA
-              </span>
-              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.3em] text-ink-2">
-                Medellín
-              </span>
-            </span>
           </Link>
 
           {/* Acciones (derecha) */}
