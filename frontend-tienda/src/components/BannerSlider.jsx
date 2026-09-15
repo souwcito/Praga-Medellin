@@ -69,25 +69,16 @@ export default function BannerSlider() {
               style={slide.fondo ? { background: slide.fondo } : undefined}
               aria-hidden={!activa}
             >
-              {/* Imagen de fondo (si existe) */}
+              {/* Imagen de fondo (si existe): sin zoom, sin recorte excesivo */}
               {slide.imagen && (
-                <img
-                  src={slide.imagen}
-                  alt=""
-                  className={`h-full w-full object-cover ${
-                    activa ? 'animate-zoom-slow' : 'opacity-0'
-                  }`}
-                />
+                <img src={slide.imagen} alt="" className="h-full w-full object-cover object-center" />
               )}
 
-              {/* Overlay oscuro para legibilidad del texto */}
-              <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/85 to-dark/20" />
-
-              {/* Texto */}
+              {/* Texto + llamado a la acción */}
               <div className="relative mx-auto flex h-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
-                <div className="max-w-xl pb-20 pt-12">
-                  <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">
-                    <span className="h-px w-8 bg-white/40" />
+                <div className="max-w-xl pb-20 pt-12 drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]">
+                  <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white">
+                    <span className="h-px w-8 bg-white" />
                     {slide.tag}
                   </span>
                   <h2
@@ -97,7 +88,7 @@ export default function BannerSlider() {
                   >
                     {slide.titulo}
                   </h2>
-                  <p className="mt-4 max-w-md text-sm leading-relaxed text-white/75 sm:text-base">
+                  <p className="mt-4 max-w-md text-sm leading-relaxed text-white sm:text-base">
                     {slide.subtitulo}
                   </p>
                   <div className="mt-7 flex flex-wrap items-center gap-3">

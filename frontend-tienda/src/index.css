@@ -21,7 +21,6 @@
   --animate-scale-in: scale-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-slide-left: slide-left 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-slide-right: slide-right 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-zoom-slow: zoom-slow 8s ease-out both;
 
   @keyframes fade-up {
     from {
@@ -65,14 +64,6 @@
     }
     to {
       transform: translateX(0);
-    }
-  }
-  @keyframes zoom-slow {
-    from {
-      transform: scale(1.08);
-    }
-    to {
-      transform: scale(1);
     }
   }
 }
