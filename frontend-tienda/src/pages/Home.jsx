@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { catalogApi } from '../services/api'
+import { mapsLink, sedes } from '../utils/sedes'
 import Seo from '../components/Seo'
 import BannerSlider from '../components/BannerSlider'
 import ProductCard from '../components/ProductCard'
 import { ArrowRightIcon } from '../components/icons'
-
-const SEDES = ['Praga · Aranjuez', 'Praga Woman', 'Praga · Andalucía', 'Akron Store']
 
 export default function Home() {
   const [destacados, setDestacados] = useState([])
@@ -84,12 +83,20 @@ export default function Home() {
           <p className="mx-auto mt-2 max-w-xl text-sm text-white/60">
             El mismo catálogo y el mismo stock en nuestras 4 sedes. Compra en línea y recoge donde quieras.
           </p>
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {SEDES.map((s) => (
-              <div key={s} className="rounded-xl border border-white/10 bg-white/5 px-4 py-5">
-                <p className="text-sm font-semibold">{s}</p>
-                <p className="mt-1 text-xs text-white/50">Medellín</p>
-              </div>
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {sedes.map((s) => (
+              <a
+                key={s.nombre}
+                href={mapsLink(s.direccion)}
+                target="_blank"
+                rel="noreferrer"
+                className="group rounded-xl border border-white/10 bg-white/5 px-4 py-5 transition-colors hover:border-white/25 hover:bg-white/10"
+              >
+                <p className="text-sm font-semibold">{s.nombre}</p>
+                <p className="mt-1 text-xs text-white/50 transition-colors group-hover:text-white/80">
+                  {s.direccion} · Ver en Maps
+                </p>
+              </a>
             ))}
           </div>
           <Link

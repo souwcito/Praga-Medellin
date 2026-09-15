@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { catalogApi } from '../services/api'
+import { mapsLink, sedes } from '../utils/sedes'
 import logoPraga from '../assets/logo-praga.png'
 import { FacebookIcon, InstagramIcon, WhatsAppIcon } from './icons'
 
@@ -81,12 +82,25 @@ export default function Footer() {
 
           {/* Sedes */}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">Nuestras sedes</h3>
-            <ul className="mt-4 space-y-2 text-sm text-white/70">
-              <li>Praga Medellín · Aranjuez</li>
-              <li>Praga Woman</li>
-              <li>Praga Medellín · Andalucía</li>
-              <li>Akron Store</li>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+              Nuestras sedes
+            </h3>
+            <ul className="mt-4 space-y-3 text-sm text-white/70">
+              {sedes.map((s) => (
+                <li key={s.nombre}>
+                  <a
+                    href={mapsLink(s.direccion)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group block transition-colors hover:text-white"
+                  >
+                    <span className="block font-medium">{s.nombre}</span>
+                    <span className="block text-xs text-white/50 transition-colors group-hover:text-white/80">
+                      {s.direccion} · Ver en Maps
+                    </span>
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
