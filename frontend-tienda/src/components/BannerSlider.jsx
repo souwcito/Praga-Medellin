@@ -69,13 +69,18 @@ export default function BannerSlider() {
               style={slide.fondo ? { background: slide.fondo } : undefined}
               aria-hidden={!activa}
             >
-              {/* Imagen de fondo (si existe): sin zoom, sin recorte excesivo */}
+              {/* Imagen de fondo (si existe): en posición absoluta para que el
+                  texto quede encima, sin zoom y sin recorte excesivo */}
               {slide.imagen && (
-                <img src={slide.imagen} alt="" className="h-full w-full object-cover object-center" />
+                <img
+                  src={slide.imagen}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover object-center"
+                />
               )}
 
               {/* Texto + llamado a la acción */}
-              <div className="relative mx-auto flex h-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+              <div className="relative z-10 mx-auto flex h-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
                 <div className="max-w-xl pb-20 pt-12 drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]">
                   <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white">
                     <span className="h-px w-8 bg-white" />
