@@ -1,34 +1,33 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import banner1 from '../assets/imagen-banner-1.jpeg'
+import banner2 from '../assets/imagen-banner-2.jpeg'
 import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from './icons'
 
-// Banners de la portada. Cada banner tiene su propio fondo (gradiente de marca),
-// título, subtítulo y llamado a la acción. Responsive: en móvil se apilan y el
-// texto se ajusta; en escritorio se ve la imagen del producto a la derecha.
+// Banners de la portada a pantalla completa (imagen de fondo + overlay oscuro
+// para el texto). Cada banner tiene su tag, título, subtítulo y llamado a la acción.
+// Responsive: el texto se ajusta en móvil.
 const SLIDES = [
   {
     tag: 'Nueva colección',
     titulo: 'Premium 1.1',
     subtitulo: 'La línea más brutal de la temporada. Ediciones limitadas con estampado 1.1.',
     cta: { label: 'Ver colección', to: '/catalogo?categoria=3' },
-    imagen: '/images/products/camiseta.svg',
-    fondo: 'linear-gradient(120deg,#0a0a0a 0%,#1c1c20 55%,#2a2a30 100%)',
+    imagen: banner1,
   },
   {
     tag: 'Los clásicos',
     titulo: 'Camisetas Originales',
     subtitulo: 'El básico que nunca falla. Algodón premium, tallas S a XXL.',
     cta: { label: 'Comprar ahora', to: '/catalogo?categoria=3&subcategoria=5' },
-    imagen: '/images/products/pantalon.svg',
-    fondo: 'linear-gradient(120deg,#141414 0%,#0a0a0a 60%,#1f1f24 100%)',
+    imagen: banner2,
   },
   {
     tag: 'Calzado',
     titulo: 'Tenis & Chanclas',
     subtitulo: 'Numeración real por talla (US-EURO). Stock por talla exacta.',
     cta: { label: 'Ver calzado', to: '/catalogo?categoria=12' },
-    imagen: '/images/products/chaqueta.svg',
-    fondo: 'linear-gradient(120deg,#1f1f24 0%,#0a0a0a 55%,#26262c 100%)',
+    fondo: 'linear-gradient(120deg,#0a0a0a 0%,#26262c 60%,#1f1f24 100%)',
   },
 ]
 
@@ -67,15 +66,26 @@ export default function BannerSlider() {
               className={`absolute inset-0 transition-opacity duration-1000 ${
                 activa ? 'opacity-100' : 'pointer-events-none opacity-0'
               }`}
-              style={{ background: slide.fondo }}
+              style={slide.fondo ? { background: slide.fondo } : undefined}
               aria-hidden={!activa}
             >
-              {/* Resplandor decorativo */}
-              <div className="pointer-events-none absolute -right-24 top-1/2 h-96 w-96 -translate-y-1/2 rounded-full bg-white/5 blur-3xl" />
+              {/* Imagen de fondo (si existe) */}
+              {slide.imagen && (
+                <img
+                  src={slide.imagen}
+                  alt=""
+                  className={`h-full w-full object-cover ${
+                    activa ? 'animate-zoom-slow' : 'opacity-0'
+                  }`}
+                />
+              )}
 
-              <div className="mx-auto grid h-full max-w-7xl items-center gap-8 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-                {/* Texto */}
-                <div className="relative z-10 pb-16 pt-10 lg:pb-0 lg:pt-0">
+              {/* Overlay oscuro para legibilidad del texto */}
+              <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/85 to-dark/20" />
+
+              {/* Texto */}
+              <div className="relative mx-auto flex h-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+                <div className="max-w-xl pb-20 pt-12">
                   <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">
                     <span className="h-px w-8 bg-white/40" />
                     {slide.tag}
@@ -87,7 +97,7 @@ export default function BannerSlider() {
                   >
                     {slide.titulo}
                   </h2>
-                  <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70 sm:text-base">
+                  <p className="mt-4 max-w-md text-sm leading-relaxed text-white/75 sm:text-base">
                     {slide.subtitulo}
                   </p>
                   <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -105,17 +115,6 @@ export default function BannerSlider() {
                       Ver catálogo
                     </Link>
                   </div>
-                </div>
-
-                {/* Imagen del producto */}
-                <div className="pointer-events-none hidden justify-center lg:flex">
-                  <img
-                    src={slide.imagen}
-                    alt=""
-                    className={`h-80 w-80 object-contain drop-shadow-[0_40px_60px_rgba(0,0,0,0.6)] ${
-                      activa ? 'animate-zoom-slow' : 'opacity-0'
-                    }`}
-                  />
                 </div>
               </div>
             </div>
