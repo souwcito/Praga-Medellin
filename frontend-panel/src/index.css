@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+@theme {
+  /* Poppins es la tipografía PRINCIPAL (texto y títulos); Inter se usa como
+     soporte/fallback y para textos secundarios cuando conviene. */
+  --font-sans: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Poppins', 'Inter', sans-serif;
+
+  /* Identidad Praga Medellín — solo negro, blanco y gris */
+  --color-ink: #0a0a0a; /* texto principal */
+  --color-ink-2: #4a4a4a; /* texto secundario */
+  --color-line: #e0e0e0; /* bordes y divisores */
+  --color-surface-2: #f5f5f5; /* fondo secundario */
+  --color-metal: #8c8c8c; /* acento metálico */
+  --color-metal-2: #6e6e6e; /* metálico oscuro (hover) */
+  --color-dark: #141414; /* sidebar / header oscuro */
+  --color-dark-2: #1f1f1f; /* variante oscura */
+
+  /* Micro-animaciones de marca (cortas y sutiles) */
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-scale-in: scale-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-slide-right: slide-right 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+  @keyframes slide-right {
+    from {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes pop {
+    0% {
+      transform: scale(0.9);
+    }
+    60% {
+      transform: scale(1.08);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+}
+
+body {
+  @apply bg-white font-sans text-ink antialiased;
+}
+
+::selection {
+  background: var(--color-ink);
+  color: #fff;
+}
+
+/* Oculta los spinners de inputs numéricos (carrito POS) */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Acento metálico en el foco por teclado */
+:focus-visible {
+  outline: 2px solid var(--color-metal);
+  outline-offset: 2px;
+}
+
+/* Selects con chevron propio (no el nativo genérico) */
+.select-field {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%234a4a4a' stroke-width='1.5' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  appearance: none;
+}
+
+/* Barra de scroll discreta, coherente con la paleta */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-line;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Respeta usuarios con movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
