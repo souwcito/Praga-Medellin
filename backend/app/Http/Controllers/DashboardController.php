@@ -40,18 +40,23 @@ class DashboardController extends Controller
 
         $ids = $ventas->pluck('id');
         $detalles = DetalleVenta::whereIn('venta_id', $ids)->get();
+
+        // Carga única de variantes/productos/empleados/sedes (evita N+1)
+        $variantes = Variante::pluck('producto_id', 'id');
+        $productos = Producto::pluck('nombre', 'id');
+        $empleados = Empleado::pluck('nombre', 'id');
+        $sedesMap = Sede::pluck('nombre', 'id');
+
         $conteo = [];
         foreach ($detalles as $d) {
-            $v = Variante::find($d->variante_id);
-            $productoId = $v ? $v->producto_id : $d->variante_id;
+            $productoId = $variantes[$d->variante_id] ?? $d->variante_id;
             $conteo[$productoId] = ($conteo[$productoId] ?? 0) + $d->cantidad;
         }
         arsort($conteo);
         $productosMasVendidos = [];
         foreach (array_slice($conteo, 0, 5, true) as $productoId => $cantidad) {
-            $p = Producto::find($productoId);
             $productosMasVendidos[] = [
-                'producto' => $p ? $p->nombre : 'Producto ' . $productoId,
+                'producto' => $productos[$productoId] ?? ('Producto ' . $productoId),
                 'cantidad' => (int) $cantidad,
             ];
         }
@@ -68,11 +73,9 @@ class DashboardController extends Controller
         if ($porEmpleado) {
             uasort($porEmpleado, fn ($a, $b) => $b['total'] <=> $a['total']);
             $top = array_key_first($porEmpleado);
-            $e = Empleado::find($top);
-            $sede = $e ? Sede::find($e->sede_id) : null;
             $empleadoDestacado = [
-                'nombre' => $e ? $e->nombre : 'Empleado ' . $top,
-                'sede' => $sede ? $sede->nombre : null,
+                'nombre' => $empleados[$top] ?? ('Empleado ' . $top),
+                'sede' => $empleados->has($top) && ($e = Empleado::find($top)) ? ($sedesMap[$e->sede_id] ?? null) : null,
                 'total' => (int) $porEmpleado[$top]['total'],
                 'numVentas' => (int) $porEmpleado[$top]['numVentas'],
             ];

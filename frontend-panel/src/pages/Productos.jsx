@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { catalogApi, productosApi } from '../services/api'
 import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
 import ImageUpload from '../components/ImageUpload'
@@ -35,28 +36,29 @@ const CAMPOS_INICIALES = {
   imagen_url: '',
 }
 
-// Código de barras sugerido (editable). El backend real asignará los definitivos.
 function sugerirBarra(idx) {
   const base = (Date.now() + idx * 1000) % 100000000
   return '770' + String(base).padStart(10, '0')
 }
 
 export default function Productos() {
-  const [productos, setProductos] = useState([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const catalogo = searchParams.get('catalogo') || ''
+  const filtroCategoria = searchParams.get('categoria') || ''
+  const filtroSubcategoria = searchParams.get('subcategoria') || ''
+
   const [categorias, setCategorias] = useState([])
   const [subcategorias, setSubcategorias] = useState([])
+  const [productos, setProductos] = useState([])
 
   const [busqueda, setBusqueda] = useState('')
-  const [filtroCategoria, setFiltroCategoria] = useState('')
-  const [filtroSubcategoria, setFiltroSubcategoria] = useState('')
-
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
 
-  // Formulario crear/editar: form = null (cerrado), {} (crear) o {producto} (editar)
   const [form, setForm] = useState(null)
   const [campos, setCampos] = useState(CAMPOS_INICIALES)
+  const [catalogoForm, setCatalogoForm] = useState('hombre')
   const [variantesForm, setVariantesForm] = useState([])
   const [guardando, setGuardando] = useState(false)
   const [formError, setFormError] = useState(null)
@@ -65,42 +67,47 @@ export default function Productos() {
   const [eliminando, setEliminando] = useState(false)
 
   useEffect(() => {
-    Promise.all([
-      productosApi.list({}),
-      catalogApi.getCategorias(),
-      catalogApi.getSubcategorias(),
-    ])
-      .then(([p, c, s]) => {
-        setProductos(p)
+    Promise.all([catalogApi.getCategorias(), catalogApi.getSubcategorias()])
+      .then(([c, s]) => {
         setCategorias(c)
         setSubcategorias(s)
         setError(null)
       })
+      .catch((err) => setError(err?.message || 'Error cargando catálogo'))
+  }, [])
+
+  useEffect(() => {
+    catalogApi
+      .getProductos({
+        catalogo: catalogo || undefined,
+        categoria_id: filtroCategoria || undefined,
+        subcategoria_id: filtroSubcategoria || undefined,
+      })
+      .then((p) => {
+        setProductos(p)
+        setError(null)
+      })
       .catch((err) => setError(err?.message || 'Error cargando productos'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [catalogo, filtroCategoria, filtroSubcategoria])
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    return productos.filter((p) => {
-      if (filtroCategoria && p.categoria_id !== Number(filtroCategoria)) return false
-      if (filtroSubcategoria && p.subcategoria_id !== Number(filtroSubcategoria)) return false
-      if (
-        q &&
-        !p.nombre.toLowerCase().includes(q) &&
-        !(p.sku || '').toLowerCase().includes(q)
-      ) {
-        return false
-      }
-      return true
-    })
-  }, [productos, busqueda, filtroCategoria, filtroSubcategoria])
+    if (!q) return productos
+    return productos.filter(
+      (p) =>
+        p.nombre.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q),
+    )
+  }, [productos, busqueda])
 
+  // Categorías/subcategorías según el catálogo activo (filtros)
+  const categoriasFiltro = categorias.filter((c) => !catalogo || c.catalogo === catalogo)
   const subcatsFiltro = subcategorias.filter(
     (s) => !filtroCategoria || s.categoria_id === Number(filtroCategoria),
   )
 
-  // En el formulario: subcategorías y tallas de la combinación elegida
+  // En el formulario
+  const categoriasForm = categorias.filter((c) => c.catalogo === catalogoForm)
   const subcatsForm = subcategorias.filter(
     (s) => !campos.categoria_id || s.categoria_id === Number(campos.categoria_id),
   )
@@ -111,20 +118,33 @@ export default function Productos() {
       ? tallasPara(campos.categoria_id, campos.subcategoria_id, categorias, subcategorias)
       : null
 
-  async function refrescar() {
-    const lista = await productosApi.list({})
-    setProductos(lista)
+  function setUrlParam(clave, valor) {
+    const next = new URLSearchParams(searchParams)
+    if (valor) next.set(clave, String(valor))
+    else next.delete(clave)
+    setSearchParams(next, { replace: true })
   }
 
-  function cambiarFiltroCategoria(e) {
-    setFiltroCategoria(e.target.value)
-    setFiltroSubcategoria('')
+  function elegirCatalogo(valor) {
+    setLoading(true)
+    setUrlParam('catalogo', valor)
+    setUrlParam('categoria', '')
+    setUrlParam('subcategoria', '')
   }
 
-  // Construye la lista de variantes (talla + código + stock inicial) según la
-  // combinación elegida. Si hay tallas las usa; si no, crea una variante única.
-  function construirVariantes(categoriaId, subcategoriaId, existentes = []) {
-    const tallas = tallasPara(categoriaId, subcategoriaId, categorias, subcategorias)
+  function elegirCategoria(valor) {
+    setLoading(true)
+    setUrlParam('categoria', valor)
+    setUrlParam('subcategoria', '')
+  }
+
+  function elegirSubcategoria(valor) {
+    setLoading(true)
+    setUrlParam('subcategoria', valor)
+  }
+
+  function construirVariantes(catId, subId, existentes = []) {
+    const tallas = tallasPara(catId, subId, categorias, subcategorias)
     const lista = tallas.length ? tallas : [null]
     return lista.map((t, idx) => {
       const ex = existentes[idx]
@@ -138,6 +158,7 @@ export default function Productos() {
 
   function abrirCrear() {
     setCampos({ ...CAMPOS_INICIALES })
+    setCatalogoForm(catalogo || 'hombre')
     setVariantesForm([])
     setForm({})
     setFormError(null)
@@ -153,6 +174,7 @@ export default function Productos() {
       subcategoria_id: String(p.subcategoria_id || ''),
       imagen_url: p.imagen_url || '',
     })
+    setCatalogoForm(p.catalogo || 'hombre')
     setVariantesForm(construirVariantes(p.categoria_id, p.subcategoria_id, p.variantes))
     setForm(p)
     setFormError(null)
@@ -167,18 +189,24 @@ export default function Productos() {
     setCampos((c) => ({ ...c, [clave]: valor }))
   }
 
+  function cambiarCatalogoForm(e) {
+    const valor = e.target.value
+    setCatalogoForm(valor)
+    setCampos((c) => ({ ...c, categoria_id: '', subcategoria_id: '' }))
+    setVariantesForm([])
+  }
+
   function cambiarCategoria(e) {
-    const value = e.target.value
-    setCampos((c) => ({ ...c, categoria_id: value, subcategoria_id: '' }))
+    const valor = e.target.value
+    setCampos((c) => ({ ...c, categoria_id: valor, subcategoria_id: '' }))
     setVariantesForm([])
   }
 
   function cambiarSubcategoria(e) {
-    const value = e.target.value
-    setCampos((c) => ({ ...c, subcategoria_id: value }))
-    // Genera automáticamente los campos de stock/código por cada talla válida
-    if (value) {
-      setVariantesForm(construirVariantes(campos.categoria_id, value))
+    const valor = e.target.value
+    setCampos((c) => ({ ...c, subcategoria_id: valor }))
+    if (valor) {
+      setVariantesForm(construirVariantes(campos.categoria_id, valor))
     } else {
       setVariantesForm([])
     }
@@ -209,7 +237,7 @@ export default function Productos() {
         sku: campos.sku.trim() || null,
         categoria_id: campos.categoria_id ? Number(campos.categoria_id) : null,
         subcategoria_id: campos.subcategoria_id ? Number(campos.subcategoria_id) : null,
-        imagen_url: campos.imagen_url.trim() || '/images/products/camiseta.svg',
+        imagen_url: campos.imagen_url.trim() || null,
         variantes: variantesForm.map((v) => ({
           talla: v.talla,
           codigo_barras: v.codigo_barras,
@@ -231,6 +259,15 @@ export default function Productos() {
     } finally {
       setGuardando(false)
     }
+  }
+
+  async function refrescar() {
+    const lista = await productosApi.list({
+      catalogo: catalogo || undefined,
+      categoria_id: filtroCategoria || undefined,
+      subcategoria_id: filtroSubcategoria || undefined,
+    })
+    setProductos(lista)
   }
 
   async function confirmarEliminar() {
@@ -270,14 +307,16 @@ export default function Productos() {
     )
   }
 
+  const tituloCatalogo = catalogo === 'mujer' ? 'Catálogo Mujer' : catalogo === 'hombre' ? 'Catálogo Hombre' : 'Productos'
+
   return (
     <div className="animate-fade-up mx-auto max-w-7xl">
       {/* Encabezado */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Productos</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">{tituloCatalogo}</h1>
           <p className="mt-1 text-sm text-ink-2">
-            Catálogo por categoría → subcategoría → tallas. Cada talla es una variante con su código de barras.
+            Crea, edita o elimina productos por catálogo, categoría y tallas (solo administradores).
           </p>
         </div>
         <button
@@ -299,7 +338,7 @@ export default function Productos() {
 
       {/* Filtros */}
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-white p-4">
-        <div className="relative min-w-64 flex-1">
+        <div className="relative min-w-56 flex-1">
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-2/60" />
           <input
             type="text"
@@ -311,12 +350,22 @@ export default function Productos() {
         </div>
 
         <select
+          value={catalogo}
+          onChange={(e) => elegirCatalogo(e.target.value)}
+          className={`${selectCls} w-48`}
+        >
+          <option value="">Ambos catálogos</option>
+          <option value="hombre">Catálogo Hombre</option>
+          <option value="mujer">Catálogo Mujer</option>
+        </select>
+
+        <select
           value={filtroCategoria}
-          onChange={cambiarFiltroCategoria}
-          className={`${selectCls} w-52`}
+          onChange={(e) => elegirCategoria(e.target.value)}
+          className={`${selectCls} w-48`}
         >
           <option value="">Todas las categorías</option>
-          {categorias.map((c) => (
+          {categoriasFiltro.map((c) => (
             <option key={c.id} value={c.id}>
               {c.nombre}
             </option>
@@ -325,9 +374,9 @@ export default function Productos() {
 
         <select
           value={filtroSubcategoria}
-          onChange={(e) => setFiltroSubcategoria(e.target.value)}
-          className={`${selectCls} w-52`}
-          disabled={!filtroCategoria || subcatsFiltro.length === 0}
+          onChange={(e) => elegirSubcategoria(e.target.value)}
+          className={`${selectCls} w-48`}
+          disabled={subcatsFiltro.length === 0}
         >
           <option value="">Todas las subcategorías</option>
           {subcatsFiltro.map((s) => (
@@ -345,10 +394,10 @@ export default function Productos() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[minmax(14rem,1fr)_6rem_7rem_8rem_6rem_4rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
+          <div className="grid grid-cols-[minmax(14rem,1fr)_6rem_6rem_8rem_6rem_4rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Producto</span>
             <span>SKU</span>
-            <span>Variantes</span>
+            <span>Catálogo</span>
             <span>Categoría</span>
             <span className="text-right">Precio</span>
             <span className="text-center">Stock</span>
@@ -359,7 +408,7 @@ export default function Productos() {
             {filtrados.map((p) => (
               <li
                 key={p.id}
-                className="grid grid-cols-[minmax(14rem,1fr)_6rem_7rem_8rem_6rem_4rem_7rem] items-center gap-4 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
+                className="grid grid-cols-[minmax(14rem,1fr)_6rem_6rem_8rem_6rem_4rem_7rem] items-center gap-4 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <img
@@ -370,12 +419,8 @@ export default function Productos() {
                   <p className="truncate font-medium text-ink">{p.nombre}</p>
                 </div>
                 <span className="truncate text-ink-2">{p.sku || '—'}</span>
-                <span className="text-ink-2">
-                  {p.variantes.length === 1
-                    ? p.variantes[0].talla
-                      ? `1 talla`
-                      : 'Única'
-                    : `${p.variantes.length} tallas`}
+                <span className="truncate text-ink-2">
+                  {p.catalogo === 'mujer' ? 'Mujer' : p.catalogo === 'hombre' ? 'Hombre' : '—'}
                 </span>
                 <span className="truncate text-ink-2">
                   {p.categoria || '—'}
@@ -496,7 +541,22 @@ export default function Productos() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Catálogo → Categoría → Subcategoría */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label htmlFor="p-catalogo" className="mb-1.5 block text-sm font-medium text-ink">
+                    Catálogo <span className="text-red-700">*</span>
+                  </label>
+                  <select
+                    id="p-catalogo"
+                    value={catalogoForm}
+                    onChange={cambiarCatalogoForm}
+                    className={selectCls}
+                  >
+                    <option value="hombre">Hombre</option>
+                    <option value="mujer">Mujer</option>
+                  </select>
+                </div>
                 <div>
                   <label htmlFor="p-categoria" className="mb-1.5 block text-sm font-medium text-ink">
                     Categoría <span className="text-red-700">*</span>
@@ -508,7 +568,7 @@ export default function Productos() {
                     className={selectCls}
                   >
                     <option value="">Selecciona…</option>
-                    {categorias.map((c) => (
+                    {categoriasForm.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nombre}
                       </option>
@@ -562,10 +622,7 @@ export default function Productos() {
                     </div>
                     <div className="space-y-2">
                       {variantesForm.map((v, idx) => (
-                        <div
-                          key={idx}
-                          className="grid grid-cols-[4.5rem_1fr_7rem] items-center gap-3"
-                        >
+                        <div key={idx} className="grid grid-cols-[4.5rem_1fr_7rem] items-center gap-3">
                           <span className="rounded-lg bg-white px-2 py-2 text-center text-sm font-semibold text-ink ring-1 ring-line">
                             {v.talla || 'Única'}
                           </span>

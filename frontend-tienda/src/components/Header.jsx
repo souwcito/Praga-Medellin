@@ -15,7 +15,8 @@ export default function Header() {
   const [busquedaAbierta, setBusquedaAbierta] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [subcategorias, setSubcategorias] = useState([])
-  const [expandida, setExpandida] = useState(null)
+  const [expandida, setExpandida] = useState(null) // categoria id con subcats abiertas
+  const [catalogoAbierto, setCatalogoAbierto] = useState(null) // 'hombre' | 'mujer' | null
 
   useEffect(() => {
     Promise.all([catalogApi.getCategorias(), catalogApi.getSubcategorias()])
@@ -29,6 +30,7 @@ export default function Header() {
   function cerrar() {
     setMenuAbierto(false)
     setExpandida(null)
+    setCatalogoAbierto(null)
   }
 
   function irA(path) {
@@ -36,11 +38,15 @@ export default function Header() {
     navigate(path)
   }
 
+  function clicCatalogo(catalogo) {
+    setCatalogoAbierto((prev) => (prev === catalogo ? null : catalogo))
+  }
+
   // Categoría sin subcategorías navega directo; con subcategorías despliega.
-  function clicCategoria(cat) {
+  function clicCategoria(cat, catalogo) {
     const subs = subcategorias.filter((s) => s.categoria_id === cat.id)
     if (subs.length === 0) {
-      irA(`/catalogo?categoria=${cat.id}`)
+      irA(`/catalogo?catalogo=${catalogo}&categoria=${cat.id}`)
     } else {
       setExpandida((prev) => (prev === cat.id ? null : cat.id))
     }
@@ -54,7 +60,7 @@ export default function Header() {
       </div>
 
       <div className="border-b border-line bg-white/95 backdrop-blur">
-<div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 md:h-20 lg:px-8">
+        <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 md:h-20 lg:px-8">
           {/* Menú hamburguesa (izquierda) */}
           <div className="flex items-center">
             <button
@@ -123,26 +129,18 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Menú lateral de categorías */}
+      {/* Menú lateral de catálogos */}
       {menuAbierto && (
         <div className="fixed inset-0 z-50">
-          <div
-            className="animate-fade-in absolute inset-0 bg-dark/60"
-            onClick={cerrar}
-            aria-hidden="true"
-          />
+          <div className="animate-fade-in absolute inset-0 bg-dark/60" onClick={cerrar} aria-hidden="true" />
           <div className="animate-slide-left absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col bg-white shadow-2xl">
             {/* Encabezado del menú */}
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
               <div className="flex items-center gap-2.5">
                 <img src={logoPraga} alt="Praga Medellín" className="h-9 w-9 rounded-full object-cover" />
                 <div>
-                  <p className="font-display text-base font-semibold leading-none tracking-wide text-ink">
-                    PRAGA
-                  </p>
-                  <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-ink-2">
-                    Medellín
-                  </p>
+                  <p className="font-display text-base font-semibold leading-none tracking-wide text-ink">PRAGA</p>
+                  <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-ink-2">Medellín</p>
                 </div>
               </div>
               <button
@@ -167,58 +165,81 @@ export default function Header() {
                 </button>
               </div>
 
-              <p className="px-6 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-ink-2">
-                Categorías
-              </p>
-
-              <div className="divide-y divide-line/70">
-                {categorias.map((cat) => {
-                  const subs = subcategorias.filter((s) => s.categoria_id === cat.id)
-                  const abierta = expandida === cat.id
-                  return (
-                    <div key={cat.id}>
-                      <button
-                        type="button"
-                        onClick={() => clicCategoria(cat)}
-                        className={`flex w-full items-center justify-between px-5 py-3.5 text-left text-sm font-medium transition-colors ${
-                          abierta ? 'bg-surface-2 text-ink' : 'text-ink hover:bg-surface-2'
+              {/* Catálogo Hombre y Catálogo Mujer */}
+              {['hombre', 'mujer'].map((catalogo) => {
+                const abierto = catalogoAbierto === catalogo
+                const cats = categorias.filter((c) => c.catalogo === catalogo)
+                return (
+                  <div key={catalogo}>
+                    <button
+                      type="button"
+                      onClick={() => clicCatalogo(catalogo)}
+                      className={`flex w-full items-center justify-between px-5 py-3.5 text-left text-sm font-semibold transition-colors ${
+                        abierto ? 'bg-surface-2 text-ink' : 'text-ink hover:bg-surface-2'
+                      }`}
+                    >
+                      {catalogo === 'hombre' ? 'Catálogo Hombre' : 'Catálogo Mujer'}
+                      <ChevronDownIcon
+                        className={`h-4 w-4 shrink-0 text-ink-2 transition-transform duration-200 ${
+                          abierto ? 'rotate-180' : ''
                         }`}
-                      >
-                        {cat.nombre}
-                        {subs.length > 0 && (
-                          <ChevronDownIcon
-                            className={`h-4 w-4 shrink-0 text-ink-2 transition-transform duration-200 ${
-                              abierta ? 'rotate-180' : ''
-                            }`}
-                          />
-                        )}
-                      </button>
+                      />
+                    </button>
 
-                      {abierta && (
-                        <div className="animate-fade-in space-y-0.5 bg-surface-2/60 pb-3">
-                          <Link
-                            to={`/catalogo?categoria=${cat.id}`}
-                            onClick={cerrar}
-                            className="block px-8 py-2 text-sm font-medium text-ink transition-colors hover:text-metal-2"
-                          >
-                            Ver todos
-                          </Link>
-                          {subs.map((s) => (
-                            <Link
-                              key={s.id}
-                              to={`/catalogo?categoria=${cat.id}&subcategoria=${s.id}`}
-                              onClick={cerrar}
-                              className="block px-8 py-2 text-sm text-ink-2 transition-colors hover:text-ink"
-                            >
-                              {s.nombre}
-                            </Link>
-                          ))}
+                    {abierto && (
+                      <div className="animate-fade-in bg-surface-2/40 pb-3">
+                        <Link
+                          to={`/catalogo?catalogo=${catalogo}`}
+                          onClick={cerrar}
+                          className="block px-8 py-2 text-sm font-medium text-ink transition-colors hover:text-metal-2"
+                        >
+                          Ver todo {catalogo === 'hombre' ? 'hombre' : 'mujer'}
+                        </Link>
+                        <div className="divide-y divide-line/60">
+                          {cats.map((cat) => {
+                            const subs = subcategorias.filter((s) => s.categoria_id === cat.id)
+                            const subAbierta = expandida === cat.id
+                            return (
+                              <div key={cat.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => clicCategoria(cat, catalogo)}
+                                  className={`flex w-full items-center justify-between px-8 py-2.5 text-left text-sm transition-colors ${
+                                    subAbierta ? 'font-semibold text-ink' : 'text-ink-2 hover:text-ink'
+                                  }`}
+                                >
+                                  {cat.nombre}
+                                  {subs.length > 0 && (
+                                    <ChevronDownIcon
+                                      className={`h-3.5 w-3.5 text-ink-2/60 transition-transform duration-200 ${
+                                        subAbierta ? 'rotate-180' : ''
+                                      }`}
+                                    />
+                                  )}
+                                </button>
+                                {subAbierta && (
+                                  <div className="space-y-0.5 pl-4">
+                                    {subs.map((s) => (
+                                      <Link
+                                        key={s.id}
+                                        to={`/catalogo?catalogo=${catalogo}&categoria=${cat.id}&subcategoria=${s.id}`}
+                                        onClick={cerrar}
+                                        className="block px-8 py-1.5 text-sm text-ink-2/80 transition-colors hover:text-ink"
+                                      >
+                                        {s.nombre}
+                                      </Link>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </nav>
 
             {/* Pie del menú */}

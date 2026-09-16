@@ -7,18 +7,36 @@ const TALLAS_TENIS = ['7-40', '8-41', '9-42', '10-43', '11-44']
 const TALLAS_CHANCLAS = ['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']
 
 export const categorias = [
-  { id: 1, nombre: 'Bolsos' },
-  { id: 2, nombre: 'Buzos' },
-  { id: 3, nombre: 'Camisetas' },
-  { id: 4, nombre: 'Chanclas' },
-  { id: 5, nombre: 'Conjuntos' },
-  { id: 6, nombre: 'Gorras' },
-  { id: 7, nombre: 'Jeans', tallas: ['30', '32', '34', '36', '38'] },
-  { id: 8, nombre: 'Mochos', tallas: ['28', '30', '32', '34', '36', '38'] },
-  { id: 9, nombre: 'Pantalonetas', tallas: ['L', 'M', 'XL', 'XXL'] },
-  { id: 10, nombre: 'Perfumes' },
-  { id: 11, nombre: 'Sudaderas' },
-  { id: 12, nombre: 'Tenis' },
+  { id: 1, nombre: 'Bolsos', catalogo: 'hombre' },
+  { id: 2, nombre: 'Buzos', catalogo: 'hombre' },
+  { id: 3, nombre: 'Camisetas', catalogo: 'hombre' },
+  { id: 4, nombre: 'Chanclas', catalogo: 'hombre' },
+  { id: 5, nombre: 'Conjuntos', catalogo: 'hombre' },
+  { id: 6, nombre: 'Gorras', catalogo: 'hombre' },
+  { id: 7, nombre: 'Jeans', tallas: ['30', '32', '34', '36', '38'], catalogo: 'hombre' },
+  { id: 8, nombre: 'Mochos', tallas: ['28', '30', '32', '34', '36', '38'], catalogo: 'hombre' },
+  { id: 9, nombre: 'Pantalonetas', tallas: ['L', 'M', 'XL', 'XXL'], catalogo: 'hombre' },
+  { id: 10, nombre: 'Perfumes', catalogo: 'hombre' },
+  { id: 11, nombre: 'Sudaderas', catalogo: 'hombre' },
+  { id: 12, nombre: 'Tenis', catalogo: 'hombre' },
+
+  // Catálogo Mujer
+  { id: 13, nombre: 'Blusas', tallas: ['XS/S', 'S/M', 'M/L'], catalogo: 'mujer' },
+  { id: 14, nombre: 'Blusones cortos', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 15, nombre: 'Blusones', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 16, nombre: 'Bodys', tallas: ['S/M', 'M/L', 'Talla única'], catalogo: 'mujer' },
+  { id: 17, nombre: 'Bolsos', catalogo: 'mujer' },
+  { id: 18, nombre: 'Chanclas', tallas: ['5', '6', '7', '8'], catalogo: 'mujer' },
+  { id: 19, nombre: 'Conjuntos', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 20, nombre: 'Sets', tallas: ['XS', 'S', 'M', 'Talla única'], catalogo: 'mujer' },
+  { id: 21, nombre: 'Faldas', tallas: ['XS', 'S', 'M', 'L', 'XL'], catalogo: 'mujer' },
+  { id: 22, nombre: 'Jeans', tallas: ['01-6', '03-8', '05-10', '07-12', '09-14', '11-16'], catalogo: 'mujer' },
+  { id: 23, nombre: 'Perfumes', catalogo: 'mujer' },
+  { id: 24, nombre: 'Relojes', catalogo: 'mujer' },
+  { id: 25, nombre: 'Chaquetas', tallas: ['L', 'XL'], catalogo: 'mujer' },
+  { id: 26, nombre: 'Shorts', tallas: ['XS', 'S', 'M'], catalogo: 'mujer' },
+  { id: 27, nombre: 'Vestidos', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 28, nombre: 'Tenis', catalogo: 'mujer' },
 ]
 
 export const subcategorias = [
@@ -42,6 +60,12 @@ export const subcategorias = [
   { id: 18, categoria_id: 12, nombre: 'Tenis Originales', tallas: TALLAS_TENIS },
   { id: 19, categoria_id: 12, nombre: 'Tenis Premium 1.1', tallas: TALLAS_TENIS },
   { id: 20, categoria_id: 12, nombre: 'Tenis Turcos', tallas: TALLAS_TENIS },
+
+  // Catálogo Mujer
+  { id: 21, categoria_id: 23, nombre: 'Perfumes Calidad 1.1', tallas: [] },
+  { id: 22, categoria_id: 28, nombre: 'Tenis Calidad 1.1', tallas: ['5', '6', '7', '8'] },
+  { id: 23, categoria_id: 28, nombre: 'Tenis Calidad Turca', tallas: ['5', '6', '7'] },
+  { id: 24, categoria_id: 28, nombre: 'Tenis Originales', tallas: ['5', '6', '7'] },
 ]
 
 // Productos con sus VARIANTES (talla + stock disponible para la tienda).
@@ -211,5 +235,38 @@ export const productos = [
     subcategoria_id: 1,
     destacado: false,
     variantes: [{ talla: null, stock: 10 }],
+  },
+  {
+    id: 16,
+    nombre: 'Blusa Seda',
+    descripcion: 'Blusa de seda, suave y ligera. Perfecta para el día a día.',
+    precio: 65000,
+    imagen_url: '/images/products/camiseta.svg',
+    categoria_id: 13,
+    subcategoria_id: null,
+    destacado: true,
+    variantes: ['XS/S', 'S/M', 'M/L'].map((t) => ({ talla: t, stock: 5 })),
+  },
+  {
+    id: 17,
+    nombre: 'Jeans Mujer',
+    descripcion: 'Jeans de corte cómodo. Tallas dobles (colombiana - US).',
+    precio: 129000,
+    imagen_url: '/images/products/pantalon.svg',
+    categoria_id: 22,
+    subcategoria_id: null,
+    destacado: false,
+    variantes: ['01-6', '03-8', '05-10', '07-12', '09-14', '11-16'].map((t) => ({ talla: t, stock: 4 })),
+  },
+  {
+    id: 18,
+    nombre: 'Vestido Elegante',
+    descripcion: 'Vestido elegante de mujer, corte favorecedor.',
+    precio: 149000,
+    imagen_url: '/images/products/camiseta.svg',
+    categoria_id: 27,
+    subcategoria_id: null,
+    destacado: true,
+    variantes: ['S', 'M', 'L'].map((t) => ({ talla: t, stock: 3 })),
   },
 ]

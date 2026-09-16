@@ -10,6 +10,7 @@ const inputCls =
 
 export default function Catalogo() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const catalogo = searchParams.get('catalogo') || ''
   const categoria = searchParams.get('categoria') || ''
   const subcategoria = searchParams.get('subcategoria') || ''
   const q = searchParams.get('q') || ''
@@ -33,6 +34,7 @@ export default function Catalogo() {
   useEffect(() => {
     catalogApi
       .getProductos({
+        catalogo: catalogo || undefined,
         categoria_id: categoria || undefined,
         subcategoria_id: subcategoria || undefined,
       })
@@ -42,7 +44,7 @@ export default function Catalogo() {
       })
       .catch((err) => setError(err?.message || 'Error cargando productos'))
       .finally(() => setLoading(false))
-  }, [categoria, subcategoria])
+  }, [catalogo, categoria, subcategoria])
 
   const filtrados = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -52,6 +54,9 @@ export default function Catalogo() {
 
   const categoriaActual = categorias.find((c) => c.id === Number(categoria))
   const subcategoriaActual = subcategorias.find((s) => s.id === Number(subcategoria))
+  const titulo =
+    categoriaActual?.nombre ||
+    (catalogo === 'mujer' ? 'Catálogo Mujer' : catalogo === 'hombre' ? 'Catálogo Hombre' : 'Catálogo')
 
   // La búsqueda vive en la URL (q): escribir actualiza el enlace sin estado extra
   function setQ(valor) {
@@ -64,7 +69,7 @@ export default function Catalogo() {
   return (
     <>
       <Seo
-        title={categoriaActual ? categoriaActual.nombre : 'Catálogo'}
+        title={titulo}
         description="Explora el catálogo de Praga Medellín: camisetas, buzos, tenis, gorras y más."
       />
 
@@ -72,7 +77,7 @@ export default function Catalogo() {
         {/* Encabezado */}
         <div className="mb-6">
           <h1 className="font-display text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
-            {categoriaActual ? categoriaActual.nombre : 'Catálogo'}
+            {titulo}
           </h1>
           <p className="mt-2 text-sm text-ink-2">
             {filtrados.length} {filtrados.length === 1 ? 'producto' : 'productos'}

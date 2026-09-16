@@ -9,37 +9,46 @@ class SubcategoriaSeeder extends Seeder
 {
     public function run(): void
     {
-        $ropa = json_encode(['S', 'M', 'L', 'XL', 'XXL']);
-        $tenis = json_encode(['7-40', '8-41', '9-42', '10-43', '11-44']);
-        $chanclas = json_encode(['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']);
+        $ropaH = json_encode(['S', 'M', 'L', 'XL', 'XXL']);
+        $tenisH = json_encode(['7-40', '8-41', '9-42', '10-43', '11-44']);
+        $chanclasH = json_encode(['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']);
 
-        // [categoria_id, nombre, tallas]
+        $categorias = DB::table('categorias')->get()->keyBy(fn ($c) => $c->catalogo . '|' . $c->nombre);
+
+        // [catalogo|nombreCategoria, nombreSubcategoria, tallas]
         $subs = [
-            [1, 'Bolsos Premium 1.1', null],
-            [1, 'Bolsos Turcos', null],
-            [2, 'Buzos Premium 1.1', $ropa],
-            [2, 'Buzos Turcos', $ropa],
-            [3, 'Camisetas Originales', $ropa],
-            [3, 'Camisetas Premium 1.1', $ropa],
-            [3, 'Camisetas Turcas', $ropa],
-            [4, 'Chanclas Premium 1.1', $chanclas],
-            [4, 'Chanclas Turcas', $chanclas],
-            [5, 'Conjuntos Premium 1.1', $ropa],
-            [5, 'Conjuntos Turcos', $ropa],
-            [6, 'Gorras Originales', null],
-            [6, 'Gorras Premium 1.1', null],
-            [6, 'Gorras Turcas', null],
-            [10, 'Perfumes Originales', null],
-            [10, 'Perfumes Premium 1.1', null],
-            [11, 'Sudaderas Premium 1.1', $ropa],
-            [12, 'Tenis Originales', $tenis],
-            [12, 'Tenis Premium 1.1', $tenis],
-            [12, 'Tenis Turcos', $tenis],
+            // HOMBRE
+            ['hombre|Bolsos', 'Bolsos Premium 1.1', null],
+            ['hombre|Bolsos', 'Bolsos Turcos', null],
+            ['hombre|Buzos', 'Buzos Premium 1.1', $ropaH],
+            ['hombre|Buzos', 'Buzos Turcos', $ropaH],
+            ['hombre|Camisetas', 'Camisetas Originales', $ropaH],
+            ['hombre|Camisetas', 'Camisetas Premium 1.1', $ropaH],
+            ['hombre|Camisetas', 'Camisetas Turcas', $ropaH],
+            ['hombre|Chanclas', 'Chanclas Premium 1.1', $chanclasH],
+            ['hombre|Chanclas', 'Chanclas Turcas', $chanclasH],
+            ['hombre|Conjuntos', 'Conjuntos Premium 1.1', $ropaH],
+            ['hombre|Conjuntos', 'Conjuntos Turcos', $ropaH],
+            ['hombre|Gorras', 'Gorras Originales', null],
+            ['hombre|Gorras', 'Gorras Premium 1.1', null],
+            ['hombre|Gorras', 'Gorras Turcas', null],
+            ['hombre|Perfumes', 'Perfumes Originales', null],
+            ['hombre|Perfumes', 'Perfumes Premium 1.1', null],
+            ['hombre|Sudaderas', 'Sudaderas Premium 1.1', $ropaH],
+            ['hombre|Tenis', 'Tenis Originales', $tenisH],
+            ['hombre|Tenis', 'Tenis Premium 1.1', $tenisH],
+            ['hombre|Tenis', 'Tenis Turcos', $tenisH],
+
+            // MUJER
+            ['mujer|Perfumes', 'Perfumes Calidad 1.1', null],
+            ['mujer|Tenis', 'Tenis Calidad 1.1', json_encode(['5', '6', '7', '8'])],
+            ['mujer|Tenis', 'Tenis Calidad Turca', json_encode(['5', '6', '7'])],
+            ['mujer|Tenis', 'Tenis Originales', json_encode(['5', '6', '7'])],
         ];
 
-        foreach ($subs as [$categoriaId, $nombre, $tallas]) {
+        foreach ($subs as [$catKey, $nombre, $tallas]) {
             DB::table('subcategorias')->insert([
-                'categoria_id' => $categoriaId,
+                'categoria_id' => $categorias[$catKey]->id,
                 'nombre' => $nombre,
                 'tallas' => $tallas,
                 'created_at' => now(),

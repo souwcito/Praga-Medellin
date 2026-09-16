@@ -59,7 +59,7 @@ export default function Footer() {
               {categorias.slice(0, 8).map((c) => (
                 <li key={c.id}>
                   <Link
-                    to={`/catalogo?categoria=${c.id}`}
+                    to={`/catalogo?catalogo=${c.catalogo}&categoria=${c.id}`}
                     className="text-sm text-white/70 transition-colors hover:text-white"
                   >
                     {c.nombre}

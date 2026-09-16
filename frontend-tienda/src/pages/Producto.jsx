@@ -101,7 +101,7 @@ function ProductoDetalle({ productoId }) {
           <Link to="/catalogo" className="transition-colors hover:text-ink">Catálogo</Link>
           <span>/</span>
           <Link
-            to={`/catalogo?categoria=${producto.categoria_id}`}
+            to={`/catalogo?catalogo=${producto.catalogo || 'hombre'}&categoria=${producto.categoria_id}`}
             className="transition-colors hover:text-ink"
           >
             {producto.categoria}

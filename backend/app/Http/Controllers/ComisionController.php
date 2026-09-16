@@ -43,9 +43,11 @@ class ComisionController extends Controller
         }
 
         $lista = [];
+        $empleados = Empleado::all()->keyBy('id');
+        $sedes = Sede::all()->keyBy('id');
         foreach ($porEmpleado as $empleadoId => $stats) {
-            $e = Empleado::find($empleadoId);
-            $sede = $e ? Sede::find($e->sede_id) : null;
+            $e = $empleados[$empleadoId] ?? null;
+            $sede = $e ? ($sedes[$e->sede_id] ?? null) : null;
             if ($request->filled('sede_id') && $e && $e->sede_id != $request->sede_id) {
                 continue;
             }

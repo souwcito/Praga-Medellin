@@ -33,18 +33,36 @@ const TALLAS_TENIS = ['7-40', '8-41', '9-42', '10-43', '11-44']
 const TALLAS_CHANCLAS = ['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']
 
 export const categorias = [
-  { id: 1, nombre: 'Bolsos' },
-  { id: 2, nombre: 'Buzos' },
-  { id: 3, nombre: 'Camisetas' },
-  { id: 4, nombre: 'Chanclas' },
-  { id: 5, nombre: 'Conjuntos' },
-  { id: 6, nombre: 'Gorras' },
-  { id: 7, nombre: 'Jeans', tallas: ['30', '32', '34', '36', '38'] },
-  { id: 8, nombre: 'Mochos', tallas: ['28', '30', '32', '34', '36', '38'] },
-  { id: 9, nombre: 'Pantalonetas', tallas: ['L', 'M', 'XL', 'XXL'] },
-  { id: 10, nombre: 'Perfumes' },
-  { id: 11, nombre: 'Sudaderas' },
-  { id: 12, nombre: 'Tenis' },
+  { id: 1, nombre: 'Bolsos', catalogo: 'hombre' },
+  { id: 2, nombre: 'Buzos', catalogo: 'hombre' },
+  { id: 3, nombre: 'Camisetas', catalogo: 'hombre' },
+  { id: 4, nombre: 'Chanclas', catalogo: 'hombre' },
+  { id: 5, nombre: 'Conjuntos', catalogo: 'hombre' },
+  { id: 6, nombre: 'Gorras', catalogo: 'hombre' },
+  { id: 7, nombre: 'Jeans', tallas: ['30', '32', '34', '36', '38'], catalogo: 'hombre' },
+  { id: 8, nombre: 'Mochos', tallas: ['28', '30', '32', '34', '36', '38'], catalogo: 'hombre' },
+  { id: 9, nombre: 'Pantalonetas', tallas: ['L', 'M', 'XL', 'XXL'], catalogo: 'hombre' },
+  { id: 10, nombre: 'Perfumes', catalogo: 'hombre' },
+  { id: 11, nombre: 'Sudaderas', catalogo: 'hombre' },
+  { id: 12, nombre: 'Tenis', catalogo: 'hombre' },
+
+  // Catálogo Mujer
+  { id: 13, nombre: 'Blusas', tallas: ['XS/S', 'S/M', 'M/L'], catalogo: 'mujer' },
+  { id: 14, nombre: 'Blusones cortos', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 15, nombre: 'Blusones', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 16, nombre: 'Bodys', tallas: ['S/M', 'M/L', 'Talla única'], catalogo: 'mujer' },
+  { id: 17, nombre: 'Bolsos', catalogo: 'mujer' },
+  { id: 18, nombre: 'Chanclas', tallas: ['5', '6', '7', '8'], catalogo: 'mujer' },
+  { id: 19, nombre: 'Conjuntos', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 20, nombre: 'Sets', tallas: ['XS', 'S', 'M', 'Talla única'], catalogo: 'mujer' },
+  { id: 21, nombre: 'Faldas', tallas: ['XS', 'S', 'M', 'L', 'XL'], catalogo: 'mujer' },
+  { id: 22, nombre: 'Jeans', tallas: ['01-6', '03-8', '05-10', '07-12', '09-14', '11-16'], catalogo: 'mujer' },
+  { id: 23, nombre: 'Perfumes', catalogo: 'mujer' },
+  { id: 24, nombre: 'Relojes', catalogo: 'mujer' },
+  { id: 25, nombre: 'Chaquetas', tallas: ['L', 'XL'], catalogo: 'mujer' },
+  { id: 26, nombre: 'Shorts', tallas: ['XS', 'S', 'M'], catalogo: 'mujer' },
+  { id: 27, nombre: 'Vestidos', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
+  { id: 28, nombre: 'Tenis', catalogo: 'mujer' },
 ]
 
 export const subcategorias = [
@@ -68,6 +86,12 @@ export const subcategorias = [
   { id: 18, categoria_id: 12, nombre: 'Tenis Originales', tallas: TALLAS_TENIS },
   { id: 19, categoria_id: 12, nombre: 'Tenis Premium 1.1', tallas: TALLAS_TENIS },
   { id: 20, categoria_id: 12, nombre: 'Tenis Turcos', tallas: TALLAS_TENIS },
+
+  // Catálogo Mujer
+  { id: 21, categoria_id: 23, nombre: 'Perfumes Calidad 1.1', tallas: [] },
+  { id: 22, categoria_id: 28, nombre: 'Tenis Calidad 1.1', tallas: ['5', '6', '7', '8'] },
+  { id: 23, categoria_id: 28, nombre: 'Tenis Calidad Turca', tallas: ['5', '6', '7'] },
+  { id: 24, categoria_id: 28, nombre: 'Tenis Originales', tallas: ['5', '6', '7'] },
 ]
 
 // Tallas válidas para una combinación categoría+subcategoría.
@@ -98,6 +122,9 @@ export const productos = [
   { id: 13, nombre: 'Sudadera Premium 1.1', descripcion: 'Sudadera con capucha premium', precio: 169000, sku: 'SUD-P11-01', categoria_id: 11, subcategoria_id: 17, imagen_url: '/images/products/chaqueta.svg' },
   { id: 14, nombre: 'Tenis Original Blanco', descripcion: 'Tenis blanco corte original', precio: 189000, sku: 'TEN-ORI-01', categoria_id: 12, subcategoria_id: 18, imagen_url: '/images/products/chaqueta.svg' },
   { id: 15, nombre: 'Bolso Premium 1.1', descripcion: 'Bolso premium con logo', precio: 120000, sku: 'BOL-P11-01', categoria_id: 1, subcategoria_id: 1, imagen_url: '/images/products/accesorio.svg' },
+  { id: 16, nombre: 'Blusa Seda', descripcion: 'Blusa de seda para mujer', precio: 65000, sku: 'BLU-SED-01', categoria_id: 13, subcategoria_id: null, imagen_url: '/images/products/camiseta.svg' },
+  { id: 17, nombre: 'Jeans Mujer', descripcion: 'Jeans de mujer', precio: 129000, sku: 'JEA-MUJ-01', categoria_id: 22, subcategoria_id: null, imagen_url: '/images/products/pantalon.svg' },
+  { id: 18, nombre: 'Vestido Elegante', descripcion: 'Vestido elegante', precio: 149000, sku: 'VES-ELE-01', categoria_id: 27, subcategoria_id: null, imagen_url: '/images/products/camiseta.svg' },
 ]
 
 // Variantes: producto + talla (null = talla única). Cada variante tiene su

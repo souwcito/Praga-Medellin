@@ -51,6 +51,7 @@ class ProductoController extends Controller
             'sku' => $p->sku,
             'categoria_id' => $p->categoria_id,
             'categoria' => optional($p->categoria)->nombre,
+            'catalogo' => optional($p->categoria)->catalogo,
             'subcategoria_id' => $p->subcategoria_id,
             'subcategoria' => optional($p->subcategoria)->nombre,
             'imagen_url' => $p->imagen_url ? url($p->imagen_url) : null,
@@ -62,6 +63,9 @@ class ProductoController extends Controller
     public function index(Request $request)
     {
         $query = Producto::with(['variantes.inventarios', 'categoria', 'subcategoria']);
+        if ($request->filled('catalogo')) {
+            $query->whereHas('categoria', fn ($q) => $q->where('catalogo', $request->catalogo));
+        }
         if ($request->filled('categoria_id')) {
             $query->where('categoria_id', $request->categoria_id);
         }
