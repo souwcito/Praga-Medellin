@@ -35,11 +35,14 @@ class ProductoController extends Controller
     private function mapear(Producto $p): array
     {
         $variantes = $p->variantes->map(function ($v) {
+            $stock = (int) $v->inventarios->sum('stock');
             return [
                 'id' => $v->id,
                 'talla' => $v->talla,
                 'codigo_barras' => $v->codigo_barras,
-                'stock_total' => (int) $v->inventarios->sum('stock'),
+                'stock_total' => $stock,
+                // 'stock' = disponibilidad total (suma de sedes) para la tienda pública
+                'stock' => $stock,
             ];
         });
 

@@ -16,7 +16,7 @@ export default function Home() {
     catalogApi
       .getProductos({ destacados: true })
       .then((p) => {
-        setDestacados(p)
+        setDestacados(p.slice(0, 8))
         setError(null)
       })
       .catch((err) => setError(err?.message || 'Error cargando la tienda'))
