@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import logoPraga from '../assets/logo-praga.png'
 
 // Cuenta única del panel (solo modo mock; el backend real valida credenciales).
-const DEMO = { email: 'admin@praga.co', password: 'admin123' }
+const DEMO = { email: 'admin@pragamedellin.com', password: 'admin123' }
 
 export default function Login() {
   const { login } = useAuth()
@@ -113,7 +113,7 @@ export default function Login() {
             }}
             className="font-medium text-white/60 underline underline-offset-2 transition-colors hover:text-white"
           >
-            admin@praga.co · admin123
+            admin@pragamedellin.com · admin123
           </button>
         </p>
       </div>
