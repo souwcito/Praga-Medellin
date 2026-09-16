@@ -77,8 +77,8 @@ export default function Productos() {
   }, [])
 
   useEffect(() => {
-    catalogApi
-      .getProductos({
+    productosApi
+      .list({
         catalogo: catalogo || undefined,
         categoria_id: filtroCategoria || undefined,
         subcategoria_id: filtroSubcategoria || undefined,
