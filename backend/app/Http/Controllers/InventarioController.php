@@ -66,6 +66,7 @@ class InventarioController extends Controller
                 'codigo_barras' => $v->codigo_barras,
                 'categoria_id' => $v->producto->categoria_id,
                 'subcategoria_id' => $v->producto->subcategoria_id,
+                'catalogo' => optional($v->producto->categoria)->catalogo,
                 'imagen_url' => $v->producto->imagen_url ? url($v->producto->imagen_url) : null,
                 'stock' => $stock->values(),
             ];

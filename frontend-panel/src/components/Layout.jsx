@@ -16,7 +16,7 @@ import {
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
   { to: '/pos', label: 'Punto de venta', icon: CartIcon },
-  { to: '/inventario', label: 'Inventario', icon: LayersIcon },
+  { to: '/inventario', label: 'Inventario General', icon: LayersIcon },
   { to: '/ventas', label: 'Ventas', icon: ReceiptIcon },
   { to: '/comisiones', label: 'Comisiones', icon: CoinsIcon },
 ]

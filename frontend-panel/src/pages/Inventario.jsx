@@ -3,6 +3,7 @@ import { catalogApi, inventarioApi } from '../services/api'
 import {
   AlertIcon,
   CheckIcon,
+  ChevronDownIcon,
   MinusIcon,
   PlusIcon,
   SearchIcon,
@@ -20,8 +21,10 @@ export default function Inventario() {
   const [variantes, setVariantes] = useState([])
 
   const [busqueda, setBusqueda] = useState('')
+  const [catalogoId, setCatalogoId] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
   const [soloBajo, setSoloBajo] = useState(false)
+  const [expandido, setExpandido] = useState(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -46,24 +49,58 @@ export default function Inventario() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Agrupa las variantes por PRODUCTO: vista general + detalle por variante
+  const grupos = useMemo(() => {
+    const map = new Map()
+    variantes.forEach((v) => {
+      let g = map.get(v.producto_id)
+      if (!g) {
+        g = {
+          producto_id: v.producto_id,
+          nombre: v.nombre,
+          catalogo: v.catalogo,
+          categoria_id: v.categoria_id,
+          subcategoria_id: v.subcategoria_id,
+          sku: v.sku,
+          imagen_url: v.imagen_url,
+          variantes: [],
+        }
+        map.set(v.producto_id, g)
+      }
+      g.variantes.push(v)
+    })
+    return [...map.values()]
+  }, [variantes])
+
+  const sedes = variantes[0]?.stock.map((s) => ({ sede_id: s.sede_id, sede: s.sede })) || []
+
+  const stockDe = (g, sedeId) =>
+    g.variantes.reduce(
+      (sum, v) => sum + (v.stock.find((s) => s.sede_id === sedeId)?.cantidad || 0),
+      0,
+    )
+  const totalDe = (g) => g.variantes.reduce((sum, v) => sum + v.stock.reduce((a, b) => a + b.cantidad, 0), 0)
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    return variantes.filter((v) => {
-      if (categoriaId && v.categoria_id !== Number(categoriaId)) return false
-      const total = v.stock.reduce((sum, s) => sum + s.cantidad, 0)
+    return grupos.filter((g) => {
+      if (catalogoId && g.catalogo !== catalogoId) return false
+      if (categoriaId && g.categoria_id !== Number(categoriaId)) return false
+      const total = totalDe(g)
       if (soloBajo && total > 5) return false
       if (
         q &&
-        !v.nombre.toLowerCase().includes(q) &&
-        !(v.talla || '').toLowerCase().includes(q) &&
-        !v.sku.toLowerCase().includes(q) &&
-        !v.codigo_barras.toLowerCase().includes(q)
+        !g.nombre.toLowerCase().includes(q) &&
+        !g.sku.toLowerCase().includes(q) &&
+        !g.variantes.some((v) => v.codigo_barras.includes(q))
       ) {
         return false
       }
       return true
     })
-  }, [variantes, busqueda, categoriaId, soloBajo])
+  }, [grupos, busqueda, catalogoId, categoriaId, soloBajo])
+
+  const categoriasFiltro = categorias.filter((c) => !catalogoId || c.catalogo === catalogoId)
 
   function abrirModal(variante, sede) {
     setModal({ variante, sede })
@@ -128,9 +165,11 @@ export default function Inventario() {
       {/* Encabezado */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Inventario</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
+            Inventario General
+          </h1>
           <p className="mt-1 text-sm text-ink-2">
-            Stock por variante (producto + talla) desglosado por las 4 sedes. Haz clic en una celda para ajustar.
+            Todo lo que existe en los catálogos (Hombre y Mujer), agrupado por producto. Clic para ver variantes y ajustar stock.
           </p>
         </div>
       </div>
@@ -150,18 +189,31 @@ export default function Inventario() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre, talla, SKU o código…"
+            placeholder="Buscar por nombre, SKU o código…"
             className={`${inputCls} pl-9`}
           />
         </div>
 
         <select
+          value={catalogoId}
+          onChange={(e) => {
+            setCatalogoId(e.target.value)
+            setCategoriaId('')
+          }}
+          className={`${selectCls} w-48`}
+        >
+          <option value="">Ambos catálogos</option>
+          <option value="hombre">Hombre</option>
+          <option value="mujer">Mujer</option>
+        </select>
+
+        <select
           value={categoriaId}
           onChange={(e) => setCategoriaId(e.target.value)}
-          className={`${selectCls} w-56`}
+          className={`${selectCls} w-52`}
         >
           <option value="">Todas las categorías</option>
-          {categorias.map((c) => (
+          {categoriasFiltro.map((c) => (
             <option key={c.id} value={c.id}>
               {c.nombre}
             </option>
@@ -172,9 +224,7 @@ export default function Inventario() {
           type="button"
           onClick={() => setSoloBajo((v) => !v)}
           className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-            soloBajo
-              ? 'border-ink bg-ink text-white'
-              : 'border-line bg-white text-ink-2 hover:border-ink-2/40'
+            soloBajo ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink-2 hover:border-ink-2/40'
           }`}
         >
           <span className={`h-2 w-2 rounded-full ${soloBajo ? 'bg-white' : 'bg-ink-2/40'}`} />
@@ -182,81 +232,116 @@ export default function Inventario() {
         </button>
       </div>
 
-      {/* Matriz por variante */}
+      {/* Tabla general por producto */}
       {filtrados.length === 0 ? (
         <div className="grid h-48 place-items-center rounded-2xl border border-dashed border-line text-sm text-ink-2/70">
-          Sin variantes para los filtros seleccionados.
+          Sin productos para los filtros seleccionados.
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[minmax(16rem,1fr)_repeat(4,6.5rem)_5.5rem] items-center gap-2 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
-            <span>Variante</span>
-            {variantes[0]?.stock.map((s) => (
+          <div className="grid grid-cols-[minmax(13rem,1fr)_4.5rem_9rem_4rem_repeat(4,5rem)_4.5rem_2rem] items-center gap-2 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
+            <span>Producto</span>
+            <span>Catálogo</span>
+            <span>Categoría</span>
+            <span className="text-center">Tallas</span>
+            {sedes.map((s) => (
               <span key={s.sede_id} className="truncate text-center" title={s.sede}>
                 {s.sede.split(' - ').pop()}
               </span>
             ))}
             <span className="text-right">Total</span>
+            <span />
           </div>
 
           <ul className="divide-y divide-line">
-            {filtrados.map((v) => {
-              const total = v.stock.reduce((sum, s) => sum + s.cantidad, 0)
+            {filtrados.map((g) => {
+              const total = totalDe(g)
+              const abierto = expandido === g.producto_id
               return (
-                <li
-                  key={v.variante_id}
-                  className="grid grid-cols-[minmax(16rem,1fr)_repeat(4,6.5rem)_5.5rem] items-center gap-2 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <img
-                      src={v.imagen_url}
-                      alt={v.nombre}
-                      className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-ink">
-                        {v.nombre}
-                        {v.talla ? <span className="ml-1 text-ink-2">· {v.talla}</span> : null}
-                      </p>
-                      <p className="truncate text-xs text-ink-2/70">
-                        {v.sku} · {v.codigo_barras}
-                      </p>
-                    </div>
-                  </div>
-
-                  {v.stock.map((s) => (
-                    <div key={s.sede_id} className="flex justify-center">
-                      <button
-                        type="button"
-                        onClick={() => abrirModal(v, s)}
-                        title={`Ajustar stock en ${s.sede}`}
-                        className="group flex w-full flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-white"
-                      >
-                        <span
-                          className={`text-sm font-semibold ${
-                            s.cantidad === 0
-                              ? 'text-ink-2/40 line-through decoration-ink-2/30'
-                              : s.cantidad <= 5
-                                ? 'text-red-700'
-                                : 'text-ink'
-                          }`}
-                        >
-                          {s.cantidad}
-                        </span>
-                        <span className="text-[10px] font-medium text-ink-2/60 opacity-0 transition-opacity group-hover:opacity-100">
-                          Ajustar
-                        </span>
-                      </button>
-                    </div>
-                  ))}
-
-                  <span
-                    className={`text-right text-sm font-bold ${
-                      total === 0 ? 'text-ink-2/40' : total <= 5 ? 'text-red-700' : 'text-ink'
-                    }`}
+                <li key={g.producto_id}>
+                  {/* Fila general del producto */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandido(abierto ? null : g.producto_id)}
+                    className="grid w-full grid-cols-[minmax(13rem,1fr)_4.5rem_9rem_4rem_repeat(4,5rem)_4.5rem_2rem] items-center gap-2 px-5 py-3 text-left text-sm transition-colors hover:bg-surface-2/40"
                   >
-                    {total}
-                  </span>
+                    <span className="flex min-w-0 items-center gap-3">
+                      <img src={g.imagen_url} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover" />
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-ink">{g.nombre}</span>
+                        <span className="block text-[11px] text-ink-2/70">{g.sku}</span>
+                      </span>
+                    </span>
+                    <span className="truncate text-xs text-ink-2 capitalize">{g.catalogo || '—'}</span>
+                    <span className="truncate text-ink-2">
+                      {categorias.find((c) => c.id === g.categoria_id)?.nombre || '—'}
+                    </span>
+                    <span className="text-center text-ink-2">{g.variantes.length}</span>
+                    {sedes.map((s) => (
+                      <span
+                        key={s.sede_id}
+                        className={`text-center font-semibold ${
+                          stockDe(g, s.sede_id) === 0 ? 'text-ink-2/40' : 'text-ink'
+                        }`}
+                      >
+                        {stockDe(g, s.sede_id)}
+                      </span>
+                    ))}
+                    <span className={`text-right font-bold ${total === 0 ? 'text-ink-2/40' : 'text-ink'}`}>
+                      {total}
+                    </span>
+                    <span className="justify-self-center">
+                      <ChevronDownIcon className={`h-4 w-4 text-ink-2/70 transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
+                    </span>
+                  </button>
+
+                  {/* Detalle por variante */}
+                  {abierto && (
+                    <div className="animate-fade-in border-t border-line bg-surface-2/40 px-5 py-3">
+                      <div className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                        <span>Talla</span>
+                        <span>Código</span>
+                        {sedes.map((s) => (
+                          <span key={s.sede_id} className="truncate text-center">{s.sede.split(' - ').pop()}</span>
+                        ))}
+                        <span className="text-right">Total</span>
+                      </div>
+                      <ul className="mt-2 space-y-1">
+                        {g.variantes.map((v) => {
+                          const vTotal = v.stock.reduce((a, b) => a + b.cantidad, 0)
+                          return (
+                            <li
+                              key={v.variante_id}
+                              className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 rounded-lg px-1 py-1 text-sm transition-colors hover:bg-white"
+                            >
+                              <span className="font-semibold text-ink">{v.talla || 'Única'}</span>
+                              <span className="truncate text-xs text-ink-2">{v.codigo_barras}</span>
+                              {v.stock.map((s) => (
+                                <span key={s.sede_id} className="flex justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => abrirModal(v, s)}
+                                    title={`Ajustar stock en ${s.sede}`}
+                                    className={`rounded-lg px-1.5 py-0.5 font-semibold transition-colors hover:bg-white ${
+                                      s.cantidad === 0 ? 'text-ink-2/40' : 'text-ink'
+                                    }`}
+                                  >
+                                    {s.cantidad}
+                                  </button>
+                                </span>
+                              ))}
+                              <span className={`text-right font-semibold ${vTotal === 0 ? 'text-ink-2/40' : 'text-ink'}`}>
+                                {vTotal}
+                              </span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                      <p className="mt-2 text-[11px] text-ink-2/70">
+                        Haz clic en un número de la variante para ajustar entrada/salida de stock.
+                      </p>
+                    </div>
+                  )}
                 </li>
               )
             })}
@@ -269,9 +354,7 @@ export default function Inventario() {
         <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
           <div className="animate-scale-in w-full max-w-sm rounded-2xl bg-white p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
-                Ajustar stock
-              </h3>
+              <h3 className="font-display text-xl font-semibold tracking-tight text-ink">Ajustar stock</h3>
               <button
                 type="button"
                 onClick={cerrarModal}
@@ -282,11 +365,7 @@ export default function Inventario() {
             </div>
 
             <div className="mb-4 flex items-center gap-3 rounded-xl bg-surface-2 p-3">
-              <img
-                src={modal.variante.imagen_url}
-                alt={modal.variante.nombre}
-                className="h-12 w-12 shrink-0 rounded-lg bg-white object-cover"
-              />
+              <img src={modal.variante.imagen_url} alt="" className="h-12 w-12 shrink-0 rounded-lg bg-white object-cover" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink">
                   {modal.variante.nombre}
@@ -321,9 +400,7 @@ export default function Inventario() {
             </div>
 
             <div className="mb-4">
-              <label htmlFor="cantidad" className="mb-1.5 block text-sm font-medium text-ink">
-                Cantidad
-              </label>
+              <label htmlFor="cantidad" className="mb-1.5 block text-sm font-medium text-ink">Cantidad</label>
               <input
                 id="cantidad"
                 type="number"
