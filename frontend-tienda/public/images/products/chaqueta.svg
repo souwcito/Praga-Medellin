@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#f1f5f9"/>
+  <path d="M150 200 L300 120 L450 200 L420 320 L300 260 L180 320 Z" fill="#94a3b8"/>
+  <rect x="250" y="300" width="100" height="160" rx="8" fill="#cbd5e1"/>
+  <text x="300" y="520" text-anchor="middle" font-family="Arial" font-size="24" fill="#64748b">Chaqueta</text>
+</svg>
