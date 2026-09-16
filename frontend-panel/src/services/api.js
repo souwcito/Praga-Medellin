@@ -9,6 +9,9 @@ import mockApi from './mockApi'
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 const API_URL = import.meta.env.VITE_API_URL || ''
 
+// Expuesto para que la UI (ej. hint de login) se adapte al modo
+export { USE_MOCK }
+
 const http = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

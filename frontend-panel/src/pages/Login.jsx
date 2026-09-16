@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { USE_MOCK } from '../services/api'
 import logoPraga from '../assets/logo-praga.png'
 
-// Cuenta única del panel (solo modo mock; el backend real valida credenciales).
-const DEMO = { email: 'admin@pragamedellin.com', password: 'admin123' }
+// Cuenta demo: en modo mock usa la cuenta simulada; con backend real, la del seeder.
+const DEMO = USE_MOCK
+  ? { email: 'admin@praga.co', password: 'admin123' }
+  : { email: 'admin@pragamedellin.com', password: 'admin123' }
 
 export default function Login() {
   const { login } = useAuth()
