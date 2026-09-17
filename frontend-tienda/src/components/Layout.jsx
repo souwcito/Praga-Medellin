@@ -3,6 +3,7 @@ import Header from './Header'
 import Footer from './Footer'
 import CartDrawer from './CartDrawer'
 import FavoritesDrawer from './FavoritesDrawer'
+import SocialFloat from './SocialFloat'
 
 // Estructura común de la tienda: header + contenido + footer + paneles laterales.
 export default function Layout() {
@@ -15,6 +16,7 @@ export default function Layout() {
       <Footer />
       <CartDrawer />
       <FavoritesDrawer />
+      <SocialFloat />
     </div>
   )
 }
