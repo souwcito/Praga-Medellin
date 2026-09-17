@@ -566,6 +566,17 @@ async function getVentas(params = {}) {
   }
 }
 
+// Clientes y pedidos online (en el mock están vacíos; llegan con el checkout web)
+async function getClientes() {
+  await delay()
+  return []
+}
+
+async function getPedidos() {
+  await delay()
+  return { data: [] }
+}
+
 export default {
   login,
   subirImagen,
@@ -584,4 +595,6 @@ export default {
   getDashboard,
   getComisiones,
   getVentas,
+  getClientes,
+  getPedidos,
 }

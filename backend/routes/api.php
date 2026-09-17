@@ -12,6 +12,8 @@ use App\Http\Controllers\VentaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ComisionController;
 use App\Http\Controllers\ImagenController;
+use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\PedidoController;
 
 // 1. Login del Panel (cuenta única)
 Route::post('/login', [AuthController::class, 'login']);
@@ -44,3 +46,8 @@ Route::get('/comisiones', [ComisionController::class, 'index']);
 
 // 7. Imágenes
 Route::post('/imagenes', [ImagenController::class, 'store']);
+
+// 8. Clientes y pedidos online
+Route::get('/clientes', [ClienteController::class, 'index']);
+Route::get('/pedidos', [PedidoController::class, 'index']);
+Route::post('/pedidos', [PedidoController::class, 'store']);

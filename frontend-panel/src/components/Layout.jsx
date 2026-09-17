@@ -10,7 +10,9 @@ import {
   DashboardIcon,
   LayersIcon,
   LogoutIcon,
+  PackageIcon,
   ReceiptIcon,
+  UserIcon,
 } from './icons'
 
 const navItems = [
@@ -20,6 +22,41 @@ const navItems = [
   { to: '/ventas', label: 'Ventas', icon: ReceiptIcon },
   { to: '/comisiones', label: 'Comisiones', icon: CoinsIcon },
 ]
+
+const comercioItems = [
+  { to: '/pedidos', label: 'Pedidos online', icon: PackageIcon },
+  { to: '/clientes', label: 'Clientes', icon: UserIcon },
+]
+
+// Item de navegación del sidebar (declarado fuera del render)
+function NavItem({ item }) {
+  const Icon = item.icon
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/dashboard'}
+      className={({ isActive }) =>
+        `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+          isActive
+            ? 'bg-white/10 text-white'
+            : 'text-white/50 hover:translate-x-0.5 hover:bg-white/5 hover:text-white'
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <span
+            className={`absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-metal transition-opacity duration-200 ${
+              isActive ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+          <Icon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+          {item.label}
+        </>
+      )}
+    </NavLink>
+  )
+}
 
 // Bloque de catálogo (Hombre/Mujer) con sus categorías desplegables
 function CatalogoGrupo({ catalogo, titulo, lista, abierto, alternar }) {
@@ -125,35 +162,16 @@ export default function Layout() {
           <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
             Gestión
           </p>
-          {navItems.map((item) => {
-            const Icon = item.icon
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/dashboard'}
-                className={({ isActive }) =>
-                  `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-white/50 hover:translate-x-0.5 hover:bg-white/5 hover:text-white'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <span
-                      className={`absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-metal transition-opacity duration-200 ${
-                        isActive ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    />
-                    <Icon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
-                    {item.label}
-                  </>
-                )}
-              </NavLink>
-            )
-          })}
+          {navItems.map((item) => (
+            <NavItem key={item.to} item={item} />
+          ))}
+
+          <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+            Comercial
+          </p>
+          {comercioItems.map((item) => (
+            <NavItem key={item.to} item={item} />
+          ))}
         </nav>
 
         <div className="border-t border-white/10 px-5 py-4">

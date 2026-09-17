@@ -49,6 +49,8 @@ const mockRoutes = {
   'DELETE /productos/:id': (url) => mockApi.deleteProducto(url.split('/').pop()),
   'GET /inventario/completo': () => mockApi.getInventarioCompleto(),
   'POST /inventario/ajustes': (body) => mockApi.ajustarInventario(body),
+  'GET /clientes': () => mockApi.getClientes(),
+  'GET /pedidos': () => mockApi.getPedidos(),
 }
 
 // Busca el handler mock: primero coincidencia exacta; luego con :id dinámico
@@ -129,6 +131,16 @@ export const comisionesApi = {
   getResumen: (params) => request('GET', '/comisiones', params),
 }
 
+export const clientesApi = {
+  // Clientes que compran en el sitio web
+  getClientes: () => request('GET', '/clientes'),
+}
+
+export const pedidosApi = {
+  // Pedidos online del sitio web
+  getPedidos: () => request('GET', '/pedidos'),
+}
+
 export default {
   authApi,
   catalogApi,
@@ -138,4 +150,6 @@ export default {
   ventasApi,
   dashboardApi,
   comisionesApi,
+  clientesApi,
+  pedidosApi,
 }
