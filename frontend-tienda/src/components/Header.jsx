@@ -73,13 +73,13 @@ export default function Header() {
             </button>
           </div>
 
-          {/* Marca centrada: los 3 logos juntos (el header no crece) */}
+          {/* Marca centrada: los 3 logos juntos, más grandes en escritorio (el header no crece) */}
           <Link
             to="/"
             className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center"
             aria-label="Praga Medellín — inicio"
           >
-            <BrandLogos />
+            <BrandLogos header />
           </Link>
 
           {/* Acciones (derecha) */}
