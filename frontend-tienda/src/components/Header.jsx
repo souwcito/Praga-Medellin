@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
 import { useFavorites } from '../hooks/useFavorites'
-import logoPraga from '../assets/logo-praga.png'
 import SearchOverlay from './SearchOverlay'
+import BrandLogos from './BrandLogos'
 import { CartIcon, ChevronDownIcon, HeartIcon, MenuIcon, SearchIcon, XIcon } from './icons'
 
 export default function Header() {
@@ -73,17 +73,13 @@ export default function Header() {
             </button>
           </div>
 
-          {/* Logo centrado: solo el logo, más grande (el header no crece) */}
+          {/* Marca centrada: los 3 logos juntos (el header no crece) */}
           <Link
             to="/"
             className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center"
             aria-label="Praga Medellín — inicio"
           >
-            <img
-              src={logoPraga}
-              alt="Praga Medellín"
-              className="h-16 w-16 rounded-full object-cover md:h-20 md:w-20"
-            />
+            <BrandLogos />
           </Link>
 
           {/* Acciones (derecha) */}
@@ -136,8 +132,8 @@ export default function Header() {
           <div className="animate-slide-left absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col bg-white shadow-2xl">
             {/* Encabezado del menú */}
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <img src={logoPraga} alt="Praga Medellín" className="h-9 w-9 rounded-full object-cover" />
+              <div className="flex items-center gap-3">
+                <BrandLogos />
                 <div>
                   <p className="font-display text-base font-semibold leading-none tracking-wide text-ink">PRAGA</p>
                   <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-ink-2">Medellín</p>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { catalogApi } from '../services/api'
-import logoPraga from '../assets/logo-praga.png'
+import BrandLogos from './BrandLogos'
 import {
   CartIcon,
   ChevronDownIcon,
@@ -128,16 +128,14 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-64 shrink-0 flex-col bg-dark text-white">
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
-          <img src={logoPraga} alt="Praga Medellín" className="h-12 w-12 rounded-full object-cover" />
-          <div>
-            <p className="font-display text-lg font-semibold leading-tight tracking-wide text-white">
-              PRAGA
-            </p>
-            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">
-              Medellín
-            </p>
-          </div>
+        <div className="flex flex-col items-center gap-1.5 border-b border-white/10 px-5 py-5">
+          <BrandLogos ring="ring-white/30" />
+          <p className="font-display text-base font-semibold leading-none tracking-wide text-white">
+            PRAGA
+          </p>
+          <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-white/50">
+            Medellín
+          </p>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">

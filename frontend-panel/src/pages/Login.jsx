@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { USE_MOCK } from '../services/api'
-import logoPraga from '../assets/logo-praga.png'
+import BrandLogos from '../components/BrandLogos'
 
 // Cuenta demo: en modo mock usa la cuenta simulada; con backend real, la del seeder.
 const DEMO = USE_MOCK
@@ -41,13 +41,9 @@ export default function Login() {
       <div className="pointer-events-none absolute -bottom-40 right-0 h-80 w-80 rounded-full bg-white/5 blur-3xl" />
 
       <div className="relative w-full max-w-md">
-        {/* Marca con el logo oficial (entra primero) */}
+        {/* Marca con los 3 logos */}
         <div className="animate-fade-up mb-8 flex flex-col items-center text-center">
-          <img
-            src={logoPraga}
-            alt="Praga Medellín"
-            className="h-24 w-24 rounded-full object-cover transition-transform duration-300 hover:scale-105"
-          />
+          <BrandLogos big ring="ring-white/30" />
           <h1 className="mt-4 font-display text-3xl font-semibold tracking-wide text-white">
             PRAGA
           </h1>

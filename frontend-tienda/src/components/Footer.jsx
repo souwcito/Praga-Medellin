@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import { mapsLink, sedes } from '../utils/sedes'
-import logoPraga from '../assets/logo-praga.png'
+import BrandLogos from './BrandLogos'
 import { FacebookIcon, InstagramIcon, WhatsAppIcon } from './icons'
 
 export default function Footer() {
@@ -21,17 +21,13 @@ export default function Footer() {
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           {/* Marca */}
           <div>
-            <div className="flex items-center gap-3">
-              <img src={logoPraga} alt="Praga Medellín" className="h-12 w-12 rounded-full object-cover" />
-              <div>
-                <p className="font-display text-xl font-semibold leading-none tracking-wide text-white">
-                  PRAGA
-                </p>
-                <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">
-                  Medellín
-                </p>
-              </div>
-            </div>
+            <BrandLogos ring="ring-white/30" />
+            <p className="mt-3 font-display text-xl font-semibold leading-none tracking-wide text-white">
+              PRAGA
+            </p>
+            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">
+              Medellín
+            </p>
             <p className="mt-4 text-sm text-white/60">
               Ropa y accesorios urbanos. 4 sedes en Medellín con el mismo catálogo.
             </p>
