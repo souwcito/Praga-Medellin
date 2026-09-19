@@ -51,6 +51,10 @@ const mockRoutes = {
   'POST /inventario/ajustes': (body) => mockApi.ajustarInventario(body),
   'GET /clientes': () => mockApi.getClientes(),
   'GET /pedidos': () => mockApi.getPedidos(),
+  'GET /ventas/buscar': (params) => mockApi.buscarVentaPorFactura(params),
+  'POST /devoluciones': (body) => mockApi.crearDevolucion(body),
+  'GET /devoluciones': (params) => mockApi.getDevoluciones(params),
+  'GET /devoluciones/:id': (params, url) => mockApi.getDevolucionDetalle(url.split('/').pop()),
 }
 
 // Busca el handler mock: primero coincidencia exacta; luego con :id dinámico
@@ -118,6 +122,16 @@ export const ventasApi = {
   createVenta: (payload) => request('POST', '/ventas', payload),
   // Historial con paginación (Laravel-style). params: { periodo, sede_id?, empleado_id?, tipo?, page?, per_page? }
   getHistorial: (params) => request('GET', '/ventas', params),
+  // Busca una venta por número de factura para precargar una devolución
+  buscarPorFactura: (factura) => request('GET', '/ventas/buscar', { factura }),
+}
+
+export const devolucionesApi = {
+  // Registrar un cambio: { venta_id, sede_id, empleado_id, devueltos[], cambios[], metodo_pago?, motivo? }
+  registrar: (payload) => request('POST', '/devoluciones', payload),
+  // Historial con paginación (Laravel-style). params: { periodo, sede_id?, empleado_id?, page?, per_page? }
+  getHistorial: (params) => request('GET', '/devoluciones', params),
+  getDetalle: (id) => request('GET', `/devoluciones/${id}`),
 }
 
 export const dashboardApi = {
@@ -148,6 +162,7 @@ export default {
   inventarioApi,
   imagenesApi,
   ventasApi,
+  devolucionesApi,
   dashboardApi,
   comisionesApi,
   clientesApi,

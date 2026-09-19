@@ -7,6 +7,8 @@
 import {
   categorias,
   detalleVentas,
+  devoluciones,
+  detalleDevoluciones,
   empleados,
   facturas,
   inventario,
@@ -577,6 +579,239 @@ async function getPedidos() {
   return { data: [] }
 }
 
+// Busca una venta por su número de factura para precargar una devolución.
+async function buscarVentaPorFactura({ factura } = {}) {
+  await delay(200)
+  const f = facturas.find(
+    (x) => String(x.numero_interno).toLowerCase() === String(factura).trim().toLowerCase(),
+  )
+  if (!f) throw new Error('No se encontró ninguna venta con esa factura')
+
+  const venta = ventas.find((v) => v.id === f.venta_id)
+  const empleado = empleados.find((e) => e.id === venta.empleado_id)
+  const sede = sedes.find((s) => s.id === venta.sede_venta_id)
+
+  const items = detalleVentas
+    .filter((d) => d.venta_id === venta.id)
+    .map((d) => {
+      const v = variantes.find((x) => x.id === d.variante_id)
+      const p = productos.find((pr) => pr.id === v.producto_id)
+      return {
+        variante_id: d.variante_id,
+        nombre: p ? p.nombre : `Producto ${d.variante_id}`,
+        talla: v ? v.talla : null,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.cantidad * d.precio_unitario,
+      }
+    })
+
+  return {
+    venta: {
+      id: venta.id,
+      factura: f.numero_interno,
+      fecha: venta.fecha,
+      sede_venta: sede ? sede.nombre : '—',
+      empleado: empleado ? empleado.nombre : '—',
+      total: venta.total,
+    },
+    items,
+  }
+}
+
+// Registra un CAMBIO o REEMBOLSO interno: los artículos devueltos vuelven al
+// inventario; los de cambio salen del mismo en la sede indicada. El reembolso
+// (caso extremo) entrega dinero al cliente y descuenta de ingresos.
+let _devolucionSeq = 1001
+async function crearDevolucion(body) {
+  await delay()
+
+  const {
+    venta_id,
+    sede_id,
+    empleado_id,
+    tipo = 'cambio',
+    devueltos,
+    cambios = [],
+    metodo_pago,
+    motivo,
+  } = body
+  if (!venta_id || !sede_id || !empleado_id) throw new Error('Faltan datos para registrar la devolución')
+  if (!Array.isArray(devueltos) || devueltos.length === 0) throw new Error('Debes devolver al menos un artículo')
+
+  const venta = ventas.find((v) => v.id === Number(venta_id))
+  if (!venta) throw new Error('La venta de origen no existe')
+
+  let totalDevuelto = 0
+  devueltos.forEach((item) => {
+    const vendido = detalleVentas
+      .filter((d) => d.venta_id === Number(venta_id) && d.variante_id === Number(item.variante_id))
+      .reduce((s, d) => s + d.cantidad, 0)
+    if (Number(item.cantidad) > vendido) {
+      throw new Error('La cantidad devuelta supera lo vendido en la factura')
+    }
+    totalDevuelto += Number(item.cantidad) * Number(item.precio_unitario)
+  })
+
+  let totalCambio = 0
+  cambios.forEach((item) => {
+    const reg = inventario.find(
+      (i) => i.sede_id === Number(sede_id) && i.variante_id === Number(item.variante_id),
+    )
+    if (!reg || reg.cantidad < Number(item.cantidad)) {
+      throw new Error('Stock insuficiente para el producto de cambio')
+    }
+    totalCambio += Number(item.cantidad) * Number(item.precio_unitario)
+  })
+
+  const diferencia = totalCambio - totalDevuelto
+  if (tipo === 'reembolso') {
+    if (cambios.length > 0) throw new Error('Un reembolso no puede incluir productos de cambio')
+    if (!metodo_pago) throw new Error('Indica el método por el que se entrega el dinero al cliente')
+  } else {
+    if (cambios.length === 0) throw new Error('Debes agregar al menos un producto de cambio')
+    if (diferencia < 0) throw new Error('El cambio debe ser de igual o mayor valor que lo devuelto')
+    if (diferencia > 0 && !metodo_pago) throw new Error('El método de pago es obligatorio cuando hay diferencia')
+  }
+
+  const numeroInterno = `DEV-${_devolucionSeq++}`
+  const fecha = new Date().toISOString()
+  const devolucion = {
+    id: devoluciones.length + 1,
+    venta_id: Number(venta_id),
+    sede_id: Number(sede_id),
+    empleado_id: Number(empleado_id),
+    numero_interno: numeroInterno,
+    tipo,
+    fecha,
+    total_devuelto: totalDevuelto,
+    total_cambio: totalCambio,
+    diferencia,
+    metodo_pago: tipo === 'reembolso' ? metodo_pago : diferencia > 0 ? metodo_pago : null,
+    motivo: motivo || null,
+    estado: 'completada',
+  }
+  devoluciones.push(devolucion)
+
+  const detalle = []
+  devueltos.forEach((item) => {
+    const reg = inventario.find(
+      (i) => i.sede_id === Number(sede_id) && i.variante_id === Number(item.variante_id),
+    )
+    if (reg) reg.cantidad += Number(item.cantidad)
+    else inventario.push({ variante_id: Number(item.variante_id), sede_id: Number(sede_id), cantidad: Number(item.cantidad) })
+    detalle.push({
+      devolucion_id: devolucion.id,
+      variante_id: Number(item.variante_id),
+      cantidad: Number(item.cantidad),
+      precio_unitario: Number(item.precio_unitario),
+      tipo: 'devuelto',
+    })
+  })
+  cambios.forEach((item) => {
+    const reg = inventario.find(
+      (i) => i.sede_id === Number(sede_id) && i.variante_id === Number(item.variante_id),
+    )
+    reg.cantidad -= Number(item.cantidad)
+    detalle.push({
+      devolucion_id: devolucion.id,
+      variante_id: Number(item.variante_id),
+      cantidad: Number(item.cantidad),
+      precio_unitario: Number(item.precio_unitario),
+      tipo: 'cambio',
+    })
+  })
+  detalleDevoluciones.push(...detalle)
+
+  return formatearDevolucion(devolucion, detalle)
+}
+
+function formatearDevolucion(d, detalle = []) {
+  const factura = facturas.find((f) => f.venta_id === d.venta_id)
+  const e = empleados.find((em) => em.id === d.empleado_id)
+  const sede = sedes.find((s) => s.id === d.sede_id)
+
+  const items = detalle.length
+    ? detalle.map((dd) => {
+        const v = variantes.find((x) => x.id === dd.variante_id)
+        const p = productos.find((pr) => pr.id === v.producto_id)
+        return {
+          id: `${dd.devolucion_id}-${dd.tipo}-${dd.variante_id}`,
+          variante_id: dd.variante_id,
+          nombre: p ? p.nombre : `Producto ${dd.variante_id}`,
+          talla: v ? v.talla : null,
+          cantidad: dd.cantidad,
+          precio_unitario: dd.precio_unitario,
+          subtotal: dd.cantidad * dd.precio_unitario,
+          tipo: dd.tipo,
+        }
+      })
+    : null
+
+  const base = {
+    id: d.id,
+    numero_interno: d.numero_interno,
+    tipo: d.tipo || 'cambio',
+    factura: factura ? factura.numero_interno : null,
+    venta_id: d.venta_id,
+    fecha: d.fecha,
+    empleado: { id: d.empleado_id, nombre: e ? e.nombre : '—' },
+    sede: sede ? sede.nombre : '—',
+    total_devuelto: d.total_devuelto,
+    total_cambio: d.total_cambio,
+    diferencia: d.diferencia,
+    reembolsado: (d.tipo || 'cambio') === 'reembolso' ? d.total_devuelto : null,
+    metodo_pago: d.metodo_pago,
+    motivo: d.motivo,
+    estado: d.estado,
+  }
+  return items ? { ...base, items } : base
+}
+
+// Historial de devoluciones con paginación estilo Laravel.
+async function getDevoluciones(params = {}) {
+  await delay()
+
+  const { periodo = 'mes', sede_id, empleado_id, tipo, page = 1, per_page = 10 } = params
+
+  const inicio = inicioPeriodo(periodo)
+  let filtradas = devoluciones.filter((d) => new Date(d.fecha) >= inicio)
+  if (sede_id) filtradas = filtradas.filter((d) => d.sede_id === Number(sede_id))
+  if (empleado_id) filtradas = filtradas.filter((d) => d.empleado_id === Number(empleado_id))
+  if (tipo) filtradas = filtradas.filter((d) => d.tipo === tipo)
+
+  const total = filtradas.length
+  const last_page = Math.max(1, Math.ceil(total / per_page))
+  const current_page = Math.min(Math.max(1, Number(page)), last_page)
+  const start = (current_page - 1) * per_page
+
+  const data = filtradas
+    .slice(start, start + per_page)
+    .map((d) => formatearDevolucion(d))
+
+  return {
+    data,
+    meta: { total, per_page, current_page, last_page },
+    resumen: {
+      totalDevuelto: filtradas.reduce((s, d) => s + d.total_devuelto, 0),
+      totalCambio: filtradas.reduce((s, d) => s + d.total_cambio, 0),
+      totalReembolsado: filtradas
+        .filter((d) => d.tipo === 'reembolso')
+        .reduce((s, d) => s + d.total_devuelto, 0),
+      numDevoluciones: total,
+    },
+  }
+}
+
+// Detalle de una devolución con sus artículos (devueltos + cambio).
+async function getDevolucionDetalle(id) {
+  await delay(150)
+  const d = devoluciones.find((x) => x.id === Number(id))
+  if (!d) throw new Error('Devolución no encontrada')
+  const detalle = detalleDevoluciones.filter((dd) => dd.devolucion_id === d.id)
+  return formatearDevolucion(d, detalle)
+}
+
 export default {
   login,
   subirImagen,
@@ -597,4 +832,8 @@ export default {
   getVentas,
   getClientes,
   getPedidos,
+  buscarVentaPorFactura,
+  crearDevolucion,
+  getDevoluciones,
+  getDevolucionDetalle,
 }

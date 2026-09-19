@@ -14,6 +14,7 @@ use App\Http\Controllers\ComisionController;
 use App\Http\Controllers\ImagenController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PedidoController;
+use App\Http\Controllers\DevolucionController;
 
 // 1. Login del Panel (cuenta única)
 Route::post('/login', [AuthController::class, 'login']);
@@ -39,6 +40,12 @@ Route::post('/inventario/ajustes', [InventarioController::class, 'ajustes']);
 // 5. Ventas (POS + historial)
 Route::post('/ventas', [VentaController::class, 'store']);
 Route::get('/ventas', [VentaController::class, 'index']);
+Route::get('/ventas/buscar', [VentaController::class, 'buscarPorFactura']);
+
+// 5.1 Devoluciones (cambio en punto físico)
+Route::get('/devoluciones', [DevolucionController::class, 'index']);
+Route::post('/devoluciones', [DevolucionController::class, 'store']);
+Route::get('/devoluciones/{id}', [DevolucionController::class, 'show']);
 
 // 6. Informes
 Route::get('/dashboard', [DashboardController::class, 'resumen']);

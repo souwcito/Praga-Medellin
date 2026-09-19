@@ -13,6 +13,7 @@ import {
   PackageIcon,
   ReceiptIcon,
   UserIcon,
+  SwapIcon,
 } from './icons'
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
   { to: '/pos', label: 'Punto de venta', icon: CartIcon },
   { to: '/inventario', label: 'Inventario General', icon: LayersIcon },
   { to: '/ventas', label: 'Ventas', icon: ReceiptIcon },
+  { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
   { to: '/comisiones', label: 'Comisiones', icon: CoinsIcon },
 ]
 

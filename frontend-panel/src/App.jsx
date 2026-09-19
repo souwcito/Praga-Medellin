@@ -14,6 +14,7 @@ const Inventario = lazy(() => import('./pages/Inventario'))
 const Productos = lazy(() => import('./pages/Productos'))
 const Pedidos = lazy(() => import('./pages/Pedidos'))
 const Clientes = lazy(() => import('./pages/Clientes'))
+const Devoluciones = lazy(() => import('./pages/Devoluciones'))
 
 function PageFallback() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/comisiones" element={<Comisiones />} />
             <Route path="/pedidos" element={<Pedidos />} />
             <Route path="/clientes" element={<Clientes />} />
+            <Route path="/devoluciones" element={<Devoluciones />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

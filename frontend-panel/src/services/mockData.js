@@ -231,3 +231,11 @@ for (let offset = 29; offset >= 0; offset -= 1) {
     _ventaId += 1
   }
 }
+
+// ---------------------------------------------------------------------------
+// Devoluciones (cambios en punto físico). Empiezan vacías y crecen durante la
+// sesión con crearDevolucion() del mock.
+// ---------------------------------------------------------------------------
+
+export const devoluciones = []
+export const detalleDevoluciones = []

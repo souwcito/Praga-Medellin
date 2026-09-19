@@ -113,6 +113,49 @@ class VentaController extends Controller
         }
     }
 
+    // Busca una venta por su número de factura con sus artículos (para precargar
+    // una devolución en el punto físico).
+    public function buscarPorFactura(Request $request)
+    {
+        $numero = $request->query('factura');
+        if (!$numero) {
+            return response()->json(['error' => 'El parámetro factura es requerido'], 400);
+        }
+
+        $venta = Venta::with(['empleado', 'sedeVenta', 'detalles.variante.producto'])
+            ->where('numero_interno', $numero)
+            ->first();
+
+        if (!$venta) {
+            return response()->json(['error' => 'No se encontró ninguna venta con esa factura'], 404);
+        }
+
+        $items = $venta->detalles->map(function ($det) {
+            $variante = $det->variante;
+            $producto = $variante ? $variante->producto : null;
+            return [
+                'variante_id' => $det->variante_id,
+                'nombre' => $producto ? $producto->nombre : 'Producto ' . $det->variante_id,
+                'talla' => $variante ? $variante->talla : null,
+                'cantidad' => (int) $det->cantidad,
+                'precio_unitario' => (int) $det->precio_unitario,
+                'subtotal' => (int) $det->subtotal,
+            ];
+        });
+
+        return response()->json([
+            'venta' => [
+                'id' => $venta->id,
+                'factura' => $venta->numero_interno,
+                'fecha' => $venta->created_at->toISOString(),
+                'sede_venta' => optional($venta->sedeVenta)->nombre ?? '—',
+                'empleado' => optional($venta->empleado)->nombre ?? '—',
+                'total' => (int) $venta->total,
+            ],
+            'items' => $items->values(),
+        ]);
+    }
+
     private function inicioPeriodo(string $periodo): \Carbon\Carbon
     {
         $d = now()->startOfDay();

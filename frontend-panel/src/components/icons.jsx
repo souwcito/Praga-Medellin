@@ -173,3 +173,12 @@ export const UploadIcon = (p) => (
     <path d="M12 3v12" />
   </Icon>
 )
+
+export const SwapIcon = (p) => (
+  <Icon {...p}>
+    <path d="M17 2v16" />
+    <path d="m13 6 4-4 4 4" />
+    <path d="M7 22V6" />
+    <path d="m3 18 4 4 4-4" />
+  </Icon>
+)
