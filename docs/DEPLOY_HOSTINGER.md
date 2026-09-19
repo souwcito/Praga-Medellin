@@ -25,9 +25,16 @@ Guía paso a paso para subir a producción. Todo se sirve bajo un solo dominio:
 ## 1. En hPanel (Hostinger)
 
 1. **Base de datos**: hPanel → Databases → MySQL → crear base con usuario y contraseña.
-   Anota: `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` (suelen ser `uXXXXXXX_praga`).
+   Anota: `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`.
+   Credenciales actuales del proyecto:
+   ```env
+   DB_DATABASE=u671432879_bd
+   DB_USERNAME=u671432879_praga
+   DB_PASSWORD=Praga+1999
+   ```
 2. **SSL**: hPanel → SSL → activar certificado gratuito para `pragamedellin.com`.
-3. **Importar datos**: phpMyAdmin (hPanel) → seleccionar la base → *Import* → subir `backend/produccion.sql`. Esto crea tablas (incluye **devoluciones**), catálogo, sedes, categorías y el usuario admin.
+3. **Importar datos**: phpMyAdmin (hPanel) → seleccionar la base `u671432879_bd` → *Import* → subir `backend/produccion.sql`. Esto crea tablas (incluye **devoluciones**), catálogo, sedes, categorías y el usuario admin.
+   > El dump importa en la base **seleccionada** (no crea una base propia), así que asegúrate de tener `u671432879_bd` seleccionada en phpMyAdmin antes de importar.
 
 ---
 
@@ -67,9 +74,9 @@ public_html/
    ```env
    DB_HOST=localhost
    DB_PORT=3306
-   DB_DATABASE=uXXXXXXX_praga
-   DB_USERNAME=uXXXXXXX_praga
-   DB_PASSWORD=TU_CONTRASENA
+   DB_DATABASE=u671432879_bd
+   DB_USERNAME=u671432879_praga
+   DB_PASSWORD=Praga+1999
    ```
 3. Verifica que `APP_KEY` esté presente (ya viene generada en `.env.production`).
 4. Sube el archivo a `public_html/api-app/.env`.
