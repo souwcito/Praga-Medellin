@@ -1,8 +1,78 @@
+# =============================================================================
+# .htaccess raíz — pragamedellin.com (public_html)
+# Estructura:
+#   /                -> tienda (este SPA)
+#   /panel/          -> panel admin (tiene su propio .htaccess)
+#   /api/*           -> Laravel (public_html/api-app/public/index.php)
+#   /images/*        -> imágenes de productos (public_html/api-app/public/images)
+# =============================================================================
+
+# ---------- HTTPS forzado ----------
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /
-  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# ---------- API Laravel ----------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # /api/* -> front controller de Laravel (las rutas ya viven bajo /api)
+  RewriteCond %{REQUEST_URI} ^/api(/|$)
+  RewriteRule ^api/(.*)$ api-app/public/index.php [QSA,L]
+  # /images/* -> archivos estáticos subidos por el panel
+  RewriteCond %{REQUEST_URI} ^/images(/|$)
+  RewriteRule ^images/(.*)$ api-app/public/images/$1 [L]
+</IfModule>
+
+# ---------- SPA fallback (tienda) — excluye api, images y panel ----------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_URI} !^/api(/|$)
+  RewriteCond %{REQUEST_URI} !^/images(/|$)
+  RewriteCond %{REQUEST_URI} !^/panel(/|$)
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
+</IfModule>
+
+# ---------- Caché de navegador para estáticos ----------
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType application/x-javascript "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType application/json "access plus 0 seconds"
+</IfModule>
+
+# ---------- Cabeceras de caché ----------
+<IfModule mod_headers.c>
+  <FilesMatch "\.(css|js|mjs|woff2|woff|ttf|eot|png|jpg|jpeg|gif|webp|svg|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "\.(html|json)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+
+# ---------- Compresión gzip ----------
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
+  AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+  AddOutputFilterByType DEFLATE application/json application/xml
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ---------- Seguridad básica ----------
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>

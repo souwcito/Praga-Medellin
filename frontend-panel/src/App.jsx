@@ -26,7 +26,7 @@ function PageFallback() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/panel">
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />

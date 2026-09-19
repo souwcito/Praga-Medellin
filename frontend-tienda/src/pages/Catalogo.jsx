@@ -71,6 +71,25 @@ export default function Catalogo() {
       <Seo
         title={titulo}
         description="Explora el catálogo de Praga Medellín: camisetas, buzos, tenis, gorras y más."
+        url={`https://pragamedellin.com${window.location.pathname}${window.location.search}`}
+        jsonLd={[
+          {
+            '@context': 'https://schema.org',
+            '@type': 'CollectionPage',
+            name: `${titulo} | Praga Medellín`,
+            description: 'Catálogo de ropa y accesorios urbanos en Medellín.',
+            url: `https://pragamedellin.com${window.location.pathname}${window.location.search}`,
+            mainEntity: {
+              '@type': 'ItemList',
+              itemListElement: filtrados.slice(0, 50).map((p, i) => ({
+                '@type': 'ListItem',
+                position: i + 1,
+                name: p.nombre,
+                url: `https://pragamedellin.com/producto/${p.id}`,
+              })),
+            },
+          },
+        ]}
       />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

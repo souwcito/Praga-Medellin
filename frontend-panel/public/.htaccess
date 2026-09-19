@@ -1,8 +1,25 @@
+# .htaccess del panel admin — se sirve bajo /panel (public_html/panel)
+# Rewrites las rutas del SPA (/panel/dashboard, /panel/ventas, ...) a index.html.
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /
+  RewriteBase /panel/
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
+  RewriteRule . /panel/index.html [L]
+</IfModule>
+
+# Caché de estáticos del panel
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# Seguridad: impedir que el panel se indexe
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow"
 </IfModule>

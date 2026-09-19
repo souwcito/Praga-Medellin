@@ -91,7 +91,48 @@ function ProductoDetalle({ productoId }) {
 
   return (
     <>
-      <Seo title={producto.nombre} description={producto.descripcion} />
+      <Seo
+        title={producto.nombre}
+        description={producto.descripcion}
+        image={producto.imagen_url}
+        url={`https://pragamedellin.com/producto/${producto.id}`}
+        jsonLd={[
+          {
+            '@context': 'https://schema.org',
+            '@type': 'Product',
+            name: producto.nombre,
+            image: producto.imagen_url,
+            description: producto.descripcion,
+            sku: producto.sku || undefined,
+            brand: { '@type': 'Brand', name: 'Praga Medellín' },
+            offers: {
+              '@type': 'Offer',
+              url: `https://pragamedellin.com/producto/${producto.id}`,
+              priceCurrency: 'COP',
+              price: producto.precio,
+              availability:
+                producto.stock_total > 0
+                  ? 'https://schema.org/InStock'
+                  : 'https://schema.org/OutOfStock',
+            },
+          },
+          {
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Inicio', item: 'https://pragamedellin.com/' },
+              { '@type': 'ListItem', position: 2, name: 'Catálogo', item: 'https://pragamedellin.com/catalogo' },
+              {
+                '@type': 'ListItem',
+                position: 3,
+                name: producto.categoria || 'Producto',
+                item: `https://pragamedellin.com/catalogo?catalogo=${producto.catalogo || 'hombre'}&categoria=${producto.categoria_id}`,
+              },
+              { '@type': 'ListItem', position: 4, name: producto.nombre },
+            ],
+          },
+        ]}
+      />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Migas de pan */}
@@ -114,6 +155,9 @@ function ProductoDetalle({ productoId }) {
             <img
               src={producto.imagen_url}
               alt={producto.nombre}
+              width={1200}
+              height={1200}
+              fetchPriority="high"
               className="h-auto w-full object-cover"
             />
           </div>

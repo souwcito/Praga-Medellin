@@ -28,6 +28,20 @@ export default function Home() {
       <Seo
         title="Ropa y accesorios urbanos"
         description="Praga Medellín — Camisetas, buzos, tenis, gorras y más. 4 sedes en Medellín, pago seguro con Wompi."
+        url="https://pragamedellin.com/"
+        jsonLd={[
+          {
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            name: 'Praga Medellín',
+            url: 'https://pragamedellin.com/',
+            potentialAction: {
+              '@type': 'SearchAction',
+              target: 'https://pragamedellin.com/catalogo?q={search_term_string}',
+              'query-input': 'required name=search_term_string',
+            },
+          },
+        ]}
       />
 
       {/* 1. Banner slider con CTAs */}
