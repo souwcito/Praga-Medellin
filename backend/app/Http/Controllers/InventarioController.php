@@ -35,7 +35,7 @@ class InventarioController extends Controller
             ->orderBy('productos.nombre')
             ->get()
             ->map(function ($r) {
-                $r->imagen_url = $r->imagen_url ? url($r->imagen_url) : null;
+                $r->imagen_url = $this->imagenUrl($r->imagen_url);
                 return $r;
             });
 
@@ -67,7 +67,7 @@ class InventarioController extends Controller
                 'categoria_id' => $v->producto->categoria_id,
                 'subcategoria_id' => $v->producto->subcategoria_id,
                 'catalogo' => optional($v->producto->categoria)->catalogo,
-                'imagen_url' => $v->producto->imagen_url ? url($v->producto->imagen_url) : null,
+                'imagen_url' => $this->imagenUrl($v->producto->imagen_url),
                 'stock' => $stock->values(),
             ];
         });

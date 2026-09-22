@@ -22,7 +22,7 @@ class ImagenController extends Controller
         $archivo->move($destino, $nombre);
 
         return response()->json([
-            'imagen_url' => url('images/products/' . $nombre),
+            'imagen_url' => 'images/products/' . $nombre,
         ], 201);
     }
 }

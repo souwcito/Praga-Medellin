@@ -22,6 +22,8 @@ return [
     'allowed_origins' => [
         'https://pragamedellin.com',
         'http://pragamedellin.com',
+        'https://beige-camel-238711.hostingersite.com',
+        'http://beige-camel-238711.hostingersite.com',
         'http://127.0.0.1:5173',
         'http://localhost:5173',
         'http://127.0.0.1:8000',

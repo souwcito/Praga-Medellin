@@ -1,13 +1,21 @@
 # Despliegue en Hostinger — pragamedellin.com
 
+> **Estado actual (fase dominio temporal):** `pragamedellin.com` está en transferencia desde otro
+> proveedor. Por ahora todo se opera con el dominio temporal de Hostinger:
+> **`https://beige-camel-238711.hostingersite.com`**.
+> Los frontends están compilados apuntando a `https://beige-camel-238711.hostingersite.com/api`
+> y el CORS ya lo admite. Al terminar la transferencia solo hay que recompilar y re-subir
+> (ver sección "Cambio a pragamedellin.com"). **Los datos (productos, inventario, ventas,
+> devoluciones) viven en la BD y no se pierden al cambiar de dominio.**
+
 Guía paso a paso para subir a producción. Todo se sirve bajo un solo dominio:
 
 | Ruta | Qué es |
 |---|---|
-| `pragamedellin.com/` | Tienda pública (React/Vite) |
-| `pragamedellin.com/panel` | Panel admin |
-| `pragamedellin.com/api/*` | Backend Laravel (en `public_html/api-app/`) |
-| `pragamedellin.com/images/*` | Imágenes de productos subidas desde el panel |
+| `https://beige-camel-238711.hostingersite.com/` | Tienda pública (React/Vite) |
+| `https://beige-camel-238711.hostingersite.com/panel` | Panel admin |
+| `https://beige-camel-238711.hostingersite.com/api/*` | Backend Laravel (en `public_html/api-app/`) |
+| `https://beige-camel-238711.hostingersite.com/images/*` | Imágenes de productos subidas desde el panel |
 
 ---
 
@@ -137,3 +145,22 @@ Si la API responde 500: revisa `api-app/storage/logs/laravel.log`.
 - **Wompi**: el checkout de la tienda todavía es un placeholder; cuando se integre, completa `VITE_WOMPI_PUBLIC_KEY` en `frontend-tienda/.env.production` y reconstruye.
 - El `.htaccess` raíz redirige HTTP→HTTPS, rutea `/api` y `/images` hacia Laravel, deja `/panel` a su propio SPA y agrega caché/compresión para rendimiento (Core Web Vitals).
 - El panel no se indexa (`X-Robots-Tag: noindex`).
+- **Imágenes**: la API arma la URL de cada imagen con el host de la petición actual
+  (`request()->getSchemeAndHttpHost()`). Por eso las imágenes funcionan con el dominio temporal
+  y luego con `pragamedellin.com` sin tocar la base de datos.
+
+---
+
+## Cambio a pragamedellin.com (cuando la transferencia termine)
+
+1. En ambos `frontend-tienda/.env.production` y `frontend-panel/.env.production` cambia:
+   ```
+   VITE_API_URL=https://pragamedellin.com/api
+   ```
+2. Recompila y re-subi por FTP:
+   - `frontend-tienda/dist/` → raíz de `public_html/`
+   - `frontend-panel/dist/` → `public_html/panel/`
+3. Activa el **SSL** de `pragamedellin.com` en hPanel.
+4. (Opcional) en `api-app/config/cors.php` puedes quitar el dominio temporal; `pragamedellin.com` ya está permitido.
+5. Verifica `https://pragamedellin.com/`, `/panel` y `/api/sedes`.
+6. **No hay que tocar la base de datos ni recargar productos**: todo sigue intacto.

@@ -57,7 +57,7 @@ class ProductoController extends Controller
             'catalogo' => optional($p->categoria)->catalogo,
             'subcategoria_id' => $p->subcategoria_id,
             'subcategoria' => optional($p->subcategoria)->nombre,
-            'imagen_url' => $p->imagen_url ? url($p->imagen_url) : null,
+            'imagen_url' => $this->imagenUrl($p->imagen_url),
             'variantes' => $variantes->values(),
             'stock_total' => (int) $variantes->sum('stock_total'),
         ];
