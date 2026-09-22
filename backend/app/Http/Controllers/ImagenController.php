@@ -10,7 +10,7 @@ class ImagenController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'imagen' => 'required|image|mimes:jpeg,jpg,png,webp|max:3072',
+            'imagen' => 'required|file|mimes:jpeg,jpg,png,webp,heic,heif|max:10240',
         ]);
 
         $archivo = $request->file('imagen');

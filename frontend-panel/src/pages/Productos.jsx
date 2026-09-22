@@ -36,6 +36,16 @@ const CAMPOS_INICIALES = {
   imagenes: [],
 }
 
+function Seccion({ titulo, descripcion, children }) {
+  return (
+    <section className="rounded-2xl border border-line p-4">
+      <h4 className="text-sm font-semibold text-ink">{titulo}</h4>
+      {descripcion && <p className="mt-0.5 text-xs text-ink-2">{descripcion}</p>}
+      <div className="mt-3">{children}</div>
+    </section>
+  )
+}
+
 function sugerirBarra(idx) {
   const base = (Date.now() + idx * 1000) % 100000000
   return '770' + String(base).padStart(10, '0')
@@ -461,220 +471,290 @@ export default function Productos() {
       {/* Formulario crear/editar */}
       {form !== null && (
         <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
-          <div className="animate-scale-in max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6">
-            <div className="mb-5 flex items-center justify-between">
-              <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
-                {form.id ? 'Editar producto' : 'Nuevo producto'}
-              </h3>
+          <div className="animate-scale-in flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-line px-6 py-4">
+              <div>
+                <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
+                  {form.id ? 'Editar producto' : 'Nuevo producto'}
+                </h3>
+                <p className="mt-0.5 text-xs text-ink-2">
+                  Completa la información, las tallas y las imágenes.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={cerrarForm}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-surface-2 hover:text-ink"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-surface-2 hover:text-ink"
               >
                 <XIcon className="h-5 w-5" />
               </button>
             </div>
 
-            {formError && (
-              <p className="animate-fade-in mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {formError}
-              </p>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="p-nombre" className="mb-1.5 block text-sm font-medium text-ink">
-                  Nombre <span className="text-red-700">*</span>
-                </label>
-                <input
-                  id="p-nombre"
-                  type="text"
-                  value={campos.nombre}
-                  onChange={(e) => setCampo('nombre', e.target.value)}
-                  placeholder="Ej. Camiseta Premium 1.1 Boxeada"
-                  className={inputCls}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="p-descripcion" className="mb-1.5 block text-sm font-medium text-ink">
-                  Descripción
-                </label>
-                <textarea
-                  id="p-descripcion"
-                  value={campos.descripcion}
-                  onChange={(e) => setCampo('descripcion', e.target.value)}
-                  rows={2}
-                  placeholder="Opcional"
-                  className={`${inputCls} resize-none`}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="p-precio" className="mb-1.5 block text-sm font-medium text-ink">
-                    Precio (COP) <span className="text-red-700">*</span>
-                  </label>
-                  <input
-                    id="p-precio"
-                    type="number"
-                    min={0}
-                    step={1000}
-                    value={campos.precio}
-                    onChange={(e) => setCampo('precio', e.target.value)}
-                    placeholder="89000"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="p-sku" className="mb-1.5 block text-sm font-medium text-ink">
-                    SKU
-                  </label>
-                  <input
-                    id="p-sku"
-                    type="text"
-                    value={campos.sku}
-                    onChange={(e) => setCampo('sku', e.target.value)}
-                    placeholder="Ej. CAM-P11-01"
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-
-              {/* Catálogo → Categoría → Subcategoría */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label htmlFor="p-catalogo" className="mb-1.5 block text-sm font-medium text-ink">
-                    Catálogo <span className="text-red-700">*</span>
-                  </label>
-                  <select
-                    id="p-catalogo"
-                    value={catalogoForm}
-                    onChange={cambiarCatalogoForm}
-                    className={selectCls}
-                  >
-                    <option value="hombre">Hombre</option>
-                    <option value="mujer">Mujer</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="p-categoria" className="mb-1.5 block text-sm font-medium text-ink">
-                    Categoría <span className="text-red-700">*</span>
-                  </label>
-                  <select
-                    id="p-categoria"
-                    value={campos.categoria_id}
-                    onChange={cambiarCategoria}
-                    className={selectCls}
-                  >
-                    <option value="">Selecciona…</option>
-                    {categoriasForm.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="p-subcategoria" className="mb-1.5 block text-sm font-medium text-ink">
-                    Subcategoría
-                  </label>
-                  <select
-                    id="p-subcategoria"
-                    value={campos.subcategoria_id}
-                    onChange={cambiarSubcategoria}
-                    className={selectCls}
-                    disabled={subcatsForm.length === 0}
-                  >
-                    <option value="">
-                      {subcatsForm.length === 0 ? 'Sin subcategorías' : 'Selecciona…'}
-                    </option>
-                    {subcatsForm.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Variantes auto-generadas */}
-              {campos.categoria_id ? (
-                necesitaSubcategoria && !campos.subcategoria_id ? (
-                  <div className="rounded-xl border border-dashed border-line bg-surface-2/50 p-4 text-sm text-ink-2">
-                    Esta categoría tiene subcategorías: selecciónala para generar las tallas/variantes.
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-line bg-surface-2/40 p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-ink">Tallas / variantes</p>
-                      <span className="text-xs text-ink-2">
-                        {tallasActivas.length === 0 ? 'Talla única' : `${tallasActivas.length} tallas`}
-                      </span>
-                    </div>
-                    <p className="mb-3 text-xs text-ink-2">
-                      Cada variante lleva su propio código de barras (inventario por unidad exacta).
-                    </p>
-                    <div className="grid grid-cols-[4.5rem_1fr_7rem] items-center gap-3 px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
-                      <span>Talla</span>
-                      <span>Código de barras</span>
-                      <span className="text-right">{form.id ? 'Stock total' : 'Stock inicial'}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {variantesForm.map((v, idx) => (
-                        <div key={idx} className="grid grid-cols-[4.5rem_1fr_7rem] items-center gap-3">
-                          <span className="rounded-lg bg-white px-2 py-2 text-center text-sm font-semibold text-ink ring-1 ring-line">
-                            {v.talla || 'Única'}
-                          </span>
-                          <input
-                            type="text"
-                            value={v.codigo_barras}
-                            onChange={(e) => cambiarVariante(idx, 'codigo_barras', e.target.value)}
-                            placeholder="Código de barras"
-                            className={inputCls}
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            value={v.stock_inicial}
-                            onChange={(e) => cambiarVariante(idx, 'stock_inicial', e.target.value)}
-                            disabled={Boolean(form.id)}
-                            placeholder="0"
-                            className={`${inputCls} text-right disabled:opacity-50`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    {form.id && (
-                      <p className="mt-3 text-xs text-ink-2">
-                        El stock se ajusta desde Inventario; aquí solo se edita el código de barras.
-                      </p>
-                    )}
-                  </div>
-                )
-              ) : (
-                <div className="rounded-xl border border-dashed border-line p-4 text-sm text-ink-2/70">
-                  Elige la categoría para generar automáticamente las tallas/variantes.
-                </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {formError && (
+                <p className="animate-fade-in mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {formError}
+                </p>
               )}
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-ink">
-                  Imágenes del producto
-                </label>
-                <MultiImageUpload
-                  value={campos.imagenes}
-                  onChange={(lista) => setCampo('imagenes', lista)}
-                />
+              <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+                {/* Columna principal */}
+                <div className="space-y-5">
+                  <Seccion titulo="Información básica">
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="p-nombre" className="mb-1.5 block text-sm font-medium text-ink">
+                          Nombre <span className="text-red-700">*</span>
+                        </label>
+                        <input
+                          id="p-nombre"
+                          type="text"
+                          value={campos.nombre}
+                          onChange={(e) => setCampo('nombre', e.target.value)}
+                          placeholder="Ej. Camiseta Premium 1.1 Boxeada"
+                          className={inputCls}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="p-descripcion" className="mb-1.5 block text-sm font-medium text-ink">
+                          Descripción
+                        </label>
+                        <textarea
+                          id="p-descripcion"
+                          value={campos.descripcion}
+                          onChange={(e) => setCampo('descripcion', e.target.value)}
+                          rows={3}
+                          placeholder="Detalles, tela, estampado… (opcional)"
+                          className={`${inputCls} resize-none`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="p-precio" className="mb-1.5 block text-sm font-medium text-ink">
+                            Precio (COP) <span className="text-red-700">*</span>
+                          </label>
+                          <input
+                            id="p-precio"
+                            type="number"
+                            min={0}
+                            step={1000}
+                            value={campos.precio}
+                            onChange={(e) => setCampo('precio', e.target.value)}
+                            placeholder="89000"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="p-sku" className="mb-1.5 block text-sm font-medium text-ink">
+                            SKU
+                          </label>
+                          <input
+                            id="p-sku"
+                            type="text"
+                            value={campos.sku}
+                            onChange={(e) => setCampo('sku', e.target.value)}
+                            placeholder="Ej. CAM-P11-01"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Seccion>
+
+                  <Seccion titulo="Catálogo" descripcion="Define a qué catálogo y categoría pertenece el producto.">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label htmlFor="p-catalogo" className="mb-1.5 block text-sm font-medium text-ink">
+                          Catálogo <span className="text-red-700">*</span>
+                        </label>
+                        <select
+                          id="p-catalogo"
+                          value={catalogoForm}
+                          onChange={cambiarCatalogoForm}
+                          className={selectCls}
+                        >
+                          <option value="hombre">Hombre</option>
+                          <option value="mujer">Mujer</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="p-categoria" className="mb-1.5 block text-sm font-medium text-ink">
+                          Categoría <span className="text-red-700">*</span>
+                        </label>
+                        <select
+                          id="p-categoria"
+                          value={campos.categoria_id}
+                          onChange={cambiarCategoria}
+                          className={selectCls}
+                        >
+                          <option value="">Selecciona…</option>
+                          {categoriasForm.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="p-subcategoria" className="mb-1.5 block text-sm font-medium text-ink">
+                          Subcategoría
+                        </label>
+                        <select
+                          id="p-subcategoria"
+                          value={campos.subcategoria_id}
+                          onChange={cambiarSubcategoria}
+                          className={selectCls}
+                          disabled={subcatsForm.length === 0}
+                        >
+                          <option value="">
+                            {subcatsForm.length === 0 ? 'Sin subcategorías' : 'Selecciona…'}
+                          </option>
+                          {subcatsForm.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </Seccion>
+
+                  <Seccion
+                    titulo="Tallas y variantes"
+                    descripcion="Se generan automáticamente según la categoría. Cada variante lleva su propio código de barras."
+                  >
+                    {campos.categoria_id ? (
+                      necesitaSubcategoria && !campos.subcategoria_id ? (
+                        <div className="rounded-xl border border-dashed border-line bg-surface-2/50 p-4 text-sm text-ink-2">
+                          Esta categoría tiene subcategorías: selecciónala para generar las tallas/variantes.
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-xs text-ink-2">
+                              {tallasActivas.length === 0
+                                ? 'Talla única'
+                                : `${tallasActivas.length} tallas`}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-[5rem_1fr_8rem] items-center gap-3 px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                            <span>Talla</span>
+                            <span>Código de barras</span>
+                            <span className="text-right">{form.id ? 'Stock total' : 'Stock inicial'}</span>
+                          </div>
+                          <div className="space-y-2">
+                            {variantesForm.map((v, idx) => (
+                              <div
+                                key={idx}
+                                className="grid grid-cols-[5rem_1fr_8rem] items-center gap-3"
+                              >
+                                <span className="rounded-lg bg-surface-2 px-2 py-2 text-center text-sm font-semibold text-ink ring-1 ring-line">
+                                  {v.talla || 'Única'}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={v.codigo_barras}
+                                  onChange={(e) => cambiarVariante(idx, 'codigo_barras', e.target.value)}
+                                  placeholder="Código de barras"
+                                  className={inputCls}
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={v.stock_inicial}
+                                  onChange={(e) => cambiarVariante(idx, 'stock_inicial', e.target.value)}
+                                  disabled={Boolean(form.id)}
+                                  placeholder="0"
+                                  className={`${inputCls} text-right disabled:opacity-50`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          {form.id && (
+                            <p className="mt-3 text-xs text-ink-2">
+                              El stock se ajusta desde Inventario; aquí solo se edita el código de barras.
+                            </p>
+                          )}
+                        </div>
+                      )
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-line p-4 text-sm text-ink-2/70">
+                        Elige la categoría para generar automáticamente las tallas/variantes.
+                      </div>
+                    )}
+                  </Seccion>
+                </div>
+
+                {/* Columna lateral */}
+                <div className="space-y-5">
+                  <Seccion
+                    titulo="Imágenes"
+                    descripcion="JPG, PNG, WebP o HEIC de iPhone. La primera es la principal."
+                  >
+                    <MultiImageUpload
+                      value={campos.imagenes}
+                      onChange={(lista) => setCampo('imagenes', lista)}
+                    />
+                  </Seccion>
+
+                  <Seccion titulo="Vista previa">
+                    <div className="overflow-hidden rounded-xl border border-line bg-surface-2/40">
+                      {campos.imagenes[0] ? (
+                        <img
+                          src={campos.imagenes[0]}
+                          alt="Vista previa"
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <div className="grid aspect-square w-full place-items-center text-xs text-ink-2/50">
+                          Sin imagen
+                        </div>
+                      )}
+                      <div className="border-t border-line bg-white p-3">
+                        <p className="truncate text-sm font-medium text-ink">
+                          {campos.nombre || 'Nombre del producto'}
+                        </p>
+                        <p className="mt-0.5 text-sm font-bold text-ink">
+                          {formato(Number(campos.precio) || 0)}
+                        </p>
+                        <p className="truncate text-xs text-ink-2">
+                          {categoriasForm.find((c) => c.id === Number(campos.categoria_id))?.nombre ||
+                            'Categoría'}
+                          {campos.subcategoria_id
+                            ? ` · ${
+                                subcategorias.find((s) => s.id === Number(campos.subcategoria_id))
+                                  ?.nombre || ''
+                              }`
+                            : ''}
+                        </p>
+                        {variantesForm.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {variantesForm.map((v, i) => (
+                              <span
+                                key={i}
+                                className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-ink-2"
+                              >
+                                {v.talla || 'Única'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Seccion>
+                </div>
               </div>
             </div>
 
-            <div className="mt-6 flex gap-2">
+            {/* Pie con acciones */}
+            <div className="flex items-center justify-end gap-2 border-t border-line bg-surface-2/50 px-6 py-4">
               <button
                 type="button"
                 onClick={cerrarForm}
                 disabled={guardando}
-                className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 active:scale-[0.98] disabled:opacity-50"
+                className="rounded-lg border border-line bg-white px-5 py-2.5 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 active:scale-[0.98] disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -682,7 +762,7 @@ export default function Productos() {
                 type="button"
                 onClick={guardar}
                 disabled={guardando}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-ink py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98] disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-ink px-6 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98] disabled:opacity-50"
               >
                 {guardando ? 'Guardando…' : form.id ? 'Guardar cambios' : 'Crear producto'}
               </button>

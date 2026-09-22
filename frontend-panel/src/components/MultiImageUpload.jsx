@@ -1,10 +1,12 @@
 // Subida de MÚLTIPLES imágenes de un producto (archivo, no por URL).
-// En modo mock se guardan como data URL; en producción el backend devuelve la ruta.
+// Acepta JPG, PNG, WebP y HEIC/HEIF (las fotos HEIC de iPhone se convierten a
+// JPEG en el navegador antes de subir para que se vean en la tienda).
 import { useRef, useState } from 'react'
 import { imagenesApi } from '../services/api'
+import { prepararArchivoImagen } from '../utils/imagenes'
 import { AlertIcon, PlusIcon, UploadIcon, XIcon } from './icons'
 
-const MAX_MB = 3
+const MAX_MB = 10
 const INPUT_ID = 'imagenes-producto'
 
 export default function MultiImageUpload({ value = [], onChange }) {
@@ -14,7 +16,7 @@ export default function MultiImageUpload({ value = [], onChange }) {
 
   async function subir(file) {
     if (!file) return
-    if (!file.type.startsWith('image/')) {
+    if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) {
       setError('El archivo debe ser una imagen')
       return
     }
@@ -25,7 +27,8 @@ export default function MultiImageUpload({ value = [], onChange }) {
     setSubiendo(true)
     setError(null)
     try {
-      const res = await imagenesApi.subir(file)
+      const lista = await Promise.all([file].map(prepararArchivoImagen))
+      const res = await imagenesApi.subir(lista[0])
       onChange([...value, res.imagen_url])
       if (inputRef.current) inputRef.current.value = ''
     } catch (err) {
@@ -52,7 +55,7 @@ export default function MultiImageUpload({ value = [], onChange }) {
         id={INPUT_ID}
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         className="hidden"
         onChange={(e) => subir(e.target.files?.[0])}
       />
@@ -103,7 +106,7 @@ export default function MultiImageUpload({ value = [], onChange }) {
               {value.length === 0 ? 'Subir imágenes del producto' : 'Agregar otra imagen'}
             </span>
             <span className="text-xs text-ink-2/60">
-              PNG o JPG · máx. {MAX_MB} MB · la primera es la principal
+              JPG, PNG, WebP o HEIC (iPhone) · máx. {MAX_MB} MB · la primera es la principal
             </span>
           </>
         )}
