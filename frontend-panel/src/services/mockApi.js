@@ -133,6 +133,7 @@ async function getProductos({ categoria_id, subcategoria_id } = {}) {
       subcategoria_id: p.subcategoria_id,
       subcategoria: subcategorias.find((s) => s.id === p.subcategoria_id)?.nombre || null,
       imagen_url: p.imagen_url,
+      imagenes: p.imagenes && p.imagenes.length ? p.imagenes : p.imagen_url ? [p.imagen_url] : [],
       variantes: vars.map((v) => ({
         id: v.id,
         talla: v.talla,
@@ -168,11 +169,15 @@ async function createProducto(body) {
     categoria_id,
     subcategoria_id,
     imagen_url,
+    imagenes = [],
     variantes: variantesForm = [],
   } = body
 
   if (!nombre || !precio) throw new Error('Nombre y precio son obligatorios')
   if (sku && productos.some((p) => p.sku === sku)) throw new Error('El SKU ya existe')
+
+  const listaImagenes =
+    Array.isArray(imagenes) && imagenes.length ? imagenes : imagen_url ? [imagen_url] : []
 
   const nuevo = {
     id: Math.max(...productos.map((p) => p.id), 0) + 1,
@@ -182,7 +187,8 @@ async function createProducto(body) {
     sku: sku || null,
     categoria_id: Number(categoria_id) || null,
     subcategoria_id: Number(subcategoria_id) || null,
-    imagen_url: imagen_url || '/images/products/camiseta.svg',
+    imagen_url: listaImagenes[0] || '/images/products/camiseta.svg',
+    imagenes: listaImagenes.length ? listaImagenes : null,
   }
   productos.push(nuevo)
 
@@ -216,11 +222,19 @@ async function updateProducto(id, body) {
     categoria_id,
     subcategoria_id,
     imagen_url,
+    imagenes,
     variantes: variantesForm = [],
   } = body
 
   if (sku && productos.some((pr) => pr.sku === sku && pr.id !== p.id)) {
     throw new Error('El SKU ya existe en otro producto')
+  }
+
+  if (imagenes !== undefined) {
+    const lista =
+      Array.isArray(imagenes) && imagenes.length ? imagenes : imagen_url ? [imagen_url] : []
+    p.imagenes = lista.length ? lista : null
+    p.imagen_url = lista[0] ?? p.imagen_url
   }
 
   const comboCambio =

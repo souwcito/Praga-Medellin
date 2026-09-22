@@ -9,7 +9,7 @@ class SubcategoriaSeeder extends Seeder
 {
     public function run(): void
     {
-        $ropaH = json_encode(['S', 'M', 'L', 'XL', 'XXL']);
+        $ropaH = json_encode(['S', 'M', 'L', 'XL', '2XL']);
         $tenisH = json_encode(['7-40', '8-41', '9-42', '10-43', '11-44']);
         $chanclasH = json_encode(['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']);
 

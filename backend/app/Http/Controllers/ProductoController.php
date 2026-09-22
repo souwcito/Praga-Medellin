@@ -46,6 +46,10 @@ class ProductoController extends Controller
             ];
         });
 
+        $imagenes = array_values(array_filter(
+            is_array($p->imagenes) ? $p->imagenes : [$p->imagen_url]
+        ));
+
         return [
             'id' => $p->id,
             'nombre' => $p->nombre,
@@ -57,7 +61,8 @@ class ProductoController extends Controller
             'catalogo' => optional($p->categoria)->catalogo,
             'subcategoria_id' => $p->subcategoria_id,
             'subcategoria' => optional($p->subcategoria)->nombre,
-            'imagen_url' => $this->imagenUrl($p->imagen_url),
+            'imagen_url' => $this->imagenUrl($imagenes[0] ?? null),
+            'imagenes' => array_map(fn ($i) => $this->imagenUrl($i), $imagenes),
             'variantes' => $variantes->values(),
             'stock_total' => (int) $variantes->sum('stock_total'),
         ];
@@ -118,12 +123,16 @@ class ProductoController extends Controller
             'categoria_id' => 'nullable|integer',
             'subcategoria_id' => 'nullable|integer',
             'imagen_url' => 'nullable|string',
+            'imagenes' => 'nullable|array',
+            'imagenes.*' => 'nullable|string',
             'variantes' => 'array',
         ]);
 
         if (!empty($data['sku']) && Producto::where('sku', $data['sku'])->exists()) {
             return response()->json(['error' => 'El SKU ya existe'], 422);
         }
+
+        $imagenes = array_values(array_filter($request->imagenes ?? []));
 
         $producto = Producto::create([
             'nombre' => $data['nombre'],
@@ -132,7 +141,8 @@ class ProductoController extends Controller
             'sku' => $data['sku'] ?? null,
             'categoria_id' => $data['categoria_id'] ?? null,
             'subcategoria_id' => $data['subcategoria_id'] ?? null,
-            'imagen_url' => $data['imagen_url'] ?? null,
+            'imagen_url' => $imagenes[0] ?? ($data['imagen_url'] ?? null),
+            'imagenes' => $imagenes ?: null,
         ]);
 
         $this->crearVariantes($producto, $request->variantes ?? []);
@@ -152,11 +162,19 @@ class ProductoController extends Controller
             'categoria_id' => 'nullable|integer',
             'subcategoria_id' => 'nullable|integer',
             'imagen_url' => 'nullable|string',
+            'imagenes' => 'nullable|array',
+            'imagenes.*' => 'nullable|string',
             'variantes' => 'array',
         ]);
 
         if (!empty($data['sku']) && Producto::where('sku', $data['sku'])->where('id', '!=', $producto->id)->exists()) {
             return response()->json(['error' => 'El SKU ya existe en otro producto'], 422);
+        }
+
+        if (array_key_exists('imagenes', $data)) {
+            $imagenes = array_values(array_filter($data['imagenes'] ?? []));
+            $data['imagenes'] = $imagenes ?: null;
+            $data['imagen_url'] = $imagenes[0] ?? null;
         }
 
         $comboCambio =

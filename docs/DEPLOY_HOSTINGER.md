@@ -141,6 +141,20 @@ Si la API responde 500: revisa `api-app/storage/logs/laravel.log`.
 
 ---
 
+## Actualización: imágenes múltiples y tallas (S–2XL, jeans 30–38)
+
+1. **Base de datos**: ejecuta en phpMyAdmin el contenido de **`docs/ACTUALIZAR_PRODUCCION.sql`**
+   (agrega la columna `imagenes` y cambia la etiqueta `XXL` → `2XL` en subcategorías y categorías).
+2. **Backend** → `public_html/api-app/` (sobrescribir):
+   - `app/Http/Controllers/ProductoController.php`
+   - `app/Models/Producto.php`
+   - `database/migrations/2026_09_19_002001_add_imagenes_to_productos_table.php` (referencia; la columna ya se crea con el SQL)
+3. **Frontends**: recompilados y listos en:
+   - `frontend-tienda/dist/` → raíz `public_html/`
+   - `frontend-panel/dist/` → `public_html/panel/`
+
+---
+
 ## Notas
 - **Wompi**: el checkout de la tienda todavía es un placeholder; cuando se integre, completa `VITE_WOMPI_PUBLIC_KEY` en `frontend-tienda/.env.production` y reconstruye.
 - El `.htaccess` raíz redirige HTTP→HTTPS, rutea `/api` y `/images` hacia Laravel, deja `/panel` a su propio SPA y agrega caché/compresión para rendimiento (Core Web Vitals).

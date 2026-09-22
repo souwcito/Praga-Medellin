@@ -22,6 +22,7 @@ function ProductoDetalle({ productoId }) {
   const [talla, setTalla] = useState(null)
   const [cantidad, setCantidad] = useState(1)
   const [agregado, setAgregado] = useState(false)
+  const [imgActiva, setImgActiva] = useState(0)
 
   useEffect(() => {
     catalogApi
@@ -150,16 +151,44 @@ function ProductoDetalle({ productoId }) {
         </nav>
 
         <div className="grid gap-10 lg:grid-cols-2">
-          {/* Imagen */}
-          <div className="overflow-hidden rounded-3xl border border-line bg-surface-2">
-            <img
-              src={producto.imagen_url}
-              alt={producto.nombre}
-              width={1200}
-              height={1200}
-              fetchPriority="high"
-              className="h-auto w-full object-cover"
-            />
+          {/* Imágenes */}
+          <div>
+            <div className="overflow-hidden rounded-3xl border border-line bg-surface-2">
+              <img
+                src={(producto.imagenes && producto.imagenes[imgActiva]) || producto.imagen_url}
+                alt={producto.nombre}
+                width={1200}
+                height={1200}
+                fetchPriority="high"
+                className="h-auto w-full object-cover"
+              />
+            </div>
+
+            {producto.imagenes && producto.imagenes.length > 1 && (
+              <div className="mt-3 grid grid-cols-4 gap-3">
+                {producto.imagenes.map((img, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setImgActiva(i)}
+                    className={`overflow-hidden rounded-xl border-2 transition-all duration-200 ${
+                      i === imgActiva
+                        ? 'border-ink'
+                        : 'border-transparent opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img
+                      src={img}
+                      alt={`${producto.nombre} — vista ${i + 1}`}
+                      width={300}
+                      height={300}
+                      loading="lazy"
+                      className="aspect-square h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Información */}

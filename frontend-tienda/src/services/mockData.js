@@ -2,7 +2,7 @@
 // Praga Medellín (categoría > subcategoría > tallas). Cuando el backend exista,
 // estos datos solo se usan con VITE_USE_MOCK=true.
 
-const TALLAS_ROPA = ['S', 'M', 'L', 'XL', 'XXL']
+const TALLAS_ROPA = ['S', 'M', 'L', 'XL', '2XL']
 const TALLAS_TENIS = ['7-40', '8-41', '9-42', '10-43', '11-44']
 const TALLAS_CHANCLAS = ['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']
 
@@ -15,7 +15,7 @@ export const categorias = [
   { id: 6, nombre: 'Gorras', catalogo: 'hombre' },
   { id: 7, nombre: 'Jeans', tallas: ['30', '32', '34', '36', '38'], catalogo: 'hombre' },
   { id: 8, nombre: 'Mochos', tallas: ['28', '30', '32', '34', '36', '38'], catalogo: 'hombre' },
-  { id: 9, nombre: 'Pantalonetas', tallas: ['L', 'M', 'XL', 'XXL'], catalogo: 'hombre' },
+  { id: 9, nombre: 'Pantalonetas', tallas: ['L', 'M', 'XL', '2XL'], catalogo: 'hombre' },
   { id: 10, nombre: 'Perfumes', catalogo: 'hombre' },
   { id: 11, nombre: 'Sudaderas', catalogo: 'hombre' },
   { id: 12, nombre: 'Tenis', catalogo: 'hombre' },

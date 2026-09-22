@@ -20,7 +20,7 @@ class CategoriaSeeder extends Seeder
             ['hombre', 'Gorras', null],
             ['hombre', 'Jeans', json_encode(['30', '32', '34', '36', '38'])],
             ['hombre', 'Mochos', json_encode(['28', '30', '32', '34', '36', '38'])],
-            ['hombre', 'Pantalonetas', json_encode(['L', 'M', 'XL', 'XXL'])],
+            ['hombre', 'Pantalonetas', json_encode(['L', 'M', 'XL', '2XL'])],
             ['hombre', 'Perfumes', null],
             ['hombre', 'Sudaderas', null],
             ['hombre', 'Tenis', null],

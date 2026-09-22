@@ -15,6 +15,11 @@ class Producto extends Model
         'categoria_id',
         'subcategoria_id',
         'imagen_url',
+        'imagenes',
+    ];
+
+    protected $casts = [
+        'imagenes' => 'array',
     ];
 
     public function categoria()

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { catalogApi, productosApi } from '../services/api'
 import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
-import ImageUpload from '../components/ImageUpload'
+import MultiImageUpload from '../components/MultiImageUpload'
 import {
   AlertIcon,
   CheckIcon,
@@ -33,7 +33,7 @@ const CAMPOS_INICIALES = {
   sku: '',
   categoria_id: '',
   subcategoria_id: '',
-  imagen_url: '',
+  imagenes: [],
 }
 
 function sugerirBarra(idx) {
@@ -172,7 +172,7 @@ export default function Productos() {
       sku: p.sku || '',
       categoria_id: String(p.categoria_id || ''),
       subcategoria_id: String(p.subcategoria_id || ''),
-      imagen_url: p.imagen_url || '',
+      imagenes: p.imagenes?.length ? p.imagenes : p.imagen_url ? [p.imagen_url] : [],
     })
     setCatalogoForm(p.catalogo || 'hombre')
     setVariantesForm(construirVariantes(p.categoria_id, p.subcategoria_id, p.variantes))
@@ -237,7 +237,7 @@ export default function Productos() {
         sku: campos.sku.trim() || null,
         categoria_id: campos.categoria_id ? Number(campos.categoria_id) : null,
         subcategoria_id: campos.subcategoria_id ? Number(campos.subcategoria_id) : null,
-        imagen_url: campos.imagen_url.trim() || null,
+        imagenes: campos.imagenes,
         variantes: variantesForm.map((v) => ({
           talla: v.talla,
           codigo_barras: v.codigo_barras,
@@ -660,11 +660,11 @@ export default function Productos() {
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink">
-                  Imagen del producto
+                  Imágenes del producto
                 </label>
-                <ImageUpload
-                  value={campos.imagen_url}
-                  onChange={(url) => setCampo('imagen_url', url)}
+                <MultiImageUpload
+                  value={campos.imagenes}
+                  onChange={(lista) => setCampo('imagenes', lista)}
                 />
               </div>
             </div>

@@ -21,6 +21,7 @@ function conDetalle(p) {
     categoria: cat ? cat.nombre : null,
     catalogo: cat ? cat.catalogo : null,
     subcategoria: subcategorias.find((s) => s.id === p.subcategoria_id)?.nombre || null,
+    imagenes: p.imagenes && p.imagenes.length ? p.imagenes : p.imagen_url ? [p.imagen_url] : [],
     variantes: p.variantes.filter((v) => v.stock > 0),
     stock_total: p.variantes.reduce((sum, v) => sum + v.stock, 0),
   }
