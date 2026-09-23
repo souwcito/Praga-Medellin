@@ -13,7 +13,7 @@ class SubcategoriaSeeder extends Seeder
         $tenisH = json_encode(['7-40', '8-41', '9-42', '10-43', '11-44']);
         $chanclasH = json_encode(['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']);
 
-        $gorrasH = json_encode(['Talla única', 'S', 'M', 'L']);
+        $gorrasH = json_encode(['XS-S', 'M-L', 'XL']);
 
         $categorias = DB::table('categorias')->get()->keyBy(fn ($c) => $c->catalogo . '|' . $c->nombre);
 
