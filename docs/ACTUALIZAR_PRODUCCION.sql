@@ -43,4 +43,11 @@ ALTER TABLE `productos` ADD COLUMN `nombre_interno` VARCHAR(255) NULL AFTER `nom
 ALTER TABLE `inventarios` ADD INDEX `inv_variante_sede_idx` (`variante_id`, `sede_id`);
 ALTER TABLE `ventas` ADD INDEX `ventas_created_at_idx` (`created_at`);
 ALTER TABLE `devoluciones` ADD INDEX `devoluciones_created_at_idx` (`created_at`);
+
+-- 7) Gorras: tallas OPCIONALES (talla única o con tallas, a elección del administrador)
+ALTER TABLE `categorias` ADD COLUMN `tallas_opcionales` TINYINT(1) NOT NULL DEFAULT 0 AFTER `tallas`;
+UPDATE `categorias` SET `tallas_opcionales` = 1 WHERE `nombre` = 'Gorras';
+UPDATE `subcategorias` SET `tallas` = '["Talla única","S","M","L"]'
+WHERE `categoria_id` IN (SELECT `id` FROM `categorias` WHERE `nombre` = 'Gorras')
+  AND `tallas` IS NULL;
 -- =============================================================================

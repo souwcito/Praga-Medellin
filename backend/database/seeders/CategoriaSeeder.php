@@ -50,6 +50,7 @@ class CategoriaSeeder extends Seeder
                 'catalogo' => $catalogo,
                 'nombre' => $nombre,
                 'tallas' => $tallas,
+                'tallas_opcionales' => $nombre === 'Gorras',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

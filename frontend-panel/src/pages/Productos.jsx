@@ -129,6 +129,9 @@ export default function Productos() {
     campos.categoria_id && !(necesitaSubcategoria && !campos.subcategoria_id)
       ? tallasPara(campos.categoria_id, campos.subcategoria_id, categorias, subcategorias)
       : null
+  const categoriaFormActual = categorias.find((c) => c.id === Number(campos.categoria_id))
+  const esOpcionalTallas = Boolean(categoriaFormActual?.tallas_opcionales)
+  const usaTallas = variantesForm.some((v) => v.talla)
 
   function setUrlParam(clave, valor) {
     const next = new URLSearchParams(searchParams)
@@ -156,16 +159,60 @@ export default function Productos() {
   }
 
   function construirVariantes(catId, subId, existentes = []) {
+    // Al editar: se conservan las tallas reales del producto
+    if (existentes && existentes.length) {
+      return existentes.map((ex, idx) => ({
+        talla: ex.talla ?? null,
+        codigo_barras: ex.codigo_barras || sugerirBarra(idx),
+        stock_inicial: ex.stock_total ?? '',
+      }))
+    }
+    const cat = categorias.find((c) => c.id === Number(catId))
+    // Categorías con tallas OPCIONALES (ej. gorras): por defecto talla única
+    if (cat?.tallas_opcionales) {
+      return [{ talla: null, codigo_barras: sugerirBarra(0), stock_inicial: '' }]
+    }
     const tallas = tallasPara(catId, subId, categorias, subcategorias)
     const lista = tallas.length ? tallas : [null]
-    return lista.map((t, idx) => {
-      const ex = existentes[idx]
-      return {
-        talla: t,
-        codigo_barras: ex ? ex.codigo_barras : sugerirBarra(idx),
-        stock_inicial: ex ? ex.stock_total : '',
-      }
+    return lista.map((t, idx) => ({
+      talla: t,
+      codigo_barras: sugerirBarra(idx),
+      stock_inicial: '',
+    }))
+  }
+
+  function construirConTallas(catId, subId) {
+    const tallas = tallasPara(catId, subId, categorias, subcategorias)
+    const lista = tallas.length ? tallas : [null]
+    return lista.map((t, idx) => ({
+      talla: t,
+      codigo_barras: sugerirBarra(idx),
+      stock_inicial: '',
+    }))
+  }
+
+  function ponerTallaUnica() {
+    setVariantesForm((prev) => [
+      { talla: null, codigo_barras: sugerirBarra(0), stock_inicial: prev[0]?.stock_inicial ?? '' },
+    ])
+  }
+
+  function ponerConTallas() {
+    setVariantesForm((prev) => {
+      const lista = construirConTallas(campos.categoria_id, campos.subcategoria_id)
+      return lista.map((v, i) => ({ ...v, stock_inicial: prev[i]?.stock_inicial ?? '' }))
     })
+  }
+
+  function agregarTalla() {
+    setVariantesForm((prev) => [
+      ...prev,
+      { talla: '', codigo_barras: sugerirBarra(prev.length), stock_inicial: '' },
+    ])
+  }
+
+  function quitarTalla(idx) {
+    setVariantesForm((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev))
   }
 
   function abrirCrear() {
@@ -212,7 +259,8 @@ export default function Productos() {
   function cambiarCategoria(e) {
     const valor = e.target.value
     setCampos((c) => ({ ...c, categoria_id: valor, subcategoria_id: '' }))
-    setVariantesForm([])
+    const necesitaSub = subcategorias.some((s) => s.categoria_id === Number(valor))
+    setVariantesForm(necesitaSub ? [] : construirVariantes(valor, null))
   }
 
   function cambiarSubcategoria(e) {
@@ -646,7 +694,11 @@ export default function Productos() {
 
                   <Seccion
                     titulo="Tallas y variantes"
-                    descripcion="Se generan automáticamente según la categoría. Cada variante lleva su propio código de barras."
+                    descripcion={
+                      esOpcionalTallas
+                        ? 'Puedes dejarlo en talla única o activar tallas. Cada variante lleva su propio código de barras.'
+                        : 'Se generan automáticamente según la categoría. Cada variante lleva su propio código de barras.'
+                    }
                   >
                     {campos.categoria_id ? (
                       necesitaSubcategoria && !campos.subcategoria_id ? (
@@ -655,27 +707,62 @@ export default function Productos() {
                         </div>
                       ) : (
                         <div>
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-xs text-ink-2">
+                          {esOpcionalTallas ? (
+                            <div className="mb-3 inline-flex w-full rounded-lg border border-line bg-surface-2 p-0.5">
+                              {[
+                                { valor: false, label: 'Talla única' },
+                                { valor: true, label: 'Con tallas' },
+                              ].map((op) => (
+                                <button
+                                  key={op.label}
+                                  type="button"
+                                  onClick={() =>
+                                    op.valor ? ponerConTallas() : ponerTallaUnica()
+                                  }
+                                  className={`flex-1 rounded-md py-2 text-sm font-medium transition-all duration-200 ${
+                                    usaTallas === op.valor
+                                      ? 'bg-ink text-white shadow-sm'
+                                      : 'text-ink-2 hover:text-ink'
+                                  }`}
+                                >
+                                  {op.label}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mb-2 text-xs text-ink-2">
                               {tallasActivas.length === 0
                                 ? 'Talla única'
-                                : `${tallasActivas.length} tallas`}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-[5rem_1fr_8rem] items-center gap-3 px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                                : `${tallasActivas.length} tallas automáticas`}
+                            </p>
+                          )}
+
+                          <div className="grid grid-cols-[6rem_1fr_7rem_2rem] items-center gap-3 px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
                             <span>Talla</span>
                             <span>Código de barras</span>
                             <span className="text-right">{form.id ? 'Stock total' : 'Stock inicial'}</span>
+                            <span />
                           </div>
+
                           <div className="space-y-2">
                             {variantesForm.map((v, idx) => (
                               <div
                                 key={idx}
-                                className="grid grid-cols-[5rem_1fr_8rem] items-center gap-3"
+                                className="grid grid-cols-[6rem_1fr_7rem_2rem] items-center gap-3"
                               >
-                                <span className="rounded-lg bg-surface-2 px-2 py-2 text-center text-sm font-semibold text-ink ring-1 ring-line">
-                                  {v.talla || 'Única'}
-                                </span>
+                                {esOpcionalTallas ? (
+                                  <input
+                                    type="text"
+                                    value={v.talla || ''}
+                                    onChange={(e) => cambiarVariante(idx, 'talla', e.target.value || null)}
+                                    placeholder="Única"
+                                    className={`${inputCls} text-center`}
+                                  />
+                                ) : (
+                                  <span className="rounded-lg bg-surface-2 px-2 py-2 text-center text-sm font-semibold text-ink ring-1 ring-line">
+                                    {v.talla || 'Única'}
+                                  </span>
+                                )}
                                 <input
                                   type="text"
                                   value={v.codigo_barras}
@@ -692,9 +779,34 @@ export default function Productos() {
                                   placeholder="0"
                                   className={`${inputCls} text-right disabled:opacity-50`}
                                 />
+                                {esOpcionalTallas ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => quitarTalla(idx)}
+                                    disabled={variantesForm.length <= 1}
+                                    title="Quitar talla"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/40 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-30"
+                                  >
+                                    <TrashIcon className="h-4 w-4" />
+                                  </button>
+                                ) : (
+                                  <span />
+                                )}
                               </div>
                             ))}
                           </div>
+
+                          {esOpcionalTallas && usaTallas && (
+                            <button
+                              type="button"
+                              onClick={agregarTalla}
+                              className="mt-2 flex items-center gap-1.5 text-xs font-medium text-ink-2 transition-colors hover:text-ink"
+                            >
+                              <PlusIcon className="h-4 w-4" />
+                              Agregar talla
+                            </button>
+                          )}
+
                           {form.id && (
                             <p className="mt-3 text-xs text-ink-2">
                               El stock se ajusta desde Inventario; aquí solo se edita el código de barras.

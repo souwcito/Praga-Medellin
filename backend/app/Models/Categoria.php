@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Categoria extends Model
 {
-    protected $fillable = ['nombre', 'tallas'];
+    protected $fillable = ['nombre', 'tallas', 'catalogo', 'tallas_opcionales'];
 
     protected $casts = [
         'tallas' => 'array',
+        'tallas_opcionales' => 'boolean',
     ];
 
     public function subcategorias()

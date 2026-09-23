@@ -13,6 +13,8 @@ class SubcategoriaSeeder extends Seeder
         $tenisH = json_encode(['7-40', '8-41', '9-42', '10-43', '11-44']);
         $chanclasH = json_encode(['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']);
 
+        $gorrasH = json_encode(['Talla única', 'S', 'M', 'L']);
+
         $categorias = DB::table('categorias')->get()->keyBy(fn ($c) => $c->catalogo . '|' . $c->nombre);
 
         // [catalogo|nombreCategoria, nombreSubcategoria, tallas]
@@ -29,9 +31,9 @@ class SubcategoriaSeeder extends Seeder
             ['hombre|Chanclas', 'Chanclas Turcas', $chanclasH],
             ['hombre|Conjuntos', 'Conjuntos Premium 1.1', $ropaH],
             ['hombre|Conjuntos', 'Conjuntos Turcos', $ropaH],
-            ['hombre|Gorras', 'Gorras Originales', null],
-            ['hombre|Gorras', 'Gorras Premium 1.1', null],
-            ['hombre|Gorras', 'Gorras Turcas', null],
+            ['hombre|Gorras', 'Gorras Originales', $gorrasH],
+            ['hombre|Gorras', 'Gorras Premium 1.1', $gorrasH],
+            ['hombre|Gorras', 'Gorras Turcas', $gorrasH],
             ['hombre|Perfumes', 'Perfumes Originales', null],
             ['hombre|Perfumes', 'Perfumes Premium 1.1', null],
             ['hombre|Sudaderas', 'Sudaderas Premium 1.1', $ropaH],

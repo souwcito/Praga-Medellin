@@ -9,7 +9,7 @@ class CategoriaController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Categoria::select('id', 'nombre', 'tallas', 'catalogo');
+        $query = Categoria::select('id', 'nombre', 'tallas', 'catalogo', 'tallas_opcionales');
         if ($request->filled('catalogo')) {
             $query->where('catalogo', $request->catalogo);
         }

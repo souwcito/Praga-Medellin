@@ -104,18 +104,22 @@ class ProductoController extends Controller
         return response()->json($this->mapear($p));
     }
 
-    // Crea producto + variantes (según tallas de la combinación) + inventario en las 4 sedes
+    // Crea producto + variantes (según las tallas enviadas en el formulario; si no
+// se envían, usa las tallas de la combinación categoría+subcategoría) + inventario en las 4 sedes
     private function crearVariantes(Producto $producto, array $variantesForm): void
     {
-        $tallas = $this->tallasDe($producto->categoria_id, $producto->subcategoria_id);
-        $lista = count($tallas) ? $tallas : [null];
         $sedes = Sede::pluck('id');
+        $tallas = array_column($variantesForm, 'talla');
 
-        foreach ($lista as $i => $talla) {
+        if (!count($tallas)) {
+            $tallas = $this->tallasDe($producto->categoria_id, $producto->subcategoria_id) ?: [null];
+        }
+
+        foreach ($tallas as $i => $talla) {
             $form = $variantesForm[$i] ?? [];
             $variante = Variante::create([
                 'producto_id' => $producto->id,
-                'talla' => $talla,
+                'talla' => $talla === '' || $talla === null ? null : $talla,
                 'codigo_barras' => !empty($form['codigo_barras']) ? $form['codigo_barras'] : $this->siguienteBarra(),
             ]);
             foreach ($sedes as $sedeId) {
@@ -202,12 +206,12 @@ class ProductoController extends Controller
         $producto->update($data);
 
         if ($comboCambio) {
-            // Regenera variantes (reinicia stock) según las nuevas tallas
+            // Regenera variantes (reinicia stock) según las tallas enviadas en el formulario
             foreach ($producto->variantes as $v) {
                 $v->inventarios()->delete();
                 $v->delete();
             }
-            $this->crearVariantes($producto, []);
+            $this->crearVariantes($producto, $request->variantes ?? []);
         } else {
             // Actualiza códigos de barras existentes
             $form = $request->variantes ?? [];
