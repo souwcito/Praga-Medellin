@@ -38,9 +38,13 @@ class SubcategoriaSeeder extends Seeder
             ['hombre|Tenis', 'Tenis Originales', $tenisH],
             ['hombre|Tenis', 'Tenis Premium 1.1', $tenisH],
             ['hombre|Tenis', 'Tenis Turcos', $tenisH],
+            ['hombre|Relojes', 'Relojes Originales', null],
+            ['hombre|Relojes', 'Relojes 1.1', null],
 
             // MUJER
             ['mujer|Perfumes', 'Perfumes Calidad 1.1', null],
+            ['mujer|Relojes', 'Relojes Originales', null],
+            ['mujer|Relojes', 'Relojes 1.1', null],
             ['mujer|Tenis', 'Tenis Calidad 1.1', json_encode(['5', '6', '7', '8'])],
             ['mujer|Tenis', 'Tenis Calidad Turca', json_encode(['5', '6', '7'])],
             ['mujer|Tenis', 'Tenis Originales', json_encode(['5', '6', '7'])],

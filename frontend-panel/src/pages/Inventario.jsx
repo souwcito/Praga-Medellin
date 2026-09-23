@@ -238,7 +238,7 @@ export default function Inventario() {
           Sin productos para los filtros seleccionados.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white">
           <div className="grid grid-cols-[minmax(13rem,1fr)_4.5rem_9rem_4rem_repeat(4,5rem)_4.5rem_2rem] items-center gap-2 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Producto</span>
             <span>Catálogo</span>

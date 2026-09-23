@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { catalogApi, productosApi } from '../services/api'
 import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
+import { urlImagen } from '../utils/imagenes'
 import MultiImageUpload from '../components/MultiImageUpload'
 import {
   AlertIcon,
@@ -403,7 +404,7 @@ export default function Productos() {
           Sin productos para los filtros seleccionados.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white">
           <div className="grid grid-cols-[minmax(14rem,1fr)_6rem_6rem_8rem_6rem_4rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Producto</span>
             <span>SKU</span>
@@ -422,7 +423,7 @@ export default function Productos() {
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <img
-                    src={p.imagen_url}
+                    src={urlImagen(p.imagen_url)}
                     alt={p.nombre}
                     className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
                   />
@@ -703,7 +704,7 @@ export default function Productos() {
                     <div className="overflow-hidden rounded-xl border border-line bg-surface-2/40">
                       {campos.imagenes[0] ? (
                         <img
-                          src={campos.imagenes[0]}
+                          src={urlImagen(campos.imagenes[0])}
                           alt="Vista previa"
                           className="aspect-square w-full object-cover"
                         />

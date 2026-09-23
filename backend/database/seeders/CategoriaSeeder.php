@@ -24,6 +24,7 @@ class CategoriaSeeder extends Seeder
             ['hombre', 'Perfumes', null],
             ['hombre', 'Sudaderas', null],
             ['hombre', 'Tenis', null],
+            ['hombre', 'Relojes', null],
 
             // ---------- CATÁLOGO MUJER ----------
             ['mujer', 'Blusas', json_encode(['XS/S', 'S/M', 'M/L'])],

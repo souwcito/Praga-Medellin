@@ -3,7 +3,7 @@
 // JPEG en el navegador antes de subir para que se vean en la tienda).
 import { useRef, useState } from 'react'
 import { imagenesApi } from '../services/api'
-import { prepararArchivoImagen } from '../utils/imagenes'
+import { prepararArchivoImagen, urlImagen } from '../utils/imagenes'
 import { AlertIcon, PlusIcon, UploadIcon, XIcon } from './icons'
 
 const MAX_MB = 10
@@ -68,7 +68,7 @@ export default function MultiImageUpload({ value = [], onChange }) {
               className="group relative overflow-hidden rounded-lg border border-line bg-surface-2"
             >
               <img
-                src={url}
+                src={urlImagen(url)}
                 alt={`Imagen ${idx + 1}`}
                 className="aspect-square h-full w-full object-cover"
               />

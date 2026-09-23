@@ -19,6 +19,7 @@ export const categorias = [
   { id: 10, nombre: 'Perfumes', catalogo: 'hombre' },
   { id: 11, nombre: 'Sudaderas', catalogo: 'hombre' },
   { id: 12, nombre: 'Tenis', catalogo: 'hombre' },
+  { id: 29, nombre: 'Relojes', catalogo: 'hombre' },
 
   // Catálogo Mujer
   { id: 13, nombre: 'Blusas', tallas: ['XS/S', 'S/M', 'M/L'], catalogo: 'mujer' },
@@ -60,6 +61,12 @@ export const subcategorias = [
   { id: 18, categoria_id: 12, nombre: 'Tenis Originales', tallas: TALLAS_TENIS },
   { id: 19, categoria_id: 12, nombre: 'Tenis Premium 1.1', tallas: TALLAS_TENIS },
   { id: 20, categoria_id: 12, nombre: 'Tenis Turcos', tallas: TALLAS_TENIS },
+
+  // Relojes (Hombre y Mujer)
+  { id: 25, categoria_id: 29, nombre: 'Relojes Originales', tallas: [] },
+  { id: 26, categoria_id: 29, nombre: 'Relojes 1.1', tallas: [] },
+  { id: 27, categoria_id: 24, nombre: 'Relojes Originales', tallas: [] },
+  { id: 28, categoria_id: 24, nombre: 'Relojes 1.1', tallas: [] },
 
   // Catálogo Mujer
   { id: 21, categoria_id: 23, nombre: 'Perfumes Calidad 1.1', tallas: [] },

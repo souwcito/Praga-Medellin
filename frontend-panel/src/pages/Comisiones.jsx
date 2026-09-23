@@ -164,7 +164,7 @@ export default function Comisiones() {
           Sin vendedores con ventas en el periodo y sede seleccionados.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white">
           <div className="grid grid-cols-[1fr_5rem_9rem_2.5rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Vendedor</span>
             <span className="text-center">Ventas</span>

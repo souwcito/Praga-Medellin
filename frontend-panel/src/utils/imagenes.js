@@ -30,3 +30,16 @@ export async function prepararArchivoImagen(file) {
     return file
   }
 }
+
+// Convierte una ruta de imagen (relativa, ej. "images/products/x.jpg") en una
+// URL absoluta para mostrarla en el <img>. Útil porque el backend guarda rutas
+// relativas y el panel vive en /panel (una ruta relativa rompería la vista previa).
+export function urlImagen(path) {
+  if (!path) return ''
+  if (/^(https?:|data:|blob:)/.test(path)) return path
+  try {
+    return new URL(path, `${window.location.origin}/`).href
+  } catch {
+    return path
+  }
+}

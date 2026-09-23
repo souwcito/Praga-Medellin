@@ -182,3 +182,11 @@ export const SwapIcon = (p) => (
     <path d="m3 18 4 4 4-4" />
   </Icon>
 )
+
+export const MenuIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 6h16" />
+    <path d="M4 12h16" />
+    <path d="M4 18h16" />
+  </Icon>
+)

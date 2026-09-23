@@ -1070,7 +1070,7 @@ function Historial() {
           Sin operaciones para los filtros seleccionados.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white">
           <div className="grid grid-cols-[6rem_6.5rem_5.5rem_1fr_8.5rem_1fr_7rem_7rem] items-center gap-3 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>N° Dev</span>
             <span>Factura</span>

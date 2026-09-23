@@ -65,7 +65,7 @@ export default function Pedidos() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white">
           <div className="grid grid-cols-[7rem_1fr_9rem_7rem_5rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Pedido</span>
             <span>Cliente</span>
