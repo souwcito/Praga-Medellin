@@ -35,4 +35,12 @@ INSERT INTO `subcategorias` (`categoria_id`, `nombre`, `tallas`, `created_at`, `
 SELECT `id`, 'Relojes Originales', NULL, NOW(), NOW() FROM `categorias` WHERE `catalogo`='mujer' AND `nombre`='Relojes';
 INSERT INTO `subcategorias` (`categoria_id`, `nombre`, `tallas`, `created_at`, `updated_at`)
 SELECT `id`, 'Relojes 1.1', NULL, NOW(), NOW() FROM `categorias` WHERE `catalogo`='mujer' AND `nombre`='Relojes';
+
+-- 5) Nombre interno del producto (solo panel). El campo 'nombre' es el público.
+ALTER TABLE `productos` ADD COLUMN `nombre_interno` VARCHAR(255) NULL AFTER `nombre`;
+
+-- 6) Índices para rendimiento con cientos de productos
+ALTER TABLE `inventarios` ADD INDEX `inv_variante_sede_idx` (`variante_id`, `sede_id`);
+ALTER TABLE `ventas` ADD INDEX `ventas_created_at_idx` (`created_at`);
+ALTER TABLE `devoluciones` ADD INDEX `devoluciones_created_at_idx` (`created_at`);
 -- =============================================================================

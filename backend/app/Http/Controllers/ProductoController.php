@@ -53,6 +53,7 @@ class ProductoController extends Controller
         return [
             'id' => $p->id,
             'nombre' => $p->nombre,
+            'nombre_interno' => $p->nombre_interno,
             'descripcion' => $p->descripcion,
             'precio' => (int) $p->precio,
             'sku' => $p->sku,
@@ -80,7 +81,21 @@ class ProductoController extends Controller
         if ($request->filled('subcategoria_id')) {
             $query->where('subcategoria_id', $request->subcategoria_id);
         }
-        return response()->json($query->orderBy('id')->get()->map(fn ($p) => $this->mapear($p)));
+        if ($request->filled('q')) {
+            $query->where('nombre', 'like', '%' . $request->q . '%');
+        }
+
+        // Home: solo un puñado de destacados (payload ligero aunque haya 500+ productos)
+        if ($request->filled('destacados')) {
+            $query->orderByDesc('id')->take(8);
+        } elseif ($request->filled('limit')) {
+            // Catálogo paginado: ?limit=40&offset=0 para cargar de a pocos
+            $query->skip((int) ($request->offset ?? 0))->take((int) $request->limit);
+        } else {
+            $query->orderBy('id');
+        }
+
+        return response()->json($query->get()->map(fn ($p) => $this->mapear($p)));
     }
 
     public function show($id)
@@ -117,6 +132,7 @@ class ProductoController extends Controller
     {
         $data = $request->validate([
             'nombre' => 'required|string',
+            'nombre_interno' => 'nullable|string',
             'precio' => 'required|integer',
             'sku' => 'nullable|string',
             'descripcion' => 'nullable|string',
@@ -136,6 +152,7 @@ class ProductoController extends Controller
 
         $producto = Producto::create([
             'nombre' => $data['nombre'],
+            'nombre_interno' => $data['nombre_interno'] ?? null,
             'descripcion' => $data['descripcion'] ?? '',
             'precio' => $data['precio'],
             'sku' => $data['sku'] ?? null,
@@ -156,6 +173,7 @@ class ProductoController extends Controller
 
         $data = $request->validate([
             'nombre' => 'sometimes|string',
+            'nombre_interno' => 'nullable|string',
             'precio' => 'sometimes|integer',
             'sku' => 'nullable|string',
             'descripcion' => 'nullable|string',

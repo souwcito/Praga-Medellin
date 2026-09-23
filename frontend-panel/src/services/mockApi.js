@@ -125,6 +125,7 @@ async function getProductos({ categoria_id, subcategoria_id } = {}) {
     return {
       id: p.id,
       nombre: p.nombre,
+      nombre_interno: p.nombre_interno || null,
       descripcion: p.descripcion,
       precio: p.precio,
       sku: p.sku,
@@ -163,6 +164,7 @@ async function createProducto(body) {
   await delay()
   const {
     nombre,
+    nombre_interno,
     descripcion,
     precio,
     sku,
@@ -182,6 +184,7 @@ async function createProducto(body) {
   const nuevo = {
     id: Math.max(...productos.map((p) => p.id), 0) + 1,
     nombre,
+    nombre_interno: nombre_interno || null,
     descripcion: descripcion || '',
     precio: Number(precio),
     sku: sku || null,
@@ -216,6 +219,7 @@ async function updateProducto(id, body) {
 
   const {
     nombre,
+    nombre_interno,
     descripcion,
     precio,
     sku,
@@ -243,6 +247,7 @@ async function updateProducto(id, body) {
 
   Object.assign(p, {
     nombre: nombre ?? p.nombre,
+    nombre_interno: nombre_interno !== undefined ? nombre_interno : p.nombre_interno,
     descripcion: descripcion ?? p.descripcion,
     precio: precio !== undefined ? Number(precio) : p.precio,
     sku: sku ?? p.sku,

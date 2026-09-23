@@ -27,7 +27,7 @@ function conDetalle(p) {
   }
 }
 
-async function getProductos({ categoria_id, subcategoria_id, destacados, catalogo } = {}) {
+async function getProductos({ categoria_id, subcategoria_id, destacados, catalogo, q, limit, offset } = {}) {
   await delay()
   let lista = productos
   if (destacados) lista = lista.filter((p) => p.destacado)
@@ -37,6 +37,12 @@ async function getProductos({ categoria_id, subcategoria_id, destacados, catalog
   }
   if (categoria_id) lista = lista.filter((p) => p.categoria_id === Number(categoria_id))
   if (subcategoria_id) lista = lista.filter((p) => p.subcategoria_id === Number(subcategoria_id))
+  if (q) {
+    const term = q.trim().toLowerCase()
+    lista = lista.filter((p) => p.nombre.toLowerCase().includes(term))
+  }
+  const inicio = Number(offset) || 0
+  if (limit) lista = lista.slice(inicio, inicio + Number(limit))
   return lista.map(conDetalle)
 }
 

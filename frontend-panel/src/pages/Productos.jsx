@@ -29,6 +29,7 @@ const selectCls =
 
 const CAMPOS_INICIALES = {
   nombre: '',
+  nombre_interno: '',
   descripcion: '',
   precio: '',
   sku: '',
@@ -178,6 +179,7 @@ export default function Productos() {
   function abrirEditar(p) {
     setCampos({
       nombre: p.nombre,
+      nombre_interno: p.nombre_interno || '',
       descripcion: p.descripcion || '',
       precio: String(p.precio),
       sku: p.sku || '',
@@ -243,6 +245,7 @@ export default function Productos() {
     try {
       const payload = {
         nombre: campos.nombre.trim(),
+        nombre_interno: campos.nombre_interno.trim() || null,
         descripcion: campos.descripcion.trim(),
         precio: Number(campos.precio),
         sku: campos.sku.trim() || null,
@@ -427,7 +430,12 @@ export default function Productos() {
                     alt={p.nombre}
                     className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
                   />
-                  <p className="truncate font-medium text-ink">{p.nombre}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{p.nombre_interno || p.nombre}</p>
+                    {p.nombre_interno && p.nombre_interno !== p.nombre && (
+                      <p className="truncate text-xs text-ink-2">{p.nombre}</p>
+                    )}
+                  </div>
                 </div>
                 <span className="truncate text-ink-2">{p.sku || '—'}</span>
                 <span className="truncate text-ink-2">
@@ -505,7 +513,7 @@ export default function Productos() {
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="p-nombre" className="mb-1.5 block text-sm font-medium text-ink">
-                          Nombre <span className="text-red-700">*</span>
+                          Nombre público (aparece en la web) <span className="text-red-700">*</span>
                         </label>
                         <input
                           id="p-nombre"
@@ -513,6 +521,20 @@ export default function Productos() {
                           value={campos.nombre}
                           onChange={(e) => setCampo('nombre', e.target.value)}
                           placeholder="Ej. Camiseta Premium 1.1 Boxeada"
+                          className={inputCls}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="p-nombre-interno" className="mb-1.5 block text-sm font-medium text-ink">
+                          Nombre interno (solo para ti)
+                        </label>
+                        <input
+                          id="p-nombre-interno"
+                          type="text"
+                          value={campos.nombre_interno}
+                          onChange={(e) => setCampo('nombre_interno', e.target.value)}
+                          placeholder="Ej. CAM-P11-01 Negro Lote 3"
                           className={inputCls}
                         />
                       </div>
