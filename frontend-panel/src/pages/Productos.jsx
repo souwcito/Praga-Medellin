@@ -287,7 +287,7 @@ export default function Productos() {
       return
     }
     if (campos.precio_antes && Number(campos.precio_antes) <= Number(campos.precio)) {
-      setFormError('El precio anterior debe ser mayor que el precio actual')
+      setFormError('El precio normal debe ser mayor que el precio en promoción')
       return
     }
     if (necesitaSubcategoria && !campos.subcategoria_id) {
@@ -622,9 +622,23 @@ export default function Productos() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
+                          <label htmlFor="p-precio-antes" className="mb-1.5 block text-sm font-medium text-ink">
+                            Precio normal
+                          </label>
+                          <input
+                            id="p-precio-antes"
+                            type="number"
+                            min={0}
+                            step={1000}
+                            value={campos.precio_antes}
+                            onChange={(e) => setCampo('precio_antes', e.target.value)}
+                            placeholder="99000"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
                           <label htmlFor="p-precio" className="mb-1.5 block text-sm font-medium text-ink">
-                            {campos.precio_antes ? 'Precio actual (COP)' : 'Precio (COP)'}{' '}
-                            <span className="text-red-700">*</span>
+                            Precio en promoción (COP) <span className="text-red-700">*</span>
                           </label>
                           <input
                             id="p-precio"
@@ -637,70 +651,29 @@ export default function Productos() {
                             className={inputCls}
                           />
                         </div>
-                        <div>
-                          <label htmlFor="p-sku" className="mb-1.5 block text-sm font-medium text-ink">
-                            SKU
-                          </label>
-                          <input
-                            id="p-sku"
-                            type="text"
-                            value={campos.sku}
-                            onChange={(e) => setCampo('sku', e.target.value)}
-                            placeholder="Ej. CAM-P11-01"
-                            className={inputCls}
-                          />
-                        </div>
                       </div>
 
-                      {/* Oferta */}
+                      <p className="text-xs text-ink-2">
+                        Si llenas el <span className="font-medium">precio normal</span> con un valor
+                        mayor al <span className="font-medium">precio en promoción</span>, el
+                        producto se muestra con el precio normal tachado y aparece en la página{' '}
+                        <span className="font-medium">Promociones</span>. Si lo dejas vacío, el
+                        producto se vende a precio normal.
+                      </p>
+
                       <div>
-                        <span className="mb-1.5 block text-sm font-medium text-ink">Oferta</span>
-                        <div className="inline-flex w-full rounded-lg border border-line bg-surface-2 p-0.5">
-                          {[
-                            { valor: false, label: 'Sin oferta' },
-                            { valor: true, label: 'En oferta' },
-                          ].map((op) => (
-                            <button
-                              key={op.label}
-                              type="button"
-                              onClick={() =>
-                                setCampo(
-                                  'precio_antes',
-                                  op.valor ? String(Number(campos.precio) || 0) : '',
-                                )
-                              }
-                              className={`flex-1 rounded-md py-2 text-sm font-medium transition-all duration-200 ${
-                                Boolean(campos.precio_antes) === op.valor
-                                  ? 'bg-ink text-white shadow-sm'
-                                  : 'text-ink-2 hover:text-ink'
-                              }`}
-                            >
-                              {op.label}
-                            </button>
-                          ))}
-                        </div>
+                        <label htmlFor="p-sku" className="mb-1.5 block text-sm font-medium text-ink">
+                          SKU
+                        </label>
+                        <input
+                          id="p-sku"
+                          type="text"
+                          value={campos.sku}
+                          onChange={(e) => setCampo('sku', e.target.value)}
+                          placeholder="Ej. CAM-P11-01"
+                          className={inputCls}
+                        />
                       </div>
-
-                      {campos.precio_antes && (
-                        <div>
-                          <label htmlFor="p-precio-antes" className="mb-1.5 block text-sm font-medium text-ink">
-                            Precio anterior (se muestra tachado)
-                          </label>
-                          <input
-                            id="p-precio-antes"
-                            type="number"
-                            min={0}
-                            step={1000}
-                            value={campos.precio_antes}
-                            onChange={(e) => setCampo('precio_antes', e.target.value)}
-                            placeholder="99000"
-                            className={inputCls}
-                          />
-                          <p className="mt-1 text-xs text-ink-2">
-                            Debe ser mayor que el precio actual. El producto aparecerá en Promociones.
-                          </p>
-                        </div>
-                      )}
                     </div>
                   </Seccion>
 
