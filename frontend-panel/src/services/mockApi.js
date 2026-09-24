@@ -122,12 +122,18 @@ async function getProductos({ categoria_id, subcategoria_id } = {}) {
     const vars = variantes.filter((v) => v.producto_id === p.id)
     const stockTotal = (varianteId) =>
       inventario.filter((i) => i.variante_id === varianteId).reduce((s, i) => s + i.cantidad, 0)
+    const precio = Number(p.precio)
+    const precioAntes = p.precio_antes ? Number(p.precio_antes) : null
+    const esOferta = precioAntes !== null && precioAntes > precio
     return {
       id: p.id,
       nombre: p.nombre,
       nombre_interno: p.nombre_interno || null,
       descripcion: p.descripcion,
-      precio: p.precio,
+      precio,
+      precio_antes: precioAntes,
+      es_oferta: esOferta,
+      descuento: esOferta ? Math.round(((precioAntes - precio) / precioAntes) * 100) : null,
       sku: p.sku,
       categoria_id: p.categoria_id,
       categoria: categorias.find((c) => c.id === p.categoria_id)?.nombre || null,
@@ -167,6 +173,7 @@ async function createProducto(body) {
     nombre_interno,
     descripcion,
     precio,
+    precio_antes,
     sku,
     categoria_id,
     subcategoria_id,
@@ -187,6 +194,7 @@ async function createProducto(body) {
     nombre_interno: nombre_interno || null,
     descripcion: descripcion || '',
     precio: Number(precio),
+    precio_antes: precio_antes ? Number(precio_antes) : null,
     sku: sku || null,
     categoria_id: Number(categoria_id) || null,
     subcategoria_id: Number(subcategoria_id) || null,
@@ -222,6 +230,7 @@ async function updateProducto(id, body) {
     nombre_interno,
     descripcion,
     precio,
+    precio_antes,
     sku,
     categoria_id,
     subcategoria_id,
@@ -250,6 +259,7 @@ async function updateProducto(id, body) {
     nombre_interno: nombre_interno !== undefined ? nombre_interno : p.nombre_interno,
     descripcion: descripcion ?? p.descripcion,
     precio: precio !== undefined ? Number(precio) : p.precio,
+    precio_antes: precio_antes !== undefined ? (precio_antes ? Number(precio_antes) : null) : p.precio_antes,
     sku: sku ?? p.sku,
     categoria_id: categoria_id !== undefined ? Number(categoria_id) : p.categoria_id,
     subcategoria_id: subcategoria_id !== undefined ? Number(subcategoria_id) : p.subcategoria_id,

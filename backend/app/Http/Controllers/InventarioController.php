@@ -6,9 +6,17 @@ use App\Models\Inventario;
 use App\Models\Sede;
 use App\Models\Variante;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class InventarioController extends Controller
 {
+    // Clave de caché del stock visible de una sede (POS). TTL corto para que las
+    // 4 sedes se vean cambios casi en tiempo real sin recargar la BD a cada rato.
+    public static function claveSede(int $sedeId): string
+    {
+        return 'inventario_sede_' . $sedeId;
+    }
+
     // Variantes con stock > 0 de una sede (para el POS)
     public function index(Request $request)
     {
@@ -17,27 +25,30 @@ class InventarioController extends Controller
             return response()->json(['error' => 'El parámetro sede_id es requerido'], 400);
         }
 
-        $rows = Inventario::join('variantes', 'inventarios.variante_id', '=', 'variantes.id')
-            ->join('productos', 'variantes.producto_id', '=', 'productos.id')
-            ->where('inventarios.sede_id', $sedeId)
-            ->where('inventarios.stock', '>', 0)
-            ->select(
-                'variantes.id as variante_id',
-                'productos.id as producto_id',
-                'productos.nombre',
-                'variantes.talla',
-                'productos.precio',
-                'productos.sku',
-                'variantes.codigo_barras',
-                'productos.imagen_url',
-                'inventarios.stock'
-            )
-            ->orderBy('productos.nombre')
-            ->get()
-            ->map(function ($r) {
-                $r->imagen_url = $this->imagenUrl($r->imagen_url);
-                return $r;
-            });
+        $rows = Cache::remember(static::claveSede((int) $sedeId), now()->addSeconds(20), function () use ($sedeId) {
+            return Inventario::join('variantes', 'inventarios.variante_id', '=', 'variantes.id')
+                ->join('productos', 'variantes.producto_id', '=', 'productos.id')
+                ->where('inventarios.sede_id', $sedeId)
+                ->where('inventarios.stock', '>', 0)
+                ->select(
+                    'variantes.id as variante_id',
+                    'productos.id as producto_id',
+                    'productos.nombre',
+                    'variantes.talla',
+                    'productos.precio',
+                    'productos.precio_antes',
+                    'productos.sku',
+                    'variantes.codigo_barras',
+                    'productos.imagen_url',
+                    'inventarios.stock'
+                )
+                ->orderBy('productos.nombre')
+                ->get()
+                ->map(function ($r) {
+                    $r->imagen_url = $this->imagenUrl($r->imagen_url);
+                    return $r;
+                });
+        });
 
         return response()->json($rows);
     }
@@ -103,6 +114,9 @@ class InventarioController extends Controller
             $reg->stock += $data['cantidad'];
         }
         $reg->save();
+
+        // Invalida la caché del stock de esa sede para que se vea al instante
+        Cache::forget(static::claveSede((int) $reg->sede_id));
 
         return response()->json([
             'variante_id' => (int) $reg->variante_id,

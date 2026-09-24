@@ -50,6 +50,7 @@ function generarSitemap(productos) {
   const urls = [
     { loc: `${BASE}/`, changefreq: 'daily', priority: '1.0' },
     { loc: `${BASE}/catalogo`, changefreq: 'daily', priority: '0.9' },
+    { loc: `${BASE}/promociones`, changefreq: 'daily', priority: '0.8' },
   ]
   productos.forEach((p) => {
     urls.push({ loc: `${BASE}/producto/${p.id}`, changefreq: 'weekly', priority: '0.8', lastmod: hoy })

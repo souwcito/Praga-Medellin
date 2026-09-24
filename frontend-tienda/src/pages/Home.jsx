@@ -5,6 +5,7 @@ import { mapsLink, sedes } from '../utils/sedes'
 import Seo from '../components/Seo'
 import BannerSlider from '../components/BannerSlider'
 import ProductCard from '../components/ProductCard'
+import usePolling from '../hooks/usePolling'
 import { ArrowRightIcon } from '../components/icons'
 
 export default function Home() {
@@ -22,6 +23,17 @@ export default function Home() {
       .catch((err) => setError(err?.message || 'Error cargando la tienda'))
       .finally(() => setLoading(false))
   }, [])
+
+  // Auto-refresco: refleja ofertas/productos nuevos en la portada sin recargar
+  function refrescar() {
+    if (loading) return
+    catalogApi
+      .getProductos({ destacados: true })
+      .then((p) => setDestacados(p.slice(0, 8)))
+      .catch(() => {})
+  }
+
+  usePolling(refrescar, 30000, !loading)
 
   return (
     <>

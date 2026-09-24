@@ -16,8 +16,15 @@ async function getSubcategorias() {
 // Listado público: agrega categoría/subcategoría y solo variantes con stock.
 function conDetalle(p) {
   const cat = categorias.find((c) => c.id === p.categoria_id)
+  const precio = Number(p.precio)
+  const precioAntes = p.precio_antes ? Number(p.precio_antes) : null
+  const esOferta = precioAntes !== null && precioAntes > precio
   return {
     ...p,
+    precio,
+    precio_antes: precioAntes,
+    es_oferta: esOferta,
+    descuento: esOferta ? Math.round(((precioAntes - precio) / precioAntes) * 100) : null,
     categoria: cat ? cat.nombre : null,
     catalogo: cat ? cat.catalogo : null,
     subcategoria: subcategorias.find((s) => s.id === p.subcategoria_id)?.nombre || null,
@@ -27,10 +34,13 @@ function conDetalle(p) {
   }
 }
 
-async function getProductos({ categoria_id, subcategoria_id, destacados, catalogo, q, limit, offset } = {}) {
+async function getProductos({ categoria_id, subcategoria_id, destacados, catalogo, q, limit, offset, en_oferta } = {}) {
   await delay()
   let lista = productos
   if (destacados) lista = lista.filter((p) => p.destacado)
+  if (en_oferta) {
+    lista = lista.filter((p) => p.precio_antes && Number(p.precio_antes) > Number(p.precio))
+  }
   if (catalogo) {
     const ids = categorias.filter((c) => c.catalogo === catalogo).map((c) => c.id)
     lista = lista.filter((p) => ids.includes(p.categoria_id))

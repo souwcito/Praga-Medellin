@@ -49,4 +49,8 @@ ALTER TABLE `categorias` ADD COLUMN `tallas_opcionales` TINYINT(1) NOT NULL DEFA
 UPDATE `categorias` SET `tallas_opcionales` = 1 WHERE `nombre` = 'Gorras';
 UPDATE `subcategorias` SET `tallas` = '["XS-S","M-L","XL"]'
 WHERE `categoria_id` IN (SELECT `id` FROM `categorias` WHERE `nombre` = 'Gorras');
+
+-- 8) Ofertas: precio anterior (tachado) + índice para el filtro en_oferta
+ALTER TABLE `productos` ADD COLUMN `precio_antes` INT NULL AFTER `precio`;
+ALTER TABLE `productos` ADD INDEX `productos_precio_antes_index` (`precio_antes`);
 -- =============================================================================

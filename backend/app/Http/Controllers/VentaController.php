@@ -12,6 +12,7 @@ use App\Models\Empleado;
 use App\Models\Sede;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class VentaController extends Controller
 {
@@ -81,6 +82,9 @@ class VentaController extends Controller
                     'subtotal' => (int) $subtotal,
                 ];
             }
+
+            // La venta descuenta stock: invalida la caché del stock de esa sede
+            Cache::forget(InventarioController::claveSede($venta->sede_venta_id));
 
             $factura = Factura::create([
                 'venta_id' => $venta->id,

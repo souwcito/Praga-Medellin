@@ -32,6 +32,7 @@ const CAMPOS_INICIALES = {
   nombre_interno: '',
   descripcion: '',
   precio: '',
+  precio_antes: '',
   sku: '',
   categoria_id: '',
   subcategoria_id: '',
@@ -229,6 +230,7 @@ export default function Productos() {
       nombre_interno: p.nombre_interno || '',
       descripcion: p.descripcion || '',
       precio: String(p.precio),
+      precio_antes: p.precio_antes ? String(p.precio_antes) : '',
       sku: p.sku || '',
       categoria_id: String(p.categoria_id || ''),
       subcategoria_id: String(p.subcategoria_id || ''),
@@ -284,6 +286,10 @@ export default function Productos() {
       setFormError('Nombre y precio son obligatorios')
       return
     }
+    if (campos.precio_antes && Number(campos.precio_antes) <= Number(campos.precio)) {
+      setFormError('El precio anterior debe ser mayor que el precio actual')
+      return
+    }
     if (necesitaSubcategoria && !campos.subcategoria_id) {
       setFormError('Selecciona la subcategoría para definir las tallas')
       return
@@ -296,6 +302,7 @@ export default function Productos() {
         nombre_interno: campos.nombre_interno.trim() || null,
         descripcion: campos.descripcion.trim(),
         precio: Number(campos.precio),
+        precio_antes: campos.precio_antes ? Number(campos.precio_antes) : null,
         sku: campos.sku.trim() || null,
         categoria_id: campos.categoria_id ? Number(campos.categoria_id) : null,
         subcategoria_id: campos.subcategoria_id ? Number(campos.subcategoria_id) : null,
@@ -483,6 +490,11 @@ export default function Productos() {
                     {p.nombre_interno && p.nombre_interno !== p.nombre && (
                       <p className="truncate text-xs text-ink-2">{p.nombre}</p>
                     )}
+                    {p.es_oferta && (
+                      <span className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                        Oferta -{p.descuento}%
+                      </span>
+                    )}
                   </div>
                 </div>
                 <span className="truncate text-ink-2">{p.sku || '—'}</span>
@@ -493,7 +505,14 @@ export default function Productos() {
                   {p.categoria || '—'}
                   {p.subcategoria ? ` · ${p.subcategoria}` : ''}
                 </span>
-                <span className="text-right font-semibold text-ink">{formato(p.precio)}</span>
+                <span className="text-right">
+                  {p.es_oferta && (
+                    <span className="mr-1.5 text-xs text-ink-2 line-through">
+                      {formato(p.precio_antes)}
+                    </span>
+                  )}
+                  <span className="font-semibold text-ink">{formato(p.precio)}</span>
+                </span>
                 <span
                   className={`text-center font-semibold ${
                     p.stock_total === 0 ? 'text-ink-2/40' : 'text-ink'
@@ -604,7 +623,8 @@ export default function Productos() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="p-precio" className="mb-1.5 block text-sm font-medium text-ink">
-                            Precio (COP) <span className="text-red-700">*</span>
+                            {campos.precio_antes ? 'Precio actual (COP)' : 'Precio (COP)'}{' '}
+                            <span className="text-red-700">*</span>
                           </label>
                           <input
                             id="p-precio"
@@ -631,6 +651,56 @@ export default function Productos() {
                           />
                         </div>
                       </div>
+
+                      {/* Oferta */}
+                      <div>
+                        <span className="mb-1.5 block text-sm font-medium text-ink">Oferta</span>
+                        <div className="inline-flex w-full rounded-lg border border-line bg-surface-2 p-0.5">
+                          {[
+                            { valor: false, label: 'Sin oferta' },
+                            { valor: true, label: 'En oferta' },
+                          ].map((op) => (
+                            <button
+                              key={op.label}
+                              type="button"
+                              onClick={() =>
+                                setCampo(
+                                  'precio_antes',
+                                  op.valor ? String(Number(campos.precio) || 0) : '',
+                                )
+                              }
+                              className={`flex-1 rounded-md py-2 text-sm font-medium transition-all duration-200 ${
+                                Boolean(campos.precio_antes) === op.valor
+                                  ? 'bg-ink text-white shadow-sm'
+                                  : 'text-ink-2 hover:text-ink'
+                              }`}
+                            >
+                              {op.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {campos.precio_antes && (
+                        <div>
+                          <label htmlFor="p-precio-antes" className="mb-1.5 block text-sm font-medium text-ink">
+                            Precio anterior (se muestra tachado)
+                          </label>
+                          <input
+                            id="p-precio-antes"
+                            type="number"
+                            min={0}
+                            step={1000}
+                            value={campos.precio_antes}
+                            onChange={(e) => setCampo('precio_antes', e.target.value)}
+                            placeholder="99000"
+                            className={inputCls}
+                          />
+                          <p className="mt-1 text-xs text-ink-2">
+                            Debe ser mayor que el precio actual. El producto aparecerá en Promociones.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </Seccion>
 
@@ -852,6 +922,11 @@ export default function Productos() {
                           {campos.nombre || 'Nombre del producto'}
                         </p>
                         <p className="mt-0.5 text-sm font-bold text-ink">
+                          {campos.precio_antes && (
+                            <span className="mr-1.5 text-xs font-medium text-ink-2 line-through">
+                              {formato(Number(campos.precio_antes) || 0)}
+                            </span>
+                          )}
                           {formato(Number(campos.precio) || 0)}
                         </p>
                         <p className="truncate text-xs text-ink-2">

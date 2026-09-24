@@ -7,6 +7,7 @@ import { FavoritesProvider } from './context/FavoritesContext.jsx'
 // Carga diferida por página (code-splitting para el sitio estático)
 const Home = lazy(() => import('./pages/Home'))
 const Catalogo = lazy(() => import('./pages/Catalogo'))
+const Promociones = lazy(() => import('./pages/Promociones'))
 const Producto = lazy(() => import('./pages/Producto'))
 const Carrito = lazy(() => import('./pages/Carrito'))
 const Checkout = lazy(() => import('./pages/Checkout'))
@@ -29,6 +30,7 @@ export default function App() {
               <Route element={<Layout />}>
                 <Route path="/" element={<Home />} />
                 <Route path="/catalogo" element={<Catalogo />} />
+                <Route path="/promociones" element={<Promociones />} />
                 <Route path="/producto/:id" element={<Producto />} />
                 <Route path="/carrito" element={<Carrito />} />
                 <Route path="/checkout" element={<Checkout />} />

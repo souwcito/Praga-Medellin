@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { catalogApi, ventasApi } from '../services/api'
 import { Comprobante } from '../components/Comprobante'
 import { imprimirComprobante } from '../utils/print'
+import usePolling from '../hooks/usePolling'
 import {
   AlertIcon,
   CartIcon,
@@ -68,6 +69,20 @@ export default function Pos() {
       .catch((err) => setError(err?.message || 'Error cargando inventario'))
       .finally(() => setCargando(false))
   }, [sedeId])
+
+  // Tiempo real: cada 20s se refresca el stock de la sede activa para reflejar
+  // ventas hechas en otras sedes sin recargar la página.
+  usePolling(
+    () => {
+      if (!sedeId) return
+      catalogApi
+        .getInventario(sedeId)
+        .then(setVariantes)
+        .catch(() => {})
+    },
+    20000,
+    Boolean(sedeId),
+  )
 
   const variantesFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()

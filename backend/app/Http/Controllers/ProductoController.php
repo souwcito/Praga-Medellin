@@ -50,12 +50,19 @@ class ProductoController extends Controller
             is_array($p->imagenes) ? $p->imagenes : [$p->imagen_url]
         ));
 
+        $precio = (int) $p->precio;
+        $precioAntes = $p->precio_antes !== null ? (int) $p->precio_antes : null;
+        $esOferta = $precioAntes !== null && $precioAntes > $precio;
+
         return [
             'id' => $p->id,
             'nombre' => $p->nombre,
             'nombre_interno' => $p->nombre_interno,
             'descripcion' => $p->descripcion,
-            'precio' => (int) $p->precio,
+            'precio' => $precio,
+            'precio_antes' => $precioAntes,
+            'es_oferta' => $esOferta,
+            'descuento' => $esOferta ? (int) round((($precioAntes - $precio) / $precioAntes) * 100) : null,
             'sku' => $p->sku,
             'categoria_id' => $p->categoria_id,
             'categoria' => optional($p->categoria)->nombre,
@@ -84,13 +91,16 @@ class ProductoController extends Controller
         if ($request->filled('q')) {
             $query->where('nombre', 'like', '%' . $request->q . '%');
         }
+        if ($request->filled('en_oferta')) {
+            $query->whereNotNull('precio_antes')->whereColumn('precio_antes', '>', 'precio');
+        }
 
         // Home: solo un puñado de destacados (payload ligero aunque haya 500+ productos)
         if ($request->filled('destacados')) {
             $query->orderByDesc('id')->take(8);
         } elseif ($request->filled('limit')) {
             // Catálogo paginado: ?limit=40&offset=0 para cargar de a pocos
-            $query->skip((int) ($request->offset ?? 0))->take((int) $request->limit);
+            $query->orderBy('id')->skip((int) ($request->offset ?? 0))->take((int) $request->limit);
         } else {
             $query->orderBy('id');
         }
@@ -138,6 +148,7 @@ class ProductoController extends Controller
             'nombre' => 'required|string',
             'nombre_interno' => 'nullable|string',
             'precio' => 'required|integer',
+            'precio_antes' => 'nullable|integer',
             'sku' => 'nullable|string',
             'descripcion' => 'nullable|string',
             'categoria_id' => 'nullable|integer',
@@ -159,6 +170,7 @@ class ProductoController extends Controller
             'nombre_interno' => $data['nombre_interno'] ?? null,
             'descripcion' => $data['descripcion'] ?? '',
             'precio' => $data['precio'],
+            'precio_antes' => $data['precio_antes'] ?? null,
             'sku' => $data['sku'] ?? null,
             'categoria_id' => $data['categoria_id'] ?? null,
             'subcategoria_id' => $data['subcategoria_id'] ?? null,
@@ -179,6 +191,7 @@ class ProductoController extends Controller
             'nombre' => 'sometimes|string',
             'nombre_interno' => 'nullable|string',
             'precio' => 'sometimes|integer',
+            'precio_antes' => 'nullable|integer',
             'sku' => 'nullable|string',
             'descripcion' => 'nullable|string',
             'categoria_id' => 'nullable|integer',

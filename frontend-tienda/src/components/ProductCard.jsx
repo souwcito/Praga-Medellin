@@ -62,11 +62,18 @@ export default function ProductCard({ producto }) {
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
         </Link>
-        {producto.destacado && (
-          <span className="absolute left-3 top-3 rounded-full bg-ink/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">
-            Destacado
-          </span>
-        )}
+        <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+          {producto.es_oferta && (
+            <span className="rounded-full bg-red-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">
+              -{producto.descuento}%
+            </span>
+          )}
+          {producto.destacado && (
+            <span className="rounded-full bg-ink/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">
+              Destacado
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => toggle(producto)}
@@ -94,7 +101,14 @@ export default function ProductCard({ producto }) {
         </Link>
 
         <div className="mt-2 flex items-end justify-between gap-2">
-          <span className="text-lg font-bold text-ink">{formato(producto.precio)}</span>
+          <div>
+            {producto.es_oferta && (
+              <span className="mr-1.5 text-xs text-ink-2 line-through">
+                {formato(producto.precio_antes)}
+              </span>
+            )}
+            <span className="text-lg font-bold text-ink">{formato(producto.precio)}</span>
+          </div>
           {tallas.length > 0 ? (
             <span className="truncate text-xs text-ink-2">
               {tallas.slice(0, 3).join(' · ')}

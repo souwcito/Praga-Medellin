@@ -200,7 +200,19 @@ function ProductoDetalle({ productoId }) {
             <h1 className="mt-2 font-display text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
               {producto.nombre}
             </h1>
-            <p className="mt-3 text-2xl font-bold text-ink">{formato(producto.precio)}</p>
+            <div className="mt-3 flex items-center gap-3">
+              {producto.es_oferta && (
+                <>
+                  <span className="text-lg text-ink-2 line-through">
+                    {formato(producto.precio_antes)}
+                  </span>
+                  <span className="rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                    -{producto.descuento}%
+                  </span>
+                </>
+              )}
+              <p className="text-2xl font-bold text-ink">{formato(producto.precio)}</p>
+            </div>
 
             <p className="mt-5 text-sm leading-relaxed text-ink-2">{producto.descripcion}</p>
 

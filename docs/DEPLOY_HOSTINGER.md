@@ -155,6 +155,35 @@ Si la API responde 500: revisa `api-app/storage/logs/laravel.log`.
 
 ---
 
+## Actualización: ofertas, Promociones, tiempo real y escalabilidad
+
+1. **Base de datos** (phpMyAdmin → SQL): ejecuta la **sección 8** de `docs/ACTUALIZAR_PRODUCCION.sql`:
+   ```sql
+   ALTER TABLE `productos` ADD COLUMN `precio_antes` INT NULL AFTER `precio`;
+   ALTER TABLE `productos` ADD INDEX `productos_precio_antes_index` (`precio_antes`);
+   ```
+2. **Backend** → `public_html/api-app/` (sobrescribir):
+   - `app/Models/Producto.php`
+   - `app/Http/Controllers/ProductoController.php`
+   - `app/Http/Controllers/CategoriaController.php`
+   - `app/Http/Controllers/SubcategoriaController.php`
+   - `app/Http/Controllers/InventarioController.php`
+   - `app/Http/Controllers/VentaController.php`
+   - `app/Http/Controllers/DevolucionController.php`
+   - Y **borra** `bootstrap/cache/config.php` si existe.
+3. **Frontends**: recompilados en
+   - `frontend-tienda/dist/` → raíz `public_html/`
+   - `frontend-panel/dist/` → `public_html/panel/`
+4. Limpia la caché de Hostinger (Turbo/Performance) y recarga en incógnito.
+
+> **Cómo funciona el tiempo real**: la tienda se auto-refresca cada 30 s y el POS cada 20 s
+> (polling). El backend cachea categorías, subcategorías (24 h) e inventario por sede (20 s),
+> e invalida la caché de inventario al vender/devolver/ajustar. Las ventas van en transacción
+> con validación de stock (evita sobreventa entre sedes). Si algún día hay SSH:
+> `php artisan optimize` (config/route/view cache).
+
+---
+
 ## Notas
 - **Wompi**: el checkout de la tienda todavía es un placeholder; cuando se integre, completa `VITE_WOMPI_PUBLIC_KEY` en `frontend-tienda/.env.production` y reconstruye.
 - El `.htaccess` raíz redirige HTTP→HTTPS, rutea `/api` y `/images` hacia Laravel, deja `/panel` a su propio SPA y agrega caché/compresión para rendimiento (Core Web Vitals).

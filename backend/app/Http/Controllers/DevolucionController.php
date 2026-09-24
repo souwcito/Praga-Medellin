@@ -12,6 +12,7 @@ use App\Models\Variante;
 use App\Models\Venta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class DevolucionController extends Controller
 {
@@ -163,6 +164,9 @@ class DevolucionController extends Controller
                 $reg->stock -= $item['cantidad'];
                 $reg->save();
             }
+
+            // Invalida la caché del stock de la sede (devueltos suman, cambios restan)
+            Cache::forget(InventarioController::claveSede((int) $request->sede_id));
 
             DB::commit();
 

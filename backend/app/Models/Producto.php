@@ -11,6 +11,7 @@ class Producto extends Model
         'nombre_interno',
         'descripcion',
         'precio',
+        'precio_antes',
         'sku',
         'codigo_barras',
         'categoria_id',
