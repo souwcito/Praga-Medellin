@@ -1,6 +1,6 @@
-import logoAkron from '../assets/logo-akron.png'
-import logoPraga from '../assets/logo-praga.png'
-import logoWoman from '../assets/logo-praga-woman.png'
+import logoAkron from '../assets/logo-akron.webp'
+import logoPraga from '../assets/logo-praga.webp'
+import logoWoman from '../assets/logo-praga-woman.webp'
 
 // Los 3 logos de la marca juntos: Akron, Praga (centro, más grande) y Praga Woman.
 // `ring` define el anillo del borde (claro en fondos oscuros, línea en fondos blancos).

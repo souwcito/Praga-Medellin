@@ -1,5 +1,44 @@
 @import "tailwindcss";
 
+/* Tipografías self-hosted (mismo origen, sin bloqueo por CSS de terceros).
+   Inter es una variable font de Google Fonts (un solo archivo para todos los
+   pesos); Poppins se sirve por peso estático. */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/poppins-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./assets/fonts/poppins-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./assets/fonts/poppins-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/poppins-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin.woff2') format('woff2');
+}
+
 @theme {
   /* Poppins es la tipografía PRINCIPAL (texto y títulos); Inter se usa como
      soporte/fallback y para textos secundarios cuando conviene. */

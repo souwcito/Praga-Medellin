@@ -9,6 +9,7 @@ use App\Models\Producto;
 use App\Models\Empleado;
 use App\Models\Sede;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
@@ -22,7 +23,10 @@ class DashboardController extends Controller
     public function resumen(Request $request)
     {
         $periodo = $request->periodo ?? 'mes';
-        $inicio = $this->inicioPeriodo($periodo);
+        $clave = 'dashboard_' . $periodo . '_' . $this->cacheVersion();
+
+        $resumen = Cache::remember($clave, 20, function () use ($periodo) {
+            $inicio = $this->inicioPeriodo($periodo);
 
         $ventas = Venta::where('created_at', '>=', $inicio)->get();
 
@@ -92,7 +96,7 @@ class DashboardController extends Controller
             ];
         }
 
-        return response()->json([
+        return [
             'periodo' => $periodo,
             'total' => $total,
             'numVentas' => $numVentas,
@@ -101,6 +105,9 @@ class DashboardController extends Controller
             'productosMasVendidos' => $productosMasVendidos,
             'empleadoDestacado' => $empleadoDestacado,
             'ventasPorDia' => $ventasPorDia,
-        ]);
+        ];
+        });
+
+        return response()->json($resumen);
     }
 }

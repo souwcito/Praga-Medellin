@@ -110,6 +110,9 @@ export default function SearchOverlay({ cerrar }) {
                       <img
                         src={p.imagen_url}
                         alt=""
+                        width={48}
+                        height={48}
+                        loading="lazy"
                         className="h-12 w-12 shrink-0 rounded-lg bg-surface-2 object-cover"
                       />
                       <span className="min-w-0 flex-1">

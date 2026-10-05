@@ -21,6 +21,7 @@ export default function ProductCard({ producto }) {
   const favorito = esFavorito(producto.id)
 
   const disponibles = producto.variantes.filter((v) => v.stock > 0)
+  const agotado = disponibles.length === 0
   const tallas = disponibles.map((v) => v.talla).filter(Boolean)
   const esTallaUnica = disponibles.length === 1 && disponibles[0].talla === null
   const varianteUnica = esTallaUnica ? disponibles[0] : null
@@ -54,7 +55,13 @@ export default function ProductCard({ producto }) {
       <div className="relative aspect-square overflow-hidden bg-surface-2">
         <Link to={`/producto/${producto.id}`} className="absolute inset-0">
           <img
-            src={producto.imagen_url}
+            src={producto.imagen_thumb || producto.imagen_url}
+            srcSet={
+              producto.imagen_thumb && producto.imagen_medium
+                ? `${producto.imagen_thumb} 400w, ${producto.imagen_medium} 800w, ${producto.imagen_url} 1200w`
+                : undefined
+            }
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             alt={producto.nombre}
             width={600}
             height={600}
@@ -86,6 +93,13 @@ export default function ProductCard({ producto }) {
         >
           <HeartIcon filled={favorito} className="h-4 w-4" />
         </button>
+        {agotado && (
+          <div className="absolute inset-0 z-10 grid place-items-center bg-white/70 backdrop-blur-[1px]">
+            <span className="rounded-full bg-ink px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
+              Agotado
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Contenido */}
@@ -121,22 +135,34 @@ export default function ProductCard({ producto }) {
 
         {/* Acciones */}
         <div className="mt-4 space-y-2">
-          <button
-            type="button"
-            onClick={() => abrir('comprar')}
-            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-ink text-xs font-semibold text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98]"
-          >
-            <ZapIcon className="h-4 w-4" />
-            Comprar ahora
-          </button>
-          <button
-            type="button"
-            onClick={() => abrir('agregar')}
-            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-line text-xs font-semibold text-ink-2 transition-all duration-200 hover:border-ink-2/40 hover:bg-surface-2 hover:text-ink active:scale-[0.98]"
-          >
-            <CartIcon className="h-4 w-4" />
-            Agregar al carrito
-          </button>
+          {agotado ? (
+            <button
+              type="button"
+              disabled
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-surface-2 text-xs font-semibold text-ink-2/50"
+            >
+              Agotado
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => abrir('comprar')}
+                className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-ink text-xs font-semibold text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98]"
+              >
+                <ZapIcon className="h-4 w-4" />
+                Comprar ahora
+              </button>
+              <button
+                type="button"
+                onClick={() => abrir('agregar')}
+                className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-line text-xs font-semibold text-ink-2 transition-all duration-200 hover:border-ink-2/40 hover:bg-surface-2 hover:text-ink active:scale-[0.98]"
+              >
+                <CartIcon className="h-4 w-4" />
+                Agregar al carrito
+              </button>
+            </>
+          )}
         </div>
       </div>
 

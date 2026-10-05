@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import ScrollToTop from './components/ScrollToTop'
+import { useAuth } from './hooks/useAuth'
 
 // Carga diferida (code-splitting): el Login queda liviano y las pantallas
 // pesadas (Dashboard con Recharts, POS) se descargan solo al entrar.
@@ -15,6 +17,8 @@ const Productos = lazy(() => import('./pages/Productos'))
 const Pedidos = lazy(() => import('./pages/Pedidos'))
 const Clientes = lazy(() => import('./pages/Clientes'))
 const Devoluciones = lazy(() => import('./pages/Devoluciones'))
+const Dueno = lazy(() => import('./pages/Dueno'))
+const DuenoProductos = lazy(() => import('./pages/DuenoProductos'))
 
 function PageFallback() {
   return (
@@ -24,9 +28,16 @@ function PageFallback() {
   )
 }
 
+// Ruta por defecto según el rol: el dueño aterriza en su panel.
+function Inicio() {
+  const { user } = useAuth()
+  return <Navigate to={user?.rol === 'dueno' ? '/dueno' : '/dashboard'} replace />
+}
+
 export default function App() {
   return (
     <BrowserRouter basename="/panel">
+      <ScrollToTop />
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -54,9 +65,27 @@ export default function App() {
             <Route path="/pedidos" element={<Pedidos />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/devoluciones" element={<Devoluciones />} />
+
+            {/* Panel del dueño (rol 'dueno') */}
+            <Route
+              path="/dueno"
+              element={
+                <ProtectedRoute requiresOwner>
+                  <Dueno />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dueno/productos"
+              element={
+                <ProtectedRoute requiresOwner>
+                  <DuenoProductos />
+                </ProtectedRoute>
+              }
+            />
           </Route>
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Inicio />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

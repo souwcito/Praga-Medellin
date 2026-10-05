@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { catalogApi, productosApi } from '../services/api'
+import { productosApi } from '../services/api'
+import { useCategorias, useSedes, useSubcategorias, useProductos } from '../hooks/useData'
 import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
 import { urlImagen } from '../utils/imagenes'
 import MultiImageUpload from '../components/MultiImageUpload'
@@ -55,18 +57,28 @@ function sugerirBarra(idx) {
 }
 
 export default function Productos() {
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const catalogo = searchParams.get('catalogo') || ''
   const filtroCategoria = searchParams.get('categoria') || ''
   const filtroSubcategoria = searchParams.get('subcategoria') || ''
 
-  const [categorias, setCategorias] = useState([])
-  const [subcategorias, setSubcategorias] = useState([])
-  const [productos, setProductos] = useState([])
+  const { data: categorias = [] } = useCategorias()
+  const { data: subcategorias = [] } = useSubcategorias()
+  const { data: sedes = [] } = useSedes()
+
+  const params = useMemo(
+    () => ({
+      catalogo: catalogo || undefined,
+      categoria_id: filtroCategoria || undefined,
+      subcategoria_id: filtroSubcategoria || undefined,
+    }),
+    [catalogo, filtroCategoria, filtroSubcategoria],
+  )
+  const { data: productos = [], isLoading: loading, isError, error: errorRaw } = useProductos(params)
+  const error = errorRaw?.message || (isError ? 'Error cargando productos' : null)
 
   const [busqueda, setBusqueda] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
 
   const [form, setForm] = useState(null)
@@ -76,33 +88,24 @@ export default function Productos() {
   const [guardando, setGuardando] = useState(false)
   const [formError, setFormError] = useState(null)
 
+  // Sedes donde se aplica el stock inicial (null = todas; se define al abrir el form)
+  const [sedesForm, setSedesForm] = useState(null)
+  const sedesSeleccionadas = sedesForm ?? sedes.map((s) => s.id)
+  function toggleSede(id) {
+    setSedesForm((prev) => {
+      const base = prev ?? sedes.map((s) => s.id)
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id]
+    })
+  }
+  function seleccionarTodasSedes() {
+    setSedesForm(sedes.map((s) => s.id))
+  }
+  function limpiarSedes() {
+    setSedesForm([])
+  }
+
   const [modalDelete, setModalDelete] = useState(null)
   const [eliminando, setEliminando] = useState(false)
-
-  useEffect(() => {
-    Promise.all([catalogApi.getCategorias(), catalogApi.getSubcategorias()])
-      .then(([c, s]) => {
-        setCategorias(c)
-        setSubcategorias(s)
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando catálogo'))
-  }, [])
-
-  useEffect(() => {
-    productosApi
-      .list({
-        catalogo: catalogo || undefined,
-        categoria_id: filtroCategoria || undefined,
-        subcategoria_id: filtroSubcategoria || undefined,
-      })
-      .then((p) => {
-        setProductos(p)
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando productos'))
-      .finally(() => setLoading(false))
-  }, [catalogo, filtroCategoria, filtroSubcategoria])
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -142,30 +145,29 @@ export default function Productos() {
   }
 
   function elegirCatalogo(valor) {
-    setLoading(true)
     setUrlParam('catalogo', valor)
     setUrlParam('categoria', '')
     setUrlParam('subcategoria', '')
   }
 
   function elegirCategoria(valor) {
-    setLoading(true)
     setUrlParam('categoria', valor)
     setUrlParam('subcategoria', '')
   }
 
   function elegirSubcategoria(valor) {
-    setLoading(true)
     setUrlParam('subcategoria', valor)
   }
 
   function construirVariantes(catId, subId, existentes = []) {
-    // Al editar: se conservan las tallas reales del producto
+    // Al editar: se conservan las tallas reales del producto. El stock inicial
+    // queda vacío (= no modifica el stock actual) y se muestra el total como referencia.
     if (existentes && existentes.length) {
       return existentes.map((ex, idx) => ({
         talla: ex.talla ?? null,
         codigo_barras: ex.codigo_barras || sugerirBarra(idx),
-        stock_inicial: ex.stock_total ?? '',
+        stock_inicial: '',
+        stock_total: ex.stock_total ?? 0,
       }))
     }
     const cat = categorias.find((c) => c.id === Number(catId))
@@ -221,6 +223,7 @@ export default function Productos() {
     setCatalogoForm(catalogo || 'hombre')
     setVariantesForm([])
     setForm({})
+    setSedesForm(null)
     setFormError(null)
   }
 
@@ -239,6 +242,7 @@ export default function Productos() {
     setCatalogoForm(p.catalogo || 'hombre')
     setVariantesForm(construirVariantes(p.categoria_id, p.subcategoria_id, p.variantes))
     setForm(p)
+    setSedesForm(null)
     setFormError(null)
   }
 
@@ -307,6 +311,7 @@ export default function Productos() {
         categoria_id: campos.categoria_id ? Number(campos.categoria_id) : null,
         subcategoria_id: campos.subcategoria_id ? Number(campos.subcategoria_id) : null,
         imagenes: campos.imagenes,
+        sedes: sedesSeleccionadas,
         variantes: variantesForm.map((v) => ({
           talla: v.talla,
           codigo_barras: v.codigo_barras,
@@ -321,22 +326,13 @@ export default function Productos() {
         setAviso('Producto creado con sus variantes.')
       }
       setForm(null)
-      await refrescar()
+      queryClient.invalidateQueries({ queryKey: ['productos'] })
       window.setTimeout(() => setAviso(null), 4000)
     } catch (err) {
       setFormError(err?.message || 'No se pudo guardar el producto')
     } finally {
       setGuardando(false)
     }
-  }
-
-  async function refrescar() {
-    const lista = await productosApi.list({
-      catalogo: catalogo || undefined,
-      categoria_id: filtroCategoria || undefined,
-      subcategoria_id: filtroSubcategoria || undefined,
-    })
-    setProductos(lista)
   }
 
   async function confirmarEliminar() {
@@ -346,7 +342,7 @@ export default function Productos() {
       await productosApi.remove(modalDelete.id)
       setModalDelete(null)
       setAviso('Producto eliminado.')
-      await refrescar()
+      queryClient.invalidateQueries({ queryKey: ['productos'] })
       window.setTimeout(() => setAviso(null), 4000)
     } catch (err) {
       setError(err?.message || 'No se pudo eliminar el producto')
@@ -740,7 +736,7 @@ export default function Productos() {
                     descripcion={
                       esOpcionalTallas
                         ? 'Puedes dejarlo en talla única o activar tallas. Cada variante lleva su propio código de barras.'
-                        : 'Se generan automáticamente según la categoría. Cada variante lleva su propio código de barras.'
+                        : 'Se generan según la categoría: edita, quita o agrega las tallas que necesites. Cada variante lleva su propio código de barras.'
                     }
                   >
                     {campos.categoria_id ? (
@@ -780,10 +776,55 @@ export default function Productos() {
                             </p>
                           )}
 
+                          {sedes.length > 0 && (
+                            <div className="mb-4 rounded-xl border border-line bg-surface-2/40 p-3">
+                              <div className="mb-2 flex items-center justify-between">
+                                <p className="text-xs font-semibold text-ink-2">
+                                  Aplicar stock inicial a las sedes
+                                </p>
+                                <div className="flex items-center gap-3 text-[11px]">
+                                  <button
+                                    type="button"
+                                    onClick={seleccionarTodasSedes}
+                                    className="font-medium text-ink-2 underline underline-offset-2 transition-colors hover:text-ink"
+                                  >
+                                    Todas
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={limpiarSedes}
+                                    className="font-medium text-ink-2 underline underline-offset-2 transition-colors hover:text-ink"
+                                  >
+                                    Ninguna
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                                {sedes.map((s) => (
+                                  <label
+                                    key={s.id}
+                                    className="flex items-center gap-2 text-sm font-medium text-ink"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={sedesSeleccionadas.includes(s.id)}
+                                      onChange={() => toggleSede(s.id)}
+                                      className="h-4 w-4 rounded border-line text-ink focus:ring-metal"
+                                    />
+                                    {s.nombre}
+                                  </label>
+                                ))}
+                              </div>
+                              <p className="mt-1.5 text-[11px] text-ink-2/70">
+                                Las sedes no seleccionadas quedan en 0 (no mostrarán la talla en el POS).
+                              </p>
+                            </div>
+                          )}
+
                           <div className="grid grid-cols-[6rem_1fr_7rem_2rem] items-center gap-3 px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
                             <span>Talla</span>
                             <span>Código de barras</span>
-                            <span className="text-right">{form.id ? 'Stock total' : 'Stock inicial'}</span>
+                            <span className="text-right">Stock inicial</span>
                             <span />
                           </div>
 
@@ -793,19 +834,14 @@ export default function Productos() {
                                 key={idx}
                                 className="grid grid-cols-[6rem_1fr_7rem_2rem] items-center gap-3"
                               >
-                                {esOpcionalTallas ? (
-                                  <input
-                                    type="text"
-                                    value={v.talla || ''}
-                                    onChange={(e) => cambiarVariante(idx, 'talla', e.target.value || null)}
-                                    placeholder="Única"
-                                    className={`${inputCls} text-center`}
-                                  />
-                                ) : (
-                                  <span className="rounded-lg bg-surface-2 px-2 py-2 text-center text-sm font-semibold text-ink ring-1 ring-line">
-                                    {v.talla || 'Única'}
-                                  </span>
-                                )}
+                                <input
+                                  type="text"
+                                  value={v.talla || ''}
+                                  onChange={(e) => cambiarVariante(idx, 'talla', e.target.value || null)}
+                                  placeholder="Única"
+                                  title="Talla (puedes editarla, vacío = talla única)"
+                                  className={`${inputCls} text-center`}
+                                />
                                 <input
                                   type="text"
                                   value={v.codigo_barras}
@@ -818,28 +854,24 @@ export default function Productos() {
                                   min={0}
                                   value={v.stock_inicial}
                                   onChange={(e) => cambiarVariante(idx, 'stock_inicial', e.target.value)}
-                                  disabled={Boolean(form.id)}
-                                  placeholder="0"
-                                  className={`${inputCls} text-right disabled:opacity-50`}
+                                  placeholder={form.id ? `Actual: ${v.stock_total ?? 0}` : '0'}
+                                  title="Stock inicial por sede (se aplica a las 4 sedes). Vacío en edición = no modifica el stock actual."
+                                  className={`${inputCls} text-right`}
                                 />
-                                {esOpcionalTallas ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => quitarTalla(idx)}
-                                    disabled={variantesForm.length <= 1}
-                                    title="Quitar talla"
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/40 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-30"
-                                  >
-                                    <TrashIcon className="h-4 w-4" />
-                                  </button>
-                                ) : (
-                                  <span />
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => quitarTalla(idx)}
+                                  disabled={variantesForm.length <= 1}
+                                  title="Quitar talla"
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/40 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-30"
+                                >
+                                  <TrashIcon className="h-4 w-4" />
+                                </button>
                               </div>
                             ))}
                           </div>
 
-                          {esOpcionalTallas && usaTallas && (
+                          {variantesForm.length > 0 && (
                             <button
                               type="button"
                               onClick={agregarTalla}
@@ -850,9 +882,11 @@ export default function Productos() {
                             </button>
                           )}
 
-                          {form.id && (
+                          {variantesForm.length > 0 && (
                             <p className="mt-3 text-xs text-ink-2">
-                              El stock se ajusta desde Inventario; aquí solo se edita el código de barras.
+                              {form.id
+                                ? 'El stock inicial vacío = no modifica el stock actual de la talla. Si lo escribes, se aplica a las sedes seleccionadas.'
+                                : 'El stock inicial se aplica a las sedes seleccionadas; vacío = comienza en 0.'}
                             </p>
                           )}
                         </div>

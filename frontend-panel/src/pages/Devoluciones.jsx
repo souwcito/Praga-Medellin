@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { catalogApi, devolucionesApi, ventasApi } from '../services/api'
+import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { devolucionesApi, ventasApi } from '../services/api'
+import { useSedes, useEmpleados, useInventarioSede, useDevoluciones, useDevolucionDetalle } from '../hooks/useData'
 import PeriodFilter from '../components/PeriodFilter'
 import {
   AlertIcon,
@@ -89,9 +91,10 @@ export default function Devoluciones() {
 // ---------------------------------------------------------------------------
 
 function Registrar() {
+  const queryClient = useQueryClient()
   const [tipo, setTipo] = useState('cambio') // 'cambio' | 'reembolso'
-  const [sedes, setSedes] = useState([])
-  const [empleados, setEmpleados] = useState([])
+  const { data: sedes = [] } = useSedes()
+  const { data: empleados = [] } = useEmpleados()
   const [sedeId, setSedeId] = useState('')
   const [vendedorId, setVendedorId] = useState('')
 
@@ -101,8 +104,7 @@ function Registrar() {
   const [ventaInfo, setVentaInfo] = useState(null)
   const [devueltos, setDevueltos] = useState([])
 
-  const [variantes, setVariantes] = useState([])
-  const [cargandoCatalogo, setCargandoCatalogo] = useState(false)
+  const { data: variantes = [], isLoading: cargandoCatalogo } = useInventarioSede(sedeId)
   const [busqueda, setBusqueda] = useState('')
   const [cambioCart, setCambioCart] = useState([])
 
@@ -111,24 +113,6 @@ function Registrar() {
   const [confirmando, setConfirmando] = useState(false)
   const [registroError, setRegistroError] = useState(null)
   const [resultado, setResultado] = useState(null)
-
-  useEffect(() => {
-    Promise.all([catalogApi.getSedes(), catalogApi.getEmpleados()])
-      .then(([s, e]) => {
-        setSedes(s)
-        setEmpleados(e)
-      })
-      .catch((err) => setFacturaError(err?.message || 'Error cargando datos'))
-  }, [])
-
-  useEffect(() => {
-    if (!sedeId) return
-    catalogApi
-      .getInventario(sedeId)
-      .then(setVariantes)
-      .catch((err) => setRegistroError(err?.message || 'Error cargando inventario'))
-      .finally(() => setCargandoCatalogo(false))
-  }, [sedeId])
 
   const variantesFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -204,7 +188,6 @@ function Registrar() {
     setSedeId(value)
     setCambioCart([])
     setRegistroError(null)
-    if (value) setCargandoCatalogo(true)
   }
 
   function cambiarDevuelto(variante_id, cantidad) {
@@ -278,7 +261,8 @@ function Registrar() {
       setMetodoPago('')
       setMotivo('')
       setFacturaInput('')
-      catalogApi.getInventario(sedeId).then(setVariantes).catch(() => {})
+      queryClient.invalidateQueries({ queryKey: ['inventario', sedeId] })
+      queryClient.invalidateQueries({ queryKey: ['devoluciones'] })
     } catch (err) {
       setRegistroError(err?.message || 'No se pudo registrar la devolución')
     } finally {
@@ -892,8 +876,8 @@ function Registrar() {
 // ---------------------------------------------------------------------------
 
 function Historial() {
-  const [sedes, setSedes] = useState([])
-  const [empleados, setEmpleados] = useState([])
+  const { data: sedes = [] } = useSedes()
+  const { data: empleados = [] } = useEmpleados()
 
   const [periodo, setPeriodo] = useState('mes')
   const [sedeId, setSedeId] = useState('')
@@ -901,80 +885,51 @@ function Historial() {
   const [tipo, setTipo] = useState('')
   const [page, setPage] = useState(1)
 
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const params = useMemo(
+    () => ({
+      periodo,
+      sede_id: sedeId || undefined,
+      empleado_id: empleadoId || undefined,
+      tipo: tipo || undefined,
+      page,
+      per_page: 10,
+    }),
+    [periodo, sedeId, empleadoId, tipo, page],
+  )
 
-  const [detalle, setDetalle] = useState(null)
-  const [cargandoDetalle, setCargandoDetalle] = useState(false)
+  const { data, isLoading: loading, isError, error: errorRaw } = useDevoluciones(params)
+  const error = errorRaw?.message || (isError ? 'Error cargando las devoluciones' : null)
 
-  useEffect(() => {
-    Promise.all([catalogApi.getSedes(), catalogApi.getEmpleados()])
-      .then(([s, e]) => {
-        setSedes(s)
-        setEmpleados(e)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando filtros'))
-  }, [])
-
-  useEffect(() => {
-    devolucionesApi
-      .getHistorial({
-        periodo,
-        sede_id: sedeId || undefined,
-        empleado_id: empleadoId || undefined,
-        tipo: tipo || undefined,
-        page,
-        per_page: 10,
-      })
-      .then((d) => {
-        setData(d)
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando las devoluciones'))
-      .finally(() => setLoading(false))
-  }, [periodo, sedeId, empleadoId, tipo, page])
+  const [detalleId, setDetalleId] = useState(null)
+  const { data: detalle, isLoading: cargandoDetalle } = useDevolucionDetalle(detalleId)
 
   function cambiarPeriodo(p) {
     if (p === periodo) return
     setPeriodo(p)
     setPage(1)
-    setLoading(true)
   }
 
   function cambiarSede(e) {
     setSedeId(e.target.value)
     setPage(1)
-    setLoading(true)
   }
 
   function cambiarEmpleado(e) {
     setEmpleadoId(e.target.value)
     setPage(1)
-    setLoading(true)
   }
 
   function cambiarTipo(e) {
     setTipo(e.target.value)
     setPage(1)
-    setLoading(true)
   }
 
   function irA(pagina) {
     setPage(pagina)
-    setLoading(true)
   }
 
-  async function abrirDetalle(id) {
-    setCargandoDetalle(true)
-    try {
-      const d = await devolucionesApi.getDetalle(id)
-      setDetalle(d)
-    } catch (err) {
-      setError(err?.message || 'No se pudo cargar el detalle')
-    } finally {
-      setCargandoDetalle(false)
-    }
+  function abrirDetalle(id) {
+    setDetalleId(id)
   }
 
   if (loading) {
@@ -1172,7 +1127,7 @@ function Historial() {
               </div>
               <button
                 type="button"
-                onClick={() => setDetalle(null)}
+                onClick={() => setDetalleId(null)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-surface-2 hover:text-ink"
               >
                 <XIcon className="h-5 w-5" />

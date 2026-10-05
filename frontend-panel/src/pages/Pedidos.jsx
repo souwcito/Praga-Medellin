@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { pedidosApi } from '../services/api'
+import { usePedidos } from '../hooks/useData'
 import { AlertIcon, CartIcon } from '../components/icons'
 
 const formato = (n) =>
@@ -17,20 +16,9 @@ const ESTADOS = {
 }
 
 export default function Pedidos() {
-  const [pedidos, setPedidos] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    pedidosApi
-      .getPedidos()
-      .then((res) => {
-        setPedidos(res.data || [])
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando pedidos'))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data, isLoading: loading, isError, error: errorRaw } = usePedidos()
+  const pedidos = data?.data || []
+  const error = errorRaw?.message || (isError ? 'Error cargando pedidos' : null)
 
   return (
     <div className="animate-fade-up mx-auto max-w-6xl">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import banner1 from '../assets/imagen-banner-1.jpeg'
-import banner2 from '../assets/imagen-banner-2.jpeg'
+import banner1 from '../assets/imagen-banner-1.webp'
+import banner2 from '../assets/imagen-banner-2.webp'
 import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from './icons'
 
 // Banners de la portada a pantalla completa (imagen de fondo + overlay oscuro
@@ -12,21 +12,21 @@ const SLIDES = [
     tag: 'Nueva colección',
     titulo: 'Premium 1.1',
     subtitulo: 'La línea más brutal de la temporada. Ediciones limitadas con estampado 1.1.',
-    cta: { label: 'Ver colección', to: '/catalogo?catalogo=hombre&categoria=3' },
+    cta: { label: 'Ver colección', to: '/catalogo/hombre/3' },
     imagen: banner1,
   },
   {
     tag: 'Los clásicos',
     titulo: 'Camisetas Originales',
     subtitulo: 'El básico que nunca falla. Algodón premium, tallas S a XXL.',
-    cta: { label: 'Comprar ahora', to: '/catalogo?catalogo=hombre&categoria=3&subcategoria=5' },
+    cta: { label: 'Comprar ahora', to: '/catalogo/hombre/3/5' },
     imagen: banner2,
   },
   {
     tag: 'Calzado',
     titulo: 'Tenis & Chanclas',
     subtitulo: 'Numeración real por talla (US-EURO). Stock por talla exacta.',
-    cta: { label: 'Ver calzado', to: '/catalogo?catalogo=hombre&categoria=12' },
+    cta: { label: 'Ver calzado', to: '/catalogo/hombre/12' },
     fondo: 'linear-gradient(120deg,#0a0a0a 0%,#26262c 60%,#1f1f24 100%)',
   },
 ]
@@ -51,33 +51,39 @@ export default function BannerSlider() {
   }
 
   return (
-    <section
-      className="relative overflow-hidden bg-dark"
-      onMouseEnter={() => setPausado(true)}
-      onMouseLeave={() => setPausado(false)}
-      aria-label="Promociones"
-    >
-      <div className="relative h-[72vh] min-h-[500px] max-h-[760px]">
-        {SLIDES.map((slide, i) => {
-          const activa = i === activo
-          return (
-            <div
-              key={i}
-              className={`absolute inset-0 transition-opacity duration-1000 ${
-                activa ? 'opacity-100' : 'pointer-events-none opacity-0'
-              }`}
-              style={slide.fondo ? { background: slide.fondo } : undefined}
-              aria-hidden={!activa}
-            >
-              {/* Imagen de fondo (si existe): en posición absoluta para que el
-                  texto quede encima, sin zoom y sin recorte excesivo */}
-              {slide.imagen && (
-                <img
-                  src={slide.imagen}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover object-center"
-                />
-              )}
+    <>
+      {/* Preload del LCP: primer banner (el que casi siempre es el hero inicial) */}
+      <link rel="preload" as="image" href={banner1} fetchPriority="high" />
+      <section
+        className="relative overflow-hidden bg-dark"
+        onMouseEnter={() => setPausado(true)}
+        onMouseLeave={() => setPausado(false)}
+        aria-label="Promociones"
+      >
+        <div className="relative h-[72vh] min-h-[500px] max-h-[760px]">
+          {SLIDES.map((slide, i) => {
+            const activa = i === activo
+            return (
+              <div
+                key={i}
+                className={`absolute inset-0 transition-opacity duration-1000 ${
+                  activa ? 'opacity-100' : 'pointer-events-none opacity-0'
+                }`}
+                style={slide.fondo ? { background: slide.fondo } : undefined}
+                aria-hidden={!activa}
+              >
+                {/* Imagen de fondo (si existe): en posición absoluta para que el
+                    texto quede encima, sin zoom y sin recorte excesivo */}
+                {slide.imagen && (
+                  <img
+                    src={slide.imagen}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover object-center"
+                    loading={activa ? 'eager' : 'lazy'}
+                    fetchPriority={activa ? 'high' : 'low'}
+                    decoding="async"
+                  />
+                )}
 
               {/* Texto + llamado a la acción */}
               <div className="relative z-10 mx-auto flex h-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
@@ -150,6 +156,7 @@ export default function BannerSlider() {
           />
         ))}
       </div>
-    </section>
+      </section>
+    </>
   )
 }

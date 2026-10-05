@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { catalogApi, inventarioApi } from '../services/api'
+import { useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { inventarioApi } from '../services/api'
+import { useCategorias, useInventarioCompleto } from '../hooks/useData'
 import {
   AlertIcon,
   CheckIcon,
@@ -17,8 +20,10 @@ const selectCls =
   'select-field w-full rounded-lg border border-line bg-white px-3 py-2 pr-9 text-sm text-ink transition-colors focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
 
 export default function Inventario() {
-  const [categorias, setCategorias] = useState([])
-  const [variantes, setVariantes] = useState([])
+  const queryClient = useQueryClient()
+  const { data: categorias = [] } = useCategorias()
+  const { data: variantes = [], isLoading: loading, isError, error: errorRaw } = useInventarioCompleto()
+  const error = errorRaw?.message || (isError ? 'Error cargando el inventario' : null)
 
   const [busqueda, setBusqueda] = useState('')
   const [catalogoId, setCatalogoId] = useState('')
@@ -26,8 +31,6 @@ export default function Inventario() {
   const [soloBajo, setSoloBajo] = useState(false)
   const [expandido, setExpandido] = useState(null)
 
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
 
   // Modal de ajuste
@@ -38,16 +41,7 @@ export default function Inventario() {
   const [ajustando, setAjustando] = useState(false)
   const [ajusteError, setAjusteError] = useState(null)
 
-  useEffect(() => {
-    Promise.all([catalogApi.getCategorias(), catalogApi.getInventarioCompleto()])
-      .then(([c, inv]) => {
-        setCategorias(c)
-        setVariantes(inv)
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando el inventario'))
-      .finally(() => setLoading(false))
-  }, [])
+  const parentRef = useRef(null)
 
   // Agrupa las variantes por PRODUCTO: vista general + detalle por variante
   const grupos = useMemo(() => {
@@ -102,6 +96,14 @@ export default function Inventario() {
 
   const categoriasFiltro = categorias.filter((c) => !catalogoId || c.catalogo === catalogoId)
 
+  // Lista virtualizada: con cientos de productos solo se montan las filas visibles
+  const virtualizer = useVirtualizer({
+    count: filtrados.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    overscan: 6,
+  })
+
   function abrirModal(variante, sede) {
     setModal({ variante, sede })
     setTipo('entrada')
@@ -127,8 +129,7 @@ export default function Inventario() {
         cantidad: Number(cantidad),
         motivo: motivo || undefined,
       })
-      const inv = await catalogApi.getInventarioCompleto()
-      setVariantes(inv)
+      queryClient.invalidateQueries({ queryKey: ['inventario-completo'] })
       setAviso(`Stock actualizado: ${tipo} de ${Number(cantidad)} en ${modal.sede.sede}.`)
       setModal(null)
       window.setTimeout(() => setAviso(null), 4000)
@@ -253,99 +254,108 @@ export default function Inventario() {
             <span />
           </div>
 
-          <ul className="divide-y divide-line">
-            {filtrados.map((g) => {
-              const total = totalDe(g)
-              const abierto = expandido === g.producto_id
-              return (
-                <li key={g.producto_id}>
-                  {/* Fila general del producto */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandido(abierto ? null : g.producto_id)}
-                    className="grid w-full grid-cols-[minmax(13rem,1fr)_4.5rem_9rem_4rem_repeat(4,5rem)_4.5rem_2rem] items-center gap-2 px-5 py-3 text-left text-sm transition-colors hover:bg-surface-2/40"
+          <div ref={parentRef} className="max-h-[70vh] overflow-auto">
+            <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+              {virtualizer.getVirtualItems().map((row) => {
+                const g = filtrados[row.index]
+                const total = totalDe(g)
+                const abierto = expandido === g.producto_id
+                return (
+                  <div
+                    key={g.producto_id}
+                    ref={virtualizer.measureElement}
+                    data-index={row.index}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ transform: `translateY(${row.start}px)` }}
                   >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <img src={g.imagen_url} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover" />
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium text-ink">{g.nombre}</span>
-                        <span className="block text-[11px] text-ink-2/70">{g.sku}</span>
+                    {/* Fila general del producto */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandido(abierto ? null : g.producto_id)}
+                      className="grid w-full grid-cols-[minmax(13rem,1fr)_4.5rem_9rem_4rem_repeat(4,5rem)_4.5rem_2rem] items-center gap-2 border-b border-line px-5 py-3 text-left text-sm transition-colors hover:bg-surface-2/40"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <img src={g.imagen_url} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover" />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-ink">{g.nombre}</span>
+                          <span className="block text-[11px] text-ink-2/70">{g.sku}</span>
+                        </span>
                       </span>
-                    </span>
-                    <span className="truncate text-xs text-ink-2 capitalize">{g.catalogo || '—'}</span>
-                    <span className="truncate text-ink-2">
-                      {categorias.find((c) => c.id === g.categoria_id)?.nombre || '—'}
-                    </span>
-                    <span className="text-center text-ink-2">{g.variantes.length}</span>
-                    {sedes.map((s) => (
-                      <span
-                        key={s.sede_id}
-                        className={`text-center font-semibold ${
-                          stockDe(g, s.sede_id) === 0 ? 'text-ink-2/40' : 'text-ink'
-                        }`}
-                      >
-                        {stockDe(g, s.sede_id)}
+                      <span className="truncate text-xs text-ink-2 capitalize">{g.catalogo || '—'}</span>
+                      <span className="truncate text-ink-2">
+                        {categorias.find((c) => c.id === g.categoria_id)?.nombre || '—'}
                       </span>
-                    ))}
-                    <span className={`text-right font-bold ${total === 0 ? 'text-ink-2/40' : 'text-ink'}`}>
-                      {total}
-                    </span>
-                    <span className="justify-self-center">
-                      <ChevronDownIcon className={`h-4 w-4 text-ink-2/70 transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
-                    </span>
-                  </button>
+                      <span className="text-center text-ink-2">{g.variantes.length}</span>
+                      {sedes.map((s) => (
+                        <span
+                          key={s.sede_id}
+                          className={`text-center font-semibold ${
+                            stockDe(g, s.sede_id) === 0 ? 'text-ink-2/40' : 'text-ink'
+                          }`}
+                        >
+                          {stockDe(g, s.sede_id)}
+                        </span>
+                      ))}
+                      <span className={`text-right font-bold ${total === 0 ? 'text-ink-2/40' : 'text-ink'}`}>
+                        {total}
+                      </span>
+                      <span className="justify-self-center">
+                        <ChevronDownIcon className={`h-4 w-4 text-ink-2/70 transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
+                      </span>
+                    </button>
 
-                  {/* Detalle por variante */}
-                  {abierto && (
-                    <div className="animate-fade-in border-t border-line bg-surface-2/40 px-5 py-3">
-                      <div className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
-                        <span>Talla</span>
-                        <span>Código</span>
-                        {sedes.map((s) => (
-                          <span key={s.sede_id} className="truncate text-center">{s.sede.split(' - ').pop()}</span>
-                        ))}
-                        <span className="text-right">Total</span>
-                      </div>
-                      <ul className="mt-2 space-y-1">
-                        {g.variantes.map((v) => {
-                          const vTotal = v.stock.reduce((a, b) => a + b.cantidad, 0)
-                          return (
-                            <li
-                              key={v.variante_id}
-                              className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 rounded-lg px-1 py-1 text-sm transition-colors hover:bg-white"
-                            >
-                              <span className="font-semibold text-ink">{v.talla || 'Única'}</span>
-                              <span className="truncate text-xs text-ink-2">{v.codigo_barras}</span>
-                              {v.stock.map((s) => (
-                                <span key={s.sede_id} className="flex justify-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => abrirModal(v, s)}
-                                    title={`Ajustar stock en ${s.sede}`}
-                                    className={`rounded-lg px-1.5 py-0.5 font-semibold transition-colors hover:bg-white ${
-                                      s.cantidad === 0 ? 'text-ink-2/40' : 'text-ink'
-                                    }`}
-                                  >
-                                    {s.cantidad}
-                                  </button>
+                    {/* Detalle por variante */}
+                    {abierto && (
+                      <div className="animate-fade-in border-b border-line bg-surface-2/40 px-5 py-3">
+                        <div className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                          <span>Talla</span>
+                          <span>Código</span>
+                          {sedes.map((s) => (
+                            <span key={s.sede_id} className="truncate text-center">{s.sede.split(' - ').pop()}</span>
+                          ))}
+                          <span className="text-right">Total</span>
+                        </div>
+                        <ul className="mt-2 space-y-1">
+                          {g.variantes.map((v) => {
+                            const vTotal = v.stock.reduce((a, b) => a + b.cantidad, 0)
+                            return (
+                              <li
+                                key={v.variante_id}
+                                className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 rounded-lg px-1 py-1 text-sm transition-colors hover:bg-white"
+                              >
+                                <span className="font-semibold text-ink">{v.talla || 'Única'}</span>
+                                <span className="truncate text-xs text-ink-2">{v.codigo_barras}</span>
+                                {v.stock.map((s) => (
+                                  <span key={s.sede_id} className="flex justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => abrirModal(v, s)}
+                                      title={`Ajustar stock en ${s.sede}`}
+                                      className={`rounded-lg px-1.5 py-0.5 font-semibold transition-colors hover:bg-white ${
+                                        s.cantidad === 0 ? 'text-ink-2/40' : 'text-ink'
+                                      }`}
+                                    >
+                                      {s.cantidad}
+                                    </button>
+                                  </span>
+                                ))}
+                                <span className={`text-right font-semibold ${vTotal === 0 ? 'text-ink-2/40' : 'text-ink'}`}>
+                                  {vTotal}
                                 </span>
-                              ))}
-                              <span className={`text-right font-semibold ${vTotal === 0 ? 'text-ink-2/40' : 'text-ink'}`}>
-                                {vTotal}
-                              </span>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                      <p className="mt-2 text-[11px] text-ink-2/70">
-                        Haz clic en un número de la variante para ajustar entrada/salida de stock.
-                      </p>
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                        <p className="mt-2 text-[11px] text-ink-2/70">
+                          Haz clic en un número de la variante para ajustar entrada/salida de stock.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
 

@@ -2,27 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ImageService;
 use Illuminate\Http\Request;
 
 class ImagenController extends Controller
 {
-    // Sube una imagen y devuelve { imagen_url } absoluta
-    public function store(Request $request)
+    // Sube una imagen, la optimiza (WebP: full/medium/thumb) y devuelve las rutas.
+    public function store(Request $request, ImageService $imageService)
     {
         $request->validate([
             'imagen' => 'required|file|mimes:jpeg,jpg,png,webp,heic,heif|max:10240',
         ]);
 
-        $archivo = $request->file('imagen');
-        $nombre = 'producto-' . time() . '-' . uniqid() . '.' . $archivo->getClientOriginalExtension();
-        $destino = public_path('images/products');
-        if (!is_dir($destino)) {
-            mkdir($destino, 0755, true);
-        }
-        $archivo->move($destino, $nombre);
+        $variantes = $imageService->optimizar($request->file('imagen'));
 
         return response()->json([
-            'imagen_url' => 'images/products/' . $nombre,
+            'imagen_url' => $variantes['full'],
+            'imagen_thumb' => $variantes['thumb'],
+            'imagen_medium' => $variantes['medium'],
         ], 201);
     }
 }

@@ -57,7 +57,7 @@ class InventarioController extends Controller
     public function completo()
     {
         $sedes = Sede::select('id', 'nombre')->orderBy('id')->get();
-        $variantes = Variante::with(['producto', 'inventarios'])->get();
+        $variantes = Variante::with(['producto.categoria', 'inventarios'])->get();
 
         $resultado = $variantes->map(function ($v) use ($sedes) {
             $stock = $sedes->map(function ($s) use ($v) {
@@ -117,6 +117,7 @@ class InventarioController extends Controller
 
         // Invalida la caché del stock de esa sede para que se vea al instante
         Cache::forget(static::claveSede((int) $reg->sede_id));
+        $this->bumpCache();
 
         return response()->json([
             'variante_id' => (int) $reg->variante_id,

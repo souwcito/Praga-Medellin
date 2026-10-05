@@ -46,7 +46,7 @@ export default function Header() {
   function clicCategoria(cat, catalogo) {
     const subs = subcategorias.filter((s) => s.categoria_id === cat.id)
     if (subs.length === 0) {
-      irA(`/catalogo?catalogo=${catalogo}&categoria=${cat.id}`)
+      irA(`/catalogo/${catalogo}/${cat.id}`)
     } else {
       setExpandida((prev) => (prev === cat.id ? null : cat.id))
     }
@@ -192,7 +192,7 @@ export default function Header() {
                     {abierto && (
                       <div className="animate-fade-in bg-surface-2/40 pb-3">
                         <Link
-                          to={`/catalogo?catalogo=${catalogo}`}
+                          to={`/catalogo/${catalogo}`}
                           onClick={cerrar}
                           className="block px-8 py-2 text-sm font-medium text-ink transition-colors hover:text-metal-2"
                         >
@@ -225,7 +225,7 @@ export default function Header() {
                                     {subs.map((s) => (
                                       <Link
                                         key={s.id}
-                                        to={`/catalogo?catalogo=${catalogo}&categoria=${cat.id}&subcategoria=${s.id}`}
+                                        to={`/catalogo/${catalogo}/${cat.id}/${s.id}`}
                                         onClick={cerrar}
                                         className="block px-8 py-1.5 text-sm text-ink-2/80 transition-colors hover:text-ink"
                                       >

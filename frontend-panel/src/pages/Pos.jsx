@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { catalogApi, ventasApi } from '../services/api'
+import { memo, useDeferredValue, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { ventasApi } from '../services/api'
+import { useSedes, useEmpleados, useInventarioSede } from '../hooks/useData'
 import { Comprobante } from '../components/Comprobante'
 import { imprimirComprobante } from '../utils/print'
-import usePolling from '../hooks/usePolling'
 import {
   AlertIcon,
   CartIcon,
@@ -30,14 +31,73 @@ const selectCls =
 const inputCls =
   'w-full rounded-2xl border border-line bg-white py-3 pl-11 pr-4 text-sm placeholder:text-ink-2/50 transition-all duration-200 hover:border-ink-2/40 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
 
+const FORMAS_PAGO = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'banco', label: 'Banco' },
+  { value: 'addi', label: 'Addi' },
+  { value: 'sistecredito', label: 'Sistecredito' },
+  { value: 'bold', label: 'Bold' },
+]
+
+// Precio final por línea (si se puso un precio con descuento, usa ese; si no, el estándar)
+const precioFinalItem = (item) =>
+  item.precio_final != null && item.precio_final !== '' ? Number(item.precio_final) : item.precio
+const descuentoLinea = (item) => (item.precio - precioFinalItem(item)) * item.cantidad
+
+// Tarjeta de producto (memoizada: el grid no se re-renderiza al escribir en el carrito)
+const ProductoCard = memo(function ProductoCard({ v, i, onAgregar }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onAgregar(v)}
+      style={{ animationDelay: `${Math.min(i, 14) * 35}ms` }}
+      className="animate-fade-up group flex flex-col overflow-hidden rounded-2xl border border-line bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:border-metal hover:shadow-[0_12px_32px_-12px_rgba(10,10,10,0.18)]"
+    >
+      <div className="relative aspect-square overflow-hidden bg-surface-2">
+        <img
+          src={v.imagen_url}
+          alt={v.nombre}
+          loading="lazy"
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+        />
+        {v.stock <= 5 && (
+          <span className="absolute right-2 top-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+            Quedan {v.stock}
+          </span>
+        )}
+        {v.talla && (
+          <span className="absolute left-2 top-2 rounded-full bg-ink/85 px-2 py-0.5 text-[11px] font-semibold text-white">
+            {v.talla}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col p-3">
+        <p className="line-clamp-2 text-sm font-medium text-ink">{v.nombre}</p>
+        <p className="mt-0.5 text-[11px] text-ink-2/70">Cód. {v.codigo_barras}</p>
+        <div className="mt-auto flex items-center justify-between pt-3">
+          <span className="text-sm font-bold text-ink">{formato(v.precio)}</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-white transition-all duration-200 group-hover:bg-metal group-active:scale-90">
+            <PlusIcon className="h-4 w-4" />
+          </span>
+        </div>
+      </div>
+    </button>
+  )
+})
+
 export default function Pos() {
-  const [sedes, setSedes] = useState([])
-  const [empleados, setEmpleados] = useState([])
+  const queryClient = useQueryClient()
+  const { data: sedes = [] } = useSedes()
+  const { data: empleados = [] } = useEmpleados()
   const [sedeId, setSedeId] = useState('')
   const [vendedorId, setVendedorId] = useState('')
+  const [canal, setCanal] = useState('presencial')
 
-  const [variantes, setVariantes] = useState([])
-  const [cargando, setCargando] = useState(false)
+  // Inventario de la sede con polling cada 20 s (React Query lo pausa si la
+  // pestaña no es visible).
+  const { data: variantes = [], isLoading: cargando, isError } = useInventarioSede(sedeId, {
+    refetchInterval: 20000,
+  })
   const [error, setError] = useState(null)
 
   const [busqueda, setBusqueda] = useState('')
@@ -46,46 +106,16 @@ export default function Pos() {
 
   const [ventaResult, setVentaResult] = useState(null)
   const [modalAbierto, setModalAbierto] = useState(false)
+  const [resumenAbierto, setResumenAbierto] = useState(false)
+  const [pagos, setPagos] = useState([])
 
   const searchRef = useRef(null)
 
-  // Carga sedes y vendedores al entrar
-  useEffect(() => {
-    Promise.all([catalogApi.getSedes(), catalogApi.getEmpleados()])
-      .then(([s, e]) => {
-        setSedes(s)
-        setEmpleados(e)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando datos'))
-  }, [])
-
-  // Al elegir sede, carga SOLO las variantes con stock en esa sede.
-  // El estado "cargando" se activa en cambiarSede (evento) para no usar setState síncrono aquí.
-  useEffect(() => {
-    if (!sedeId) return
-    catalogApi
-      .getInventario(sedeId)
-      .then(setVariantes)
-      .catch((err) => setError(err?.message || 'Error cargando inventario'))
-      .finally(() => setCargando(false))
-  }, [sedeId])
-
-  // Tiempo real: cada 20s se refresca el stock de la sede activa para reflejar
-  // ventas hechas en otras sedes sin recargar la página.
-  usePolling(
-    () => {
-      if (!sedeId) return
-      catalogApi
-        .getInventario(sedeId)
-        .then(setVariantes)
-        .catch(() => {})
-    },
-    20000,
-    Boolean(sedeId),
-  )
+  // La búsqueda con useDeferredValue mantiene la UI fluida mientras se filtra
+  const busquedaDeferred = useDeferredValue(busqueda)
 
   const variantesFiltradas = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
+    const q = busquedaDeferred.trim().toLowerCase()
     if (!q) return variantes
     return variantes.filter(
       (v) =>
@@ -94,11 +124,20 @@ export default function Pos() {
         (v.talla || '').toLowerCase().includes(q) ||
         v.sku.toLowerCase().includes(q),
     )
-  }, [variantes, busqueda])
+  }, [variantes, busquedaDeferred])
 
   const total = useMemo(
-    () => cart.reduce((sum, i) => sum + i.precio * i.cantidad, 0),
+    () => cart.reduce((sum, i) => sum + precioFinalItem(i) * i.cantidad, 0),
     [cart],
+  )
+
+  const sumaPagos = useMemo(
+    () => pagos.reduce((sum, p) => sum + (Number(p.monto) || 0), 0),
+    [pagos],
+  )
+  const pagosValidos = useMemo(
+    () => pagos.some((p) => Number(p.monto) > 0) && sumaPagos === total,
+    [pagos, sumaPagos, total],
   )
 
   const sedeNombre = sedes.find((s) => s.id === Number(sedeId))?.nombre
@@ -108,11 +147,6 @@ export default function Pos() {
     const value = e.target.value
     setSedeId(value)
     setError(null)
-    if (value) {
-      setCargando(true)
-    } else {
-      setVariantes([])
-    }
     // Al cambiar de sede se limpia la venta: evita mezclar stock de sedes distintas
     setCart([])
     setBusqueda('')
@@ -147,30 +181,67 @@ export default function Pos() {
     setCart((prev) => prev.filter((i) => i.variante_id !== variante_id))
   }
 
-  async function confirmarVenta() {
+  function cambiarPrecioFinal(variante_id, value) {
+    setCart((prev) =>
+      prev.map((i) =>
+        i.variante_id === variante_id
+          ? {
+              ...i,
+              precio_final:
+                value === '' ? '' : Math.max(1, Math.min(i.precio, Number(value) || 0)),
+            }
+          : i,
+      ),
+    )
+  }
+
+  function togglePago(metodo) {
+    setPagos((prev) => {
+      const existe = prev.some((p) => p.metodo_pago === metodo)
+      if (existe) return prev.filter((p) => p.metodo_pago !== metodo)
+      return [...prev, { metodo_pago: metodo, monto: '' }]
+    })
+  }
+
+  function cambiarMonto(metodo, monto) {
+    setPagos((prev) => prev.map((p) => (p.metodo_pago === metodo ? { ...p, monto } : p)))
+  }
+
+  // Primer paso: abre el resumen para revisar la venta antes de registrarla.
+  function abrirResumen() {
     if (!puedeConfirmar) return
+    setError(null)
+    setPagos([{ metodo_pago: 'efectivo', monto: '' }])
+    setResumenAbierto(true)
+  }
+
+  async function confirmarVenta() {
+    if (!puedeConfirmar || !pagosValidos) return
     setConfirmando(true)
     setError(null)
     try {
       const payload = {
         empleado_id: Number(vendedorId),
         sede_venta_id: Number(sedeId),
-        tipo: 'presencial',
+        tipo: canal,
         items: cart.map((i) => ({
           variante_id: i.variante_id,
           cantidad: i.cantidad,
           precio_unitario: i.precio,
+          precio_final: precioFinalItem(i),
         })),
+        pagos: pagos.map((p) => ({ metodo_pago: p.metodo_pago, monto: Number(p.monto) || 0 })),
       }
       const result = await ventasApi.createVenta(payload)
       setVentaResult(result)
+      setResumenAbierto(false)
       setModalAbierto(true)
       setCart([])
       setBusqueda('')
-      // Refresca el stock visible de la sede tras el descuento
-      catalogApi.getInventario(sedeId).then(setVariantes).catch(() => {})
+      // Invalida el stock visible de la sede: se re-trae al instante
+      queryClient.invalidateQueries({ queryKey: ['inventario', sedeId] })
     } catch (err) {
-      setError(err?.message || 'No se pudo registrar la venta')
+      setError(err?.error || err?.message || 'No se pudo registrar la venta')
     } finally {
       setConfirmando(false)
     }
@@ -190,19 +261,19 @@ export default function Pos() {
         </div>
         <span className="flex items-center gap-2 rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-medium text-ink-2">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-2" />
-          Presencial
+          {canal === 'virtual' ? 'Redes' : 'Punto físico'}
         </span>
       </div>
 
       {error && (
         <div className="animate-fade-in mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertIcon className="h-5 w-5 shrink-0" />
-          {error}
+          {error || (isError ? 'No se pudo cargar el inventario de la sede' : '')}
         </div>
       )}
 
       {/* Selectores de venta */}
-      <div className="mb-6 grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-6 grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <StoreIcon className="h-4 w-4" /> Sede de la venta
@@ -232,6 +303,20 @@ export default function Pos() {
                 {v.nombre} — {v.sede_nombre}
               </option>
             ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
+            <CartIcon className="h-4 w-4" /> Canal de la venta
+          </span>
+          <select
+            value={canal}
+            onChange={(e) => setCanal(e.target.value)}
+            className={selectCls}
+          >
+            <option value="presencial">Punto físico</option>
+            <option value="virtual">Redes (Instagram / WhatsApp)</option>
           </select>
         </label>
 
@@ -285,41 +370,7 @@ export default function Pos() {
           ) : (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
               {variantesFiltradas.map((v, i) => (
-                <button
-                  key={v.variante_id}
-                  type="button"
-                  onClick={() => agregar(v)}
-                  style={{ animationDelay: `${Math.min(i, 14) * 35}ms` }}
-                  className="animate-fade-up group flex flex-col overflow-hidden rounded-2xl border border-line bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:border-metal hover:shadow-[0_12px_32px_-12px_rgba(10,10,10,0.18)]"
-                >
-                  <div className="relative aspect-square overflow-hidden bg-surface-2">
-                    <img
-                      src={v.imagen_url}
-                      alt={v.nombre}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
-                    {v.stock <= 5 && (
-                      <span className="absolute right-2 top-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                        Quedan {v.stock}
-                      </span>
-                    )}
-                    {v.talla && (
-                      <span className="absolute left-2 top-2 rounded-full bg-ink/85 px-2 py-0.5 text-[11px] font-semibold text-white">
-                        {v.talla}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-1 flex-col p-3">
-                    <p className="line-clamp-2 text-sm font-medium text-ink">{v.nombre}</p>
-                    <p className="mt-0.5 text-[11px] text-ink-2/70">Cód. {v.codigo_barras}</p>
-                    <div className="mt-auto flex items-center justify-between pt-3">
-                      <span className="text-sm font-bold text-ink">{formato(v.precio)}</span>
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-white transition-all duration-200 group-hover:bg-metal group-active:scale-90">
-                        <PlusIcon className="h-4 w-4" />
-                      </span>
-                    </div>
-                  </div>
-                </button>
+                <ProductoCard key={v.variante_id} v={v} i={i} onAgregar={agregar} />
               ))}
             </div>
           )}
@@ -419,8 +470,28 @@ export default function Pos() {
                         <TrashIcon className="h-4 w-4" />
                       </button>
                     </div>
-                    <p className="mt-1.5 text-right text-sm font-semibold text-ink">
-                      {formato(item.precio * item.cantidad)}
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <label className="flex items-center gap-1.5 text-[11px] text-ink-2">
+                        Precio final
+                        <input
+                          type="number"
+                          min={1}
+                          max={item.precio}
+                          value={item.precio_final ?? ''}
+                          onChange={(e) => cambiarPrecioFinal(item.variante_id, e.target.value)}
+                          placeholder={formato(item.precio)}
+                          title="Precio al que se vende (vacío = precio estándar)"
+                          className="w-24 rounded-lg border border-line bg-white px-2 py-1 text-right text-xs font-medium text-ink focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                        />
+                      </label>
+                      {descuentoLinea(item) > 0 && (
+                        <span className="text-[11px] font-semibold text-emerald-700">
+                          −{formato(descuentoLinea(item))}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-right text-sm font-semibold text-ink">
+                      {formato(precioFinalItem(item) * item.cantidad)}
                     </p>
                   </div>
                 </div>
@@ -437,31 +508,183 @@ export default function Pos() {
             </div>
             <button
               type="button"
-              onClick={confirmarVenta}
-              disabled={!puedeConfirmar || confirmando}
+              onClick={abrirResumen}
+              disabled={!puedeConfirmar}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3.5 text-sm font-semibold tracking-wide text-white transition-all duration-200 hover:bg-metal-2 hover:shadow-lg hover:shadow-ink/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {confirmando ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Registrando venta…
-                </span>
-              ) : (
-                <>
-                  <CheckIcon className="h-5 w-5" />
-                  Confirmar venta
-                </>
-              )}
+              <CheckIcon className="h-5 w-5" />
+              Confirmar venta
             </button>
           </footer>
         </aside>
       </div>
 
+      {/* Resumen previo a registrar la venta (el stock se descuenta al confirmar aquí) */}
+      {resumenAbierto && (
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+          <div className="animate-scale-in flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-line px-6 py-4">
+              <div>
+                <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
+                  Revisa la venta
+                </h3>
+                <p className="text-xs text-ink-2/70">
+                  Confirma los datos antes de registrar la venta y descontar el stock.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResumenAbierto(false)}
+                disabled={confirmando}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-surface-2 hover:text-ink"
+              >
+                <XIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <dl className="mb-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-ink-2">Sede</dt>
+                  <dd className="font-medium text-ink">{sedeNombre || '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-ink-2">Vendedor</dt>
+                  <dd className="font-medium text-ink">
+                    {empleados.find((e) => e.id === Number(vendedorId))?.nombre || '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-ink-2">Canal</dt>
+                  <dd className="font-medium text-ink">
+                    {canal === 'virtual' ? 'Redes' : 'Punto físico'}
+                  </dd>
+                </div>
+              </dl>
+
+              <ul className="space-y-2 border-t border-line pt-3">
+                {cart.map((item) => (
+                  <li key={item.variante_id} className="flex items-center gap-3 text-sm">
+                    <img
+                      src={item.imagen_url}
+                      alt={item.nombre}
+                      className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-ink">
+                      {item.nombre}
+                      {item.talla ? <span className="text-ink-2"> · {item.talla}</span> : null}
+                    </span>
+                    <span className="shrink-0 text-xs text-ink-2">
+                      {item.cantidad} × {formato(precioFinalItem(item))}
+                    </span>
+                    <span className="w-20 shrink-0 text-right font-semibold text-ink">
+                      {formato(precioFinalItem(item) * item.cantidad)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Formas de pago (una o varias; la suma debe ser el total) */}
+              <div className="mt-4 border-t border-line pt-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-ink">Forma(s) de pago</p>
+                  <span
+                    className={`text-xs font-semibold ${
+                      pagosValidos ? 'text-emerald-700' : 'text-red-700'
+                    }`}
+                  >
+                    {pagosValidos
+                      ? 'Pago completo'
+                      : total - sumaPagos > 0
+                        ? `Falta ${formato(total - sumaPagos)}`
+                        : `Excede ${formato(sumaPagos - total)}`}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {FORMAS_PAGO.map((f) => {
+                    const activo = pagos.some((p) => p.metodo_pago === f.value)
+                    return (
+                      <button
+                        key={f.value}
+                        type="button"
+                        onClick={() => togglePago(f.value)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-200 active:scale-95 ${
+                          activo
+                            ? 'border-ink bg-ink text-white'
+                            : 'border-line bg-white text-ink-2 hover:border-ink-2/40'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {pagos.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {pagos.map((p) => (
+                      <div key={p.metodo_pago} className="flex items-center gap-3">
+                        <span className="w-28 shrink-0 text-sm font-medium text-ink">
+                          {FORMAS_PAGO.find((f) => f.value === p.metodo_pago)?.label}
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={p.monto}
+                          onChange={(e) => cambiarMonto(p.metodo_pago, e.target.value)}
+                          placeholder="0"
+                          className="w-full rounded-lg border border-line bg-white px-3 py-2 text-right text-sm text-ink placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-line px-6 py-4">
+              <span className="text-sm text-ink-2">Total</span>
+              <span className="text-2xl font-bold text-ink">{formato(total)}</span>
+            </div>
+
+            <div className="flex gap-2 border-t border-line px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setResumenAbierto(false)}
+                disabled={confirmando}
+                className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={confirmarVenta}
+                disabled={!pagosValidos || confirmando}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-ink py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {confirmando ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Registrando…
+                  </span>
+                ) : (
+                  <>
+                    <CheckIcon className="h-4 w-4" />
+                    Confirmar venta
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de comprobante tras confirmar */}
       {modalAbierto && ventaResult && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
-          <div className="animate-scale-in w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+          <div className="animate-scale-in flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <div className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-white">
                   <CheckIcon className="h-5 w-5" />
@@ -479,9 +702,11 @@ export default function Pos() {
               </button>
             </div>
 
-            <Comprobante data={ventaResult} />
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <Comprobante data={ventaResult} />
+            </div>
 
-            <div className="mt-5 flex gap-2">
+            <div className="flex gap-2 border-t border-line px-6 py-4">
               <button
                 type="button"
                 onClick={() => setModalAbierto(false)}

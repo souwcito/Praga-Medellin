@@ -57,7 +57,13 @@
   <FilesMatch "\.(css|js|mjs|woff2|woff|ttf|eot|png|jpg|jpeg|gif|webp|svg|ico)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
-  <FilesMatch "\.(html|json)$">
+  <FilesMatch "\.html$">
+    # El HTML es prerenderizado (estático): la CDN puede cachearlo corto y el
+    # navegador revalida con el navegador (ETag). Los assets cambian de hash en
+    # cada deploy, así el HTML no queda obsoleto.
+    Header set Cache-Control "public, max-age=0, s-maxage=600, stale-while-revalidate=86400"
+  </FilesMatch>
+  <FilesMatch "\.json$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
 </IfModule>

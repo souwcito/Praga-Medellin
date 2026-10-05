@@ -10,6 +10,7 @@ use App\Models\Sede;
 use App\Models\Empleado;
 use App\Models\Variante;
 use App\Models\Venta;
+use App\Services\ConsecutivoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -107,9 +108,7 @@ class DevolucionController extends Controller
                 }
             }
 
-            $ultima = Devolucion::orderBy('id', 'desc')->first();
-            $siguiente = $ultima ? (int) str_replace('DEV-', '', $ultima->numero_interno) + 1 : 1001;
-            $numeroInterno = 'DEV-' . $siguiente;
+            $numeroInterno = 'DEV-' . ConsecutivoService::siguiente('devolucion');
 
             $devolucion = Devolucion::create([
                 'venta_id' => $venta->id,
@@ -169,6 +168,7 @@ class DevolucionController extends Controller
             Cache::forget(InventarioController::claveSede((int) $request->sede_id));
 
             DB::commit();
+            $this->bumpCache();
 
             return response()->json($this->formatear($devolucion, $venta), 201);
         } catch (\Exception $e) {
@@ -180,7 +180,7 @@ class DevolucionController extends Controller
     // Historial de devoluciones con paginación y filtros (estilo ventas)
     public function index(Request $request)
     {
-        $query = Devolucion::with(['empleado', 'sede', 'venta'])->orderByDesc('id');
+        $query = Devolucion::with(['empleado', 'sede', 'venta', 'detalles.variante.producto'])->orderByDesc('id');
 
         if ($request->filled('periodo')) {
             $query->where('created_at', '>=', $this->inicioPeriodo($request->periodo));

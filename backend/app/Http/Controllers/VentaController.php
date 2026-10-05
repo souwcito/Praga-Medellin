@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Venta;
 use App\Models\DetalleVenta;
+use App\Models\Pago;
 use App\Models\Inventario;
 use App\Models\Factura;
 use App\Models\Variante;
 use App\Models\Producto;
 use App\Models\Empleado;
 use App\Models\Sede;
+use App\Services\ConsecutivoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -22,22 +24,51 @@ class VentaController extends Controller
         $request->validate([
             'empleado_id' => 'required|integer',
             'sede_venta_id' => 'required|integer',
+            'tipo' => 'nullable|string|in:presencial,virtual',
             'items' => 'required|array',
             'items.*.variante_id' => 'required|integer',
             'items.*.cantidad' => 'required|integer|min:1',
             'items.*.precio_unitario' => 'required|integer',
+            'items.*.precio_final' => 'nullable|integer|min:1',
+            'pagos' => 'required|array|min:1',
+            'pagos.*.metodo_pago' => 'required|string|in:efectivo,banco,addi,sistecredito,bold',
+            'pagos.*.monto' => 'required|integer|min:1',
         ]);
 
         try {
             DB::beginTransaction();
 
-            $ultimaVenta = Venta::orderBy('id', 'desc')->first();
-            $siguiente = $ultimaVenta ? (int) str_replace('FAC-', '', $ultimaVenta->numero_interno) + 1 : 1001;
-            $numeroInterno = 'FAC-' . $siguiente;
+            $numeroInterno = 'FAC-' . ConsecutivoService::siguiente('factura');
 
+            // Calcula totales y valida precio_final <= precio_unitario
             $total = 0;
+            $lineas = [];
             foreach ($request->items as $item) {
-                $total += $item['cantidad'] * $item['precio_unitario'];
+                $precioUnitario = (int) $item['precio_unitario'];
+                $precioFinal = isset($item['precio_final']) && $item['precio_final'] !== '' && $item['precio_final'] !== null
+                    ? (int) $item['precio_final']
+                    : $precioUnitario;
+                if ($precioFinal > $precioUnitario) {
+                    throw new \Exception('El precio final no puede ser mayor al precio unitario.');
+                }
+                $cantidad = (int) $item['cantidad'];
+                $descuento = ($precioUnitario - $precioFinal) * $cantidad;
+                $subtotal = $precioFinal * $cantidad;
+                $total += $subtotal;
+                $lineas[] = [
+                    'variante_id' => (int) $item['variante_id'],
+                    'cantidad' => $cantidad,
+                    'precio_unitario' => $precioUnitario,
+                    'precio_final' => $precioFinal,
+                    'descuento' => $descuento,
+                    'subtotal' => $subtotal,
+                ];
+            }
+
+            // Los pagos deben sumar exactamente el total de la venta
+            $sumaPagos = collect($request->pagos)->sum('monto');
+            if ($sumaPagos !== $total) {
+                throw new \Exception('El total de los pagos no coincide con el total de la venta.');
             }
 
             $venta = Venta::create([
@@ -49,38 +80,47 @@ class VentaController extends Controller
             ]);
 
             $itemsSalida = [];
-            foreach ($request->items as $item) {
-                $subtotal = $item['cantidad'] * $item['precio_unitario'];
-
+            foreach ($lineas as $linea) {
                 DetalleVenta::create([
                     'venta_id' => $venta->id,
-                    'variante_id' => $item['variante_id'],
-                    'cantidad' => $item['cantidad'],
-                    'precio_unitario' => $item['precio_unitario'],
-                    'subtotal' => $subtotal,
+                    'variante_id' => $linea['variante_id'],
+                    'cantidad' => $linea['cantidad'],
+                    'precio_unitario' => $linea['precio_unitario'],
+                    'descuento' => $linea['descuento'],
+                    'subtotal' => $linea['subtotal'],
                 ]);
 
                 $inv = Inventario::where('sede_id', $venta->sede_venta_id)
-                    ->where('variante_id', $item['variante_id'])
+                    ->where('variante_id', $linea['variante_id'])
                     ->first();
                 if (!$inv) {
                     throw new \Exception('La variante no tiene inventario en esta sede.');
                 }
-                if ($inv->stock < $item['cantidad']) {
+                if ($inv->stock < $linea['cantidad']) {
                     throw new \Exception('Stock insuficiente para la variante solicitada.');
                 }
-                $inv->stock -= $item['cantidad'];
+                $inv->stock -= $linea['cantidad'];
                 $inv->save();
 
-                $variante = Variante::with('producto')->find($item['variante_id']);
+                $variante = Variante::with('producto')->find($linea['variante_id']);
                 $itemsSalida[] = [
-                    'variante_id' => (int) $item['variante_id'],
+                    'variante_id' => $linea['variante_id'],
                     'nombre' => $variante->producto->nombre,
                     'talla' => $variante->talla,
-                    'cantidad' => (int) $item['cantidad'],
-                    'precio_unitario' => (int) $item['precio_unitario'],
-                    'subtotal' => (int) $subtotal,
+                    'cantidad' => $linea['cantidad'],
+                    'precio_unitario' => $linea['precio_unitario'],
+                    'precio_final' => $linea['precio_final'],
+                    'descuento' => $linea['descuento'],
+                    'subtotal' => $linea['subtotal'],
                 ];
+            }
+
+            foreach ($request->pagos as $pago) {
+                Pago::create([
+                    'venta_id' => $venta->id,
+                    'metodo_pago' => $pago['metodo_pago'],
+                    'monto' => (int) $pago['monto'],
+                ]);
             }
 
             // La venta descuenta stock: invalida la caché del stock de esa sede
@@ -93,8 +133,11 @@ class VentaController extends Controller
 
             DB::commit();
 
+            $this->bumpCache();
+
             $sede = Sede::find($venta->sede_venta_id);
             $vendedor = Empleado::find($venta->empleado_id);
+            $pagos = $venta->pagos->map(fn ($p) => ['metodo_pago' => $p->metodo_pago, 'monto' => (int) $p->monto])->values();
 
             return response()->json([
                 'venta' => [
@@ -107,6 +150,7 @@ class VentaController extends Controller
                 ],
                 'factura' => ['venta_id' => $venta->id, 'numero_interno' => $numeroInterno, 'fecha' => $venta->created_at->toISOString()],
                 'items' => $itemsSalida,
+                'pagos' => $pagos,
                 'sede' => $sede ? $sede->nombre : null,
                 'vendedor' => $vendedor ? $vendedor->nombre : null,
                 'total' => (int) $venta->total,
@@ -126,7 +170,7 @@ class VentaController extends Controller
             return response()->json(['error' => 'El parámetro factura es requerido'], 400);
         }
 
-        $venta = Venta::with(['empleado', 'sedeVenta', 'detalles.variante.producto'])
+        $venta = Venta::with(['empleado', 'sedeVenta', 'pagos', 'detalles.variante.producto'])
             ->where('numero_interno', $numero)
             ->first();
 
@@ -157,6 +201,7 @@ class VentaController extends Controller
                 'total' => (int) $venta->total,
             ],
             'items' => $items->values(),
+            'pagos' => $venta->pagos->map(fn ($p) => ['metodo_pago' => $p->metodo_pago, 'monto' => (int) $p->monto])->values(),
         ]);
     }
 
@@ -170,7 +215,7 @@ class VentaController extends Controller
     // Historial de ventas con paginación (estilo Laravel)
     public function index(Request $request)
     {
-        $query = Venta::with(['empleado', 'sedeVenta', 'factura'])->orderByDesc('id');
+        $query = Venta::with(['empleado', 'sedeVenta', 'factura', 'pagos', 'detalles'])->orderByDesc('id');
 
         if ($request->filled('periodo')) {
             $query->where('created_at', '>=', $this->inicioPeriodo($request->periodo));
@@ -199,6 +244,8 @@ class VentaController extends Controller
                 'sede_venta' => optional($v->sedeVenta)->nombre ?? '—',
                 'tipo' => $v->tipo,
                 'total' => (int) $v->total,
+                'descuento_total' => (int) $v->detalles->sum(fn ($d) => $d->descuento),
+                'pagos' => $v->pagos->map(fn ($p) => ['metodo_pago' => $p->metodo_pago, 'monto' => (int) $p->monto])->values(),
             ];
         });
 

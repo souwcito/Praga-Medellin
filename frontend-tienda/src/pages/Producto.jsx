@@ -4,7 +4,7 @@ import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
 import { formato } from '../utils/formato'
 import Seo from '../components/Seo'
-import { AlertIcon, CartIcon, CheckIcon, MinusIcon, PlusIcon } from '../components/icons'
+import { AlertIcon, CartIcon, CheckIcon, MinusIcon, PlusIcon, XIcon } from '../components/icons'
 
 // Wrapper: remonta el detalle cuando cambia el id (reinicia estado limpio).
 export default function Producto() {
@@ -45,8 +45,11 @@ function ProductoDetalle({ productoId }) {
 
   const tieneTallas = producto?.variantes.some((v) => v.talla !== null) || false
   const stockVariante = variante ? variante.stock : 0
+  const agotadoProducto = (producto?.stock_total ?? 0) <= 0
+  const stockDe = (t) => producto.variantes.find((v) => v.talla === t)?.stock ?? 0
 
   function elegirTalla(t) {
+    if (stockDe(t) <= 0) return
     setTalla(t)
     setCantidad(1)
     setAgregado(false)
@@ -127,7 +130,7 @@ function ProductoDetalle({ productoId }) {
                 '@type': 'ListItem',
                 position: 3,
                 name: producto.categoria || 'Producto',
-                item: `https://pragamedellin.com/catalogo?catalogo=${producto.catalogo || 'hombre'}&categoria=${producto.categoria_id}`,
+                item: `https://pragamedellin.com/catalogo/${producto.catalogo || 'hombre'}/${producto.categoria_id}`,
               },
               { '@type': 'ListItem', position: 4, name: producto.nombre },
             ],
@@ -143,7 +146,7 @@ function ProductoDetalle({ productoId }) {
           <Link to="/catalogo" className="transition-colors hover:text-ink">Catálogo</Link>
           <span>/</span>
           <Link
-            to={`/catalogo?catalogo=${producto.catalogo || 'hombre'}&categoria=${producto.categoria_id}`}
+            to={`/catalogo/${producto.catalogo || 'hombre'}/${producto.categoria_id}`}
             className="transition-colors hover:text-ink"
           >
             {producto.categoria}
@@ -212,6 +215,11 @@ function ProductoDetalle({ productoId }) {
                 </>
               )}
               <p className="text-2xl font-bold text-ink">{formato(producto.precio)}</p>
+              {agotadoProducto && (
+                <span className="rounded-full bg-ink px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                  Agotado
+                </span>
+              )}
             </div>
 
             <p className="mt-5 text-sm leading-relaxed text-ink-2">{producto.descripcion}</p>
@@ -225,30 +233,46 @@ function ProductoDetalle({ productoId }) {
                 )}
               </p>
               <div className="flex flex-wrap gap-2">
-                {producto.variantes.map((v) => (
-                  <button
-                    key={v.talla || 'unica'}
-                    type="button"
-                    onClick={() => elegirTalla(v.talla)}
-                    className={`min-w-14 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-95 ${
-                      talla === v.talla
-                        ? 'border-ink bg-ink text-white'
-                        : 'border-line text-ink hover:border-ink-2/50'
-                    }`}
-                  >
-                    {v.talla || 'Única'}
-                  </button>
-                ))}
+                {producto.variantes.map((v) => {
+                  const agotada = v.stock <= 0
+                  return (
+                    <button
+                      key={v.talla || 'unica'}
+                      type="button"
+                      onClick={() => elegirTalla(v.talla)}
+                      disabled={agotada}
+                      className={`relative min-w-14 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-95 ${
+                        agotada
+                          ? 'cursor-not-allowed border-line bg-surface-2 text-ink-2/40 line-through'
+                          : talla === v.talla
+                            ? 'border-ink bg-ink text-white'
+                            : 'border-line text-ink hover:border-ink-2/50'
+                      }`}
+                    >
+                      {v.talla || 'Única'}
+                      {agotada && (
+                        <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-700 text-white">
+                          <XIcon className="h-3 w-3" />
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
             {/* Cantidad + agregar */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <div className="flex items-center rounded-xl border border-line">
+              <div
+                className={`flex items-center rounded-xl border border-line ${
+                  stockVariante <= 0 ? 'opacity-50' : ''
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => setCantidad((c) => Math.max(1, c - 1))}
-                  className="flex h-12 w-12 items-center justify-center text-ink-2 transition-colors hover:text-ink active:scale-90"
+                  disabled={stockVariante <= 0}
+                  className="flex h-12 w-12 items-center justify-center text-ink-2 transition-colors hover:text-ink active:scale-90 disabled:opacity-40"
                   aria-label="Disminuir cantidad"
                 >
                   <MinusIcon className="h-4 w-4" />
@@ -257,8 +281,8 @@ function ProductoDetalle({ productoId }) {
                 <button
                   type="button"
                   onClick={() => setCantidad((c) => Math.min(stockVariante, c + 1))}
-                  disabled={cantidad >= stockVariante}
-                  className="flex h-12 w-12 items-center justify-center text-ink-2 transition-colors hover:text-ink active:scale-90 disabled:opacity-30"
+                  disabled={cantidad >= stockVariante || stockVariante <= 0}
+                  className="flex h-12 w-12 items-center justify-center text-ink-2 transition-colors hover:text-ink active:scale-90 disabled:opacity-40"
                   aria-label="Aumentar cantidad"
                 >
                   <PlusIcon className="h-4 w-4" />
@@ -268,12 +292,16 @@ function ProductoDetalle({ productoId }) {
               <button
                 type="button"
                 onClick={agregarAlCarrito}
-                disabled={!variante}
+                disabled={!variante || stockVariante <= 0}
                 className={`flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${
                   agregado ? 'bg-emerald-700' : 'bg-ink hover:bg-metal-2'
                 }`}
               >
-                {agregado ? (
+                {stockVariante <= 0 ? (
+                  <>
+                    <XIcon className="h-5 w-5" /> Agotado
+                  </>
+                ) : agregado ? (
                   <>
                     <CheckIcon className="h-5 w-5" /> ¡Agregado!
                   </>
@@ -285,9 +313,14 @@ function ProductoDetalle({ productoId }) {
               </button>
             </div>
 
-            {tieneTallas && talla === null && (
+            {tieneTallas && talla === null && stockVariante > 0 && (
               <p className="mt-2 text-xs text-ink-2">
                 Selecciona una talla para agregar al carrito.
+              </p>
+            )}
+            {agotadoProducto && (
+              <p className="mt-2 text-xs font-medium text-ink-2">
+                Este producto está agotado. Visita una de nuestras sedes para consultar disponibilidad.
               </p>
             )}
 

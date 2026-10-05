@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { dashboardApi } from '../services/api'
+import { useDashboard } from '../hooks/useData'
 import { AlertIcon } from '../components/icons'
 import PeriodFilter from '../components/PeriodFilter'
 
@@ -49,22 +49,12 @@ function Card({ title, subtitle, delay = 0, children, className = '' }) {
 
 export default function Dashboard() {
   const [periodo, setPeriodo] = useState('mes')
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    dashboardApi
-      .getResumen(periodo)
-      .then(setData)
-      .catch((err) => setError(err?.message || 'Error cargando el dashboard'))
-      .finally(() => setLoading(false))
-  }, [periodo])
+  const { data, isLoading: loading, isError, error: errorRaw } = useDashboard(periodo)
+  const error = errorRaw?.message || (isError ? 'Error cargando el dashboard' : null)
 
   function cambiarPeriodo(p) {
     if (p === periodo) return
     setPeriodo(p)
-    setLoading(true)
   }
 
   // Skeleton de carga (pulso suave, coherente con la paleta)

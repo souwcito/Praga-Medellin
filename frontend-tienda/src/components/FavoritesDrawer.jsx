@@ -82,6 +82,9 @@ export default function FavoritesDrawer() {
                     <img
                       src={f.imagen_url}
                       alt={f.nombre}
+                      width={64}
+                      height={64}
+                      loading="lazy"
                       className="h-16 w-16 rounded-lg bg-surface-2 object-cover"
                     />
                   </button>

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class DetalleVenta extends Model
 {
-    protected $fillable = ['venta_id', 'variante_id', 'cantidad', 'precio_unitario', 'subtotal'];
+    protected $fillable = ['venta_id', 'variante_id', 'cantidad', 'precio_unitario', 'descuento', 'subtotal'];
 
     public function venta()
     {

@@ -9,10 +9,13 @@ import { useEffect } from 'react'
 //   image       — URL absoluta de la imagen para OG/Twitter (opcional)
 //   url         — URL canónica (opcional; por defecto usa la actual)
 //   jsonLd      — array de objetos JSON-LD a inyectar (opcional)
+//   noindex     — si es true, agrega robots noindex (carrito, checkout, etc.)
 const BASE = 'Praga Medellín'
-const DEFAULT_IMAGE = 'https://pragamedellin.com/favicon.png'
+const DEFAULT_IMAGE = 'https://pragamedellin.com/og-image.png'
+const OG_WIDTH = 1200
+const OG_HEIGHT = 630
 
-export default function Seo({ title, description, image, url, jsonLd }) {
+export default function Seo({ title, description, image, url, jsonLd, noindex }) {
   useEffect(() => {
     const finalTitle = title ? `${title} | ${BASE}` : BASE
     const canon = url || `${window.location.origin}${window.location.pathname}`
@@ -40,16 +43,20 @@ export default function Seo({ title, description, image, url, jsonLd }) {
       el.setAttribute('href', href || '')
     }
 
+    setMeta('name', 'robots', noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1')
     setMeta('name', 'description', description || '')
     setMeta('property', 'og:title', finalTitle)
     setMeta('property', 'og:description', description || '')
     setMeta('property', 'og:url', canon)
     setMeta('property', 'og:image', ogImage)
     setMeta('property', 'og:image:alt', description || finalTitle)
+    setMeta('property', 'og:image:width', String(OG_WIDTH))
+    setMeta('property', 'og:image:height', String(OG_HEIGHT))
     setMeta('property', 'og:type', 'website')
     setMeta('property', 'og:locale', 'es_CO')
     setMeta('property', 'og:site_name', BASE)
     setMeta('name', 'twitter:card', 'summary_large_image')
+    setMeta('name', 'twitter:site', '@praga_medellin_')
     setMeta('name', 'twitter:title', finalTitle)
     setMeta('name', 'twitter:description', description || '')
     setMeta('name', 'twitter:image', ogImage)
@@ -66,7 +73,7 @@ export default function Seo({ title, description, image, url, jsonLd }) {
       script.textContent = JSON.stringify(obj)
       document.head.appendChild(script)
     })
-  }, [title, description, image, url, jsonLd])
+  }, [title, description, image, url, jsonLd, noindex])
 
   return null
 }

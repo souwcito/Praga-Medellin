@@ -10,7 +10,7 @@ const REFRESCO_MS = 30000
 // auto-refresco cada 30s para reflejar productos nuevos, ofertas y stock sin
 // recargar la página (merge por id, sin saltos).
 // parametros: { catalogo?, categoria_id?, subcategoria_id?, q?, en_oferta? }
-export default function CatalogoResultados({ parametros }) {
+export default function CatalogoResultados({ parametros, onProductos }) {
   const [productos, setProductos] = useState([])
   const [loading, setLoading] = useState(true)
   const [cargandoMas, setCargandoMas] = useState(false)
@@ -21,11 +21,12 @@ export default function CatalogoResultados({ parametros }) {
       .getProductos({ ...parametros, limit: LIMITE, offset: 0 })
       .then((p) => {
         setProductos(p)
+        onProductos?.(p)
         setError(null)
       })
       .catch((err) => setError(err?.message || 'Error cargando productos'))
       .finally(() => setLoading(false))
-  }, [parametros])
+  }, [parametros, onProductos])
 
   function cargarMas() {
     setCargandoMas(true)
@@ -42,6 +43,7 @@ export default function CatalogoResultados({ parametros }) {
     catalogApi
       .getProductos({ ...parametros, limit: LIMITE, offset: 0 })
       .then((nuevos) => {
+        onProductos?.(nuevos)
         setProductos((prev) => {
           const ids = new Set(nuevos.map((p) => p.id))
           const resto = prev.filter((p) => !ids.has(p.id))

@@ -7,6 +7,14 @@ export const formato = (n) =>
     maximumFractionDigits: 0,
   }).format(n)
 
+const LABEL_PAGO = {
+  efectivo: 'Efectivo',
+  banco: 'Banco',
+  addi: 'Addi',
+  sistecredito: 'Sistecredito',
+  bold: 'Bold',
+}
+
 // Abre una ventana de impresión con el comprobante formateado para térmica 80mm.
 export function imprimirComprobante(data) {
   const fecha = new Date(data.venta.fecha).toLocaleString('es-CO', {
@@ -14,15 +22,24 @@ export function imprimirComprobante(data) {
     timeStyle: 'short',
   })
 
+  const canal = data.venta.tipo === 'virtual' ? 'Redes' : 'Punto físico'
+
   const filas = data.items
     .map(
       (i) => `
       <tr>
         <td>${i.nombre}${i.talla ? ` (${i.talla})` : ''}</td>
         <td class="c">${i.cantidad}</td>
-        <td class="r">${formato(i.precio_unitario)}</td>
+        <td class="r">${formato(i.precio_final ?? i.precio_unitario)}</td>
         <td class="r">${formato(i.subtotal)}</td>
       </tr>`,
+    )
+    .join('')
+
+  const descuentoTotal = (data.items || []).reduce((s, i) => s + (i.descuento || 0), 0)
+  const filasPago = (data.pagos || [])
+    .map(
+      (p) => `<div class="row"><span>${LABEL_PAGO[p.metodo_pago] || p.metodo_pago}:</span><span>${formato(p.monto)}</span></div>`,
     )
     .join('')
 
@@ -58,6 +75,7 @@ export function imprimirComprobante(data) {
   <div class="row"><span>Fecha:</span><span>${fecha}</span></div>
   <div class="row"><span>Sede:</span><span>${data.sede}</span></div>
   <div class="row"><span>Vendedor:</span><span>${data.vendedor}</span></div>
+  <div class="row"><span>Canal:</span><span>${canal}</span></div>
   <div class="line"></div>
   <table>
     <thead>
@@ -67,6 +85,8 @@ export function imprimirComprobante(data) {
   </table>
   <div class="line"></div>
   <div class="row total"><span>TOTAL</span><span>${formato(data.total)}</span></div>
+  ${descuentoTotal > 0 ? `<div class="row"><span>Descuentos:</span><span>-${formato(descuentoTotal)}</span></div>` : ''}
+  ${filasPago ? `<div class="line"></div>${filasPago}` : ''}
   <p class="note center">Gracias por su compra. — Praga Medellín</p>
   <script>window.onload = function () { window.print(); };</script>
 </body>

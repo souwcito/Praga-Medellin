@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { catalogApi, ventasApi } from '../services/api'
+import { useMemo, useState } from 'react'
+import { useSedes, useEmpleados, useVentas } from '../hooks/useData'
 import PeriodFilter from '../components/PeriodFilter'
 import { AlertIcon, StoreIcon, UserIcon } from '../components/icons'
 
@@ -24,13 +24,21 @@ const fechaLarga = (iso) =>
 
 const TIPOS = [
   { value: '', label: 'Todos los tipos' },
-  { value: 'presencial', label: 'Presencial' },
-  { value: 'virtual', label: 'Virtual' },
+  { value: 'presencial', label: 'Punto físico' },
+  { value: 'virtual', label: 'Redes' },
 ]
 
+const METODO_LABEL = {
+  efectivo: 'Efectivo',
+  banco: 'Banco',
+  addi: 'Addi',
+  sistecredito: 'Sistecredito',
+  bold: 'Bold',
+}
+
 export default function Ventas() {
-  const [sedes, setSedes] = useState([])
-  const [empleados, setEmpleados] = useState([])
+  const { data: sedes = [] } = useSedes()
+  const { data: empleados = [] } = useEmpleados()
 
   const [periodo, setPeriodo] = useState('mes')
   const [sedeId, setSedeId] = useState('')
@@ -38,66 +46,44 @@ export default function Ventas() {
   const [tipo, setTipo] = useState('')
   const [page, setPage] = useState(1)
 
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const params = useMemo(
+    () => ({
+      periodo,
+      sede_id: sedeId || undefined,
+      empleado_id: empleadoId || undefined,
+      tipo: tipo || undefined,
+      page,
+      per_page: 10,
+    }),
+    [periodo, sedeId, empleadoId, tipo, page],
+  )
 
-  // Carga las opciones de los filtros (sedes y vendedores)
-  useEffect(() => {
-    Promise.all([catalogApi.getSedes(), catalogApi.getEmpleados()])
-      .then(([s, e]) => {
-        setSedes(s)
-        setEmpleados(e)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando filtros'))
-  }, [])
-
-  useEffect(() => {
-    ventasApi
-      .getHistorial({
-        periodo,
-        sede_id: sedeId || undefined,
-        empleado_id: empleadoId || undefined,
-        tipo: tipo || undefined,
-        page,
-        per_page: 10,
-      })
-      .then((d) => {
-        setData(d)
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando las ventas'))
-      .finally(() => setLoading(false))
-  }, [periodo, sedeId, empleadoId, tipo, page])
+  const { data, isLoading: loading, isError, error: errorRaw } = useVentas(params)
+  const error = errorRaw?.message || (isError ? 'Error cargando las ventas' : null)
 
   function cambiarPeriodo(p) {
     if (p === periodo) return
     setPeriodo(p)
     setPage(1)
-    setLoading(true)
   }
 
   function cambiarSede(e) {
     setSedeId(e.target.value)
     setPage(1)
-    setLoading(true)
   }
 
   function cambiarEmpleado(e) {
     setEmpleadoId(e.target.value)
     setPage(1)
-    setLoading(true)
   }
 
   function cambiarTipo(e) {
     setTipo(e.target.value)
     setPage(1)
-    setLoading(true)
   }
 
   function irA(pagina) {
     setPage(pagina)
-    setLoading(true)
   }
 
   if (loading) {
@@ -195,11 +181,12 @@ export default function Ventas() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[6.5rem_1fr_9rem_1fr_5.5rem_7.5rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
+          <div className="grid grid-cols-[6.5rem_1fr_9rem_1fr_8rem_5.5rem_7.5rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Factura</span>
             <span>Fecha</span>
             <span>Vendedor</span>
             <span>Sede de venta</span>
+            <span className="text-center">Pago</span>
             <span className="text-center">Tipo</span>
             <span className="text-right">Total</span>
           </div>
@@ -208,18 +195,35 @@ export default function Ventas() {
             {filas.map((v) => (
               <li
                 key={v.id}
-                className="grid grid-cols-[6.5rem_1fr_9rem_1fr_5.5rem_7.5rem] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-surface-2/50"
+                className="grid grid-cols-[6.5rem_1fr_9rem_1fr_8rem_5.5rem_7.5rem] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-surface-2/50"
               >
                 <span className="font-medium text-ink">{v.factura || '—'}</span>
                 <span className="text-ink">{fechaLarga(v.fecha)}</span>
                 <span className="truncate text-ink">{v.empleado.nombre}</span>
                 <span className="truncate text-ink-2">{v.sede_venta}</span>
+                <span className="flex flex-wrap justify-center gap-1">
+                  {(v.pagos || []).map((p) => (
+                    <span
+                      key={p.metodo_pago}
+                      className="inline-flex rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium capitalize text-ink-2"
+                    >
+                      {METODO_LABEL[p.metodo_pago] || p.metodo_pago}
+                    </span>
+                  ))}
+                </span>
                 <span className="justify-self-center">
                   <span className="inline-flex rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium capitalize text-ink-2">
                     {v.tipo}
                   </span>
                 </span>
-                <span className="text-right font-semibold text-ink">{formato(v.total)}</span>
+                <span className="text-right">
+                  <span className="font-semibold text-ink">{formato(v.total)}</span>
+                  {v.descuento_total > 0 && (
+                    <span className="block text-[10px] font-medium text-emerald-700">
+                      Dcto −{formato(v.descuento_total)}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

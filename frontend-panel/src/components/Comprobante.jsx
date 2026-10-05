@@ -4,11 +4,21 @@
 
 import { formato } from '../utils/print'
 
+const METODO_LABEL = {
+  efectivo: 'Efectivo',
+  banco: 'Banco',
+  addi: 'Addi',
+  sistecredito: 'Sistecredito',
+  bold: 'Bold',
+}
+
 export function Comprobante({ data }) {
   const fecha = new Date(data.venta.fecha).toLocaleString('es-CO', {
     dateStyle: 'medium',
     timeStyle: 'short',
   })
+
+  const canal = data.venta.tipo === 'virtual' ? 'Redes' : 'Punto físico'
 
   return (
     <div className="rounded-xl bg-white">
@@ -36,6 +46,10 @@ export function Comprobante({ data }) {
           <dt className="text-ink-2">Vendedor</dt>
           <dd className="font-medium text-ink">{data.vendedor}</dd>
         </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-ink-2">Canal</dt>
+          <dd className="font-medium text-ink">{canal}</dd>
+        </div>
       </dl>
 
       <div className="mt-4">
@@ -51,8 +65,8 @@ export function Comprobante({ data }) {
                 {item.nombre}
                 {item.talla ? <span className="text-ink-2"> · {item.talla}</span> : null}
               </span>
-              <span className="w-12 shrink-0 text-center text-ink-2">
-                {item.cantidad} × {formato(item.precio_unitario)}
+              <span className="w-14 shrink-0 text-center text-ink-2">
+                {item.cantidad} × {formato(item.precio_final ?? item.precio_unitario)}
               </span>
               <span className="w-24 shrink-0 text-right font-semibold text-ink">
                 {formato(item.subtotal)}
@@ -60,12 +74,28 @@ export function Comprobante({ data }) {
             </li>
           ))}
         </ul>
+        {data.items.some((i) => i.descuento > 0) && (
+          <p className="mt-2 text-[11px] text-emerald-700">
+            Descuentos aplicados: −{formato(data.items.reduce((s, i) => s + (i.descuento || 0), 0))}
+          </p>
+        )}
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-dashed border-line pt-4">
         <span className="text-sm font-medium text-ink-2">Total</span>
         <span className="text-2xl font-bold text-ink">{formato(data.total)}</span>
       </div>
+
+      {data.pagos?.length > 0 && (
+        <div className="mt-3 space-y-1 border-t border-dashed border-line pt-3">
+          {data.pagos.map((p) => (
+            <div key={p.metodo_pago} className="flex justify-between gap-4 text-sm">
+              <span className="text-ink-2">{METODO_LABEL[p.metodo_pago] || p.metodo_pago}</span>
+              <span className="font-medium text-ink">{formato(p.monto)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <p className="mt-4 text-center text-[11px] text-ink-2/70">
         Factura interna — no constituye facturación ante la DIAN.

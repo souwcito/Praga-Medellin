@@ -15,46 +15,67 @@ use App\Http\Controllers\ImagenController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\DevolucionController;
+use App\Http\Controllers\DuenoController;
 
-// 1. Login del Panel (cuenta única)
-Route::post('/login', [AuthController::class, 'login']);
+/*
+|--------------------------------------------------------------------------
+| API — Praga Medellín
+|--------------------------------------------------------------------------
+| Rutas públicas (tienda + login) y rutas protegidas del panel (auth:sanctum).
+| El token se obtiene en POST /api/login (Bearer). El login lleva throttle
+| anti fuerza bruta; el grupo protegido tiene un límite amplio (el POS hace
+| polling cada 20 s y pueden haber varias cajas por sede).
+*/
 
-// 2. Catálogo y sedes
+// 1. Login del Panel (cuenta única) — con límite anti fuerza bruta (10/min por IP)
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+
+// 2. Rutas PÚBLICAS (tienda): catálogo y pedidos online
 Route::get('/sedes', [SedeController::class, 'index']);
-Route::get('/empleados', [EmpleadoController::class, 'index']);
 Route::get('/categorias', [CategoriaController::class, 'index']);
 Route::get('/subcategorias', [SubcategoriaController::class, 'index']);
-
-// 3. Productos (CRUD con variantes)
 Route::get('/productos', [ProductoController::class, 'index']);
-Route::post('/productos', [ProductoController::class, 'store']);
 Route::get('/productos/{id}', [ProductoController::class, 'show']);
-Route::put('/productos/{id}', [ProductoController::class, 'update']);
-Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
+Route::post('/pedidos', [PedidoController::class, 'store'])->middleware('throttle:20,1');
 
-// 4. Inventario por variante
-Route::get('/inventario', [InventarioController::class, 'index']);
-Route::get('/inventario/completo', [InventarioController::class, 'completo']);
-Route::post('/inventario/ajustes', [InventarioController::class, 'ajustes']);
+// 3. Rutas PROTEGIDAS (panel): requieren token Sanctum
+Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
+    Route::get('/empleados', [EmpleadoController::class, 'index']);
 
-// 5. Ventas (POS + historial)
-Route::post('/ventas', [VentaController::class, 'store']);
-Route::get('/ventas', [VentaController::class, 'index']);
-Route::get('/ventas/buscar', [VentaController::class, 'buscarPorFactura']);
+    // Productos (escritura)
+    Route::post('/productos', [ProductoController::class, 'store']);
+    Route::put('/productos/{id}', [ProductoController::class, 'update']);
+    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
 
-// 5.1 Devoluciones (cambio en punto físico)
-Route::get('/devoluciones', [DevolucionController::class, 'index']);
-Route::post('/devoluciones', [DevolucionController::class, 'store']);
-Route::get('/devoluciones/{id}', [DevolucionController::class, 'show']);
+    // Inventario
+    Route::get('/inventario', [InventarioController::class, 'index']);
+    Route::get('/inventario/completo', [InventarioController::class, 'completo']);
+    Route::post('/inventario/ajustes', [InventarioController::class, 'ajustes']);
 
-// 6. Informes
-Route::get('/dashboard', [DashboardController::class, 'resumen']);
-Route::get('/comisiones', [ComisionController::class, 'index']);
+    // Ventas (POS + historial)
+    Route::post('/ventas', [VentaController::class, 'store']);
+    Route::get('/ventas', [VentaController::class, 'index']);
+    Route::get('/ventas/buscar', [VentaController::class, 'buscarPorFactura']);
 
-// 7. Imágenes
-Route::post('/imagenes', [ImagenController::class, 'store']);
+    // Devoluciones
+    Route::get('/devoluciones', [DevolucionController::class, 'index']);
+    Route::post('/devoluciones', [DevolucionController::class, 'store']);
+    Route::get('/devoluciones/{id}', [DevolucionController::class, 'show']);
 
-// 8. Clientes y pedidos online
-Route::get('/clientes', [ClienteController::class, 'index']);
-Route::get('/pedidos', [PedidoController::class, 'index']);
-Route::post('/pedidos', [PedidoController::class, 'store']);
+    // Informes
+    Route::get('/dashboard', [DashboardController::class, 'resumen']);
+    Route::get('/comisiones', [ComisionController::class, 'index']);
+
+    // Imágenes
+    Route::post('/imagenes', [ImagenController::class, 'store']);
+
+    // Clientes y pedidos (gestión)
+    Route::get('/clientes', [ClienteController::class, 'index']);
+    Route::get('/pedidos', [PedidoController::class, 'index']);
+});
+
+// 4. Panel del DUEÑO (solo rol 'dueno'): costos y valoración de mercancía
+Route::middleware(['auth:sanctum', 'role:dueno'])->group(function () {
+    Route::get('/dueno/resumen', [DuenoController::class, 'resumen']);
+    Route::put('/dueno/productos/{id}/costo', [DuenoController::class, 'updateCosto']);
+});

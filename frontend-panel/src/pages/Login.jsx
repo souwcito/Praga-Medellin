@@ -28,7 +28,9 @@ export default function Login() {
     const result = await login({ email, password })
     setSubmitting(false)
     if (result.ok) {
-      navigate(from, { replace: true })
+      // El dueño siempre aterriza en su panel
+      const destino = result.user?.rol === 'dueno' ? '/dueno' : from
+      navigate(destino, { replace: true })
     } else {
       setError(result.error)
     }

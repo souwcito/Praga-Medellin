@@ -1,26 +1,24 @@
 # Despliegue en Hostinger — pragamedellin.com
 
-> **Estado actual (fase dominio temporal):** `pragamedellin.com` está en transferencia desde otro
-> proveedor. Por ahora todo se opera con el dominio temporal de Hostinger:
-> **`https://beige-camel-238711.hostingersite.com`**.
-> Los frontends están compilados apuntando a `https://beige-camel-238711.hostingersite.com/api`
-> y el CORS ya lo admite. Al terminar la transferencia solo hay que recompilar y re-subir
-> (ver sección "Cambio a pragamedellin.com"). **Los datos (productos, inventario, ventas,
-> devoluciones) viven en la BD y no se pierden al cambiar de dominio.**
+> **IMPORTANTE (SSL):** para que el sitio funcione, el certificado SSL de
+> `pragamedellin.com` debe estar **activo** en Hostinger. Mientras no esté emitido,
+> HTTPS falla (el `.htaccess` redirige HTTP→HTTPS) y el dominio se ve caído.
+> Actívalo en hPanel → **SSL** → *Instalar certificado* para `pragamedellin.com`
+> (gratuito, Let's Encrypt), espera a que se emita y verifica en un navegador.
 
-Guía paso a paso para subir a producción. Todo se sirve bajo un solo dominio:
+Guía paso a paso para producción. Todo se sirve bajo un solo dominio:
 
 | Ruta | Qué es |
 |---|---|
-| `https://beige-camel-238711.hostingersite.com/` | Tienda pública (React/Vite) |
-| `https://beige-camel-238711.hostingersite.com/panel` | Panel admin |
-| `https://beige-camel-238711.hostingersite.com/api/*` | Backend Laravel (en `public_html/api-app/`) |
-| `https://beige-camel-238711.hostingersite.com/images/*` | Imágenes de productos subidas desde el panel |
+| `https://pragamedellin.com/` | Tienda pública (React/Vite, prerenderizada para SEO) |
+| `https://pragamedellin.com/panel` | Panel admin |
+| `https://pragamedellin.com/api/*` | Backend Laravel (en `public_html/api-app/`) |
+| `https://pragamedellin.com/images/*` | Imágenes de productos subidas desde el panel |
 
 ---
 
 ## 0. Requisitos
-- Dominio `pragamedellin.com` conectado a Hostinger (si está en otro registrador, apunta los **nameservers** a Hostinger en hPanel).
+- Dominio `pragamedellin.com` conectado a Hostinger con **SSL activo**.
 - Plan de Hostinger con **hPanel + FTP** (y MySQL).
 - En tu PC: FTP (FileZilla), y los builds ya generados en:
   - `frontend-tienda/dist/`
@@ -33,16 +31,18 @@ Guía paso a paso para subir a producción. Todo se sirve bajo un solo dominio:
 ## 1. En hPanel (Hostinger)
 
 1. **Base de datos**: hPanel → Databases → MySQL → crear base con usuario y contraseña.
-   Anota: `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`.
    Credenciales actuales del proyecto:
    ```env
    DB_DATABASE=u671432879_bd
    DB_USERNAME=u671432879_praga
    DB_PASSWORD=Praga+1999
    ```
-2. **SSL**: hPanel → SSL → activar certificado gratuito para `pragamedellin.com`.
-3. **Importar datos**: phpMyAdmin (hPanel) → seleccionar la base `u671432879_bd` → *Import* → subir `backend/produccion.sql`. Esto crea tablas (incluye **devoluciones**), catálogo, sedes, categorías y el usuario admin.
-   > El dump importa en la base **seleccionada** (no crea una base propia), así que asegúrate de tener `u671432879_bd` seleccionada en phpMyAdmin antes de importar.
+2. **SSL**: hPanel → SSL → instalar el certificado gratuito para `pragamedellin.com`
+   (¡sin esto el sitio no carga!).
+3. **Importar datos**: phpMyAdmin (hPanel) → seleccionar la base `u671432879_bd`
+   → *Import* → subir `backend/produccion.sql`. Esto crea tablas (incluye
+   **devoluciones**), catálogo, sedes, categorías y el usuario admin.
+   > El dump importa en la base **seleccionada** (no crea una base propia).
 
 ---
 
@@ -53,10 +53,12 @@ public_html/
 ├── .htaccess            ← el de frontend-tienda/dist/.htaccess (combinado)
 ├── index.html           ← de frontend-tienda/dist/
 ├── assets/              ← de frontend-tienda/dist/assets/
-├── images/              ← de frontend-tienda/dist/images/ (respaldo, opcional)
+├── og-image.png         ← imagen social (1200×630) del SEO
 ├── favicon.png
 ├── robots.txt
 ├── sitemap.xml
+├── producto/            ← HTML prerenderizado por producto (SEO)
+│   └── <id>/index.html
 ├── panel/               ← TODO el contenido de frontend-panel/dist/
 │   ├── .htaccess
 │   ├── index.html
@@ -71,36 +73,35 @@ public_html/
     └── bootstrap/
 ```
 
-> **Importante**: sube el **contenido** de `dist/` (no la carpeta `dist/`), y el **contenido** de `backend/` (no `backend/produccion.sql` dentro de api-app; ese archivo es solo para importar).
+> **Importante**: sube el **contenido** de `dist/` (no la carpeta `dist/`), y el
+> **contenido** de `backend/` (no `backend/produccion.sql` dentro de api-app).
 
 ---
 
 ## 3. Configurar la API (`api-app/.env`)
 
-1. En tu PC: copia `backend/.env.production` y renómbralo a `.env` (o súbelo como `.env`).
-2. Completa las credenciales de la base creada en el paso 1:
+1. En tu PC: copia `backend/.env.production` y renómbralo a `.env`.
+2. Verifica las credenciales de la base:
    ```env
    DB_HOST=localhost
    DB_PORT=3306
    DB_DATABASE=u671432879_bd
    DB_USERNAME=u671432879_praga
    DB_PASSWORD=Praga+1999
+   APP_URL=https://pragamedellin.com
    ```
-3. Verifica que `APP_KEY` esté presente (ya viene generada en `.env.production`).
-4. Sube el archivo a `public_html/api-app/.env`.
+3. Sube el archivo a `public_html/api-app/.env`.
 
-> El `APP_KEY` ya está generado; **no lo cambies** o los datos cifrados (tokens) se invalidan.
+> El `APP_KEY` ya viene generado en `.env.production`; **no lo cambies**.
 
 ---
 
 ## 4. Permisos (hPanel → File Manager)
 
-Selecciona `api-app` → *Permissions* y pon:
+Selecciona `api-app` → *Permissions*:
 - `storage` y `storage/framework/{cache,sessions,views,testing}` → **755**
 - `bootstrap/cache` → **755**
 - Archivos `.php` → **644**
-
-Esto es necesario para que Laravel escriba logs, sesiones y caché.
 
 ---
 
@@ -108,14 +109,15 @@ Esto es necesario para que Laravel escriba logs, sesiones y caché.
 
 | Prueba | Resultado esperado |
 |---|---|
-| `https://pragamedellin.com/` | Tienda cargando (layout + catálogo) |
-| `https://pragamedellin.com/catalogo` | Catálogo (y al recargar no rompe assets) |
-| `https://pragamedellin.com/producto/1` | Detalle de producto (recarga OK) |
+| `https://pragamedellin.com/` | Tienda cargando (layout + catálogo), con HTML prerenderizado |
+| `https://pragamedellin.com/catalogo` | Catálogo (recarga OK) |
+| `https://pragamedellin.com/producto/26` | Detalle de producto con HTML prerenderizado (recarga OK) |
 | `https://pragamedellin.com/api/sedes` | JSON con las sedes |
 | `https://pragamedellin.com/api/login` | Login del panel (POST con admin@pragamedellin.com / admin123) |
 | `https://pragamedellin.com/panel` | Login del panel admin |
 | `https://pragamedellin.com/sitemap.xml` | Sitemap (se regenera en cada build) |
 | `https://pragamedellin.com/robots.txt` | Permite indexar + referencia al sitemap |
+| `https://pragamedellin.com/og-image.png` | Imagen social del SEO |
 
 Si la API responde 500: revisa `api-app/storage/logs/laravel.log`.
 
@@ -123,87 +125,41 @@ Si la API responde 500: revisa `api-app/storage/logs/laravel.log`.
 
 ## 6. Publicar cambios futuros (cada actualización)
 
-1. `cd frontend-tienda && npm run build` → subir `dist/` a la raíz de `public_html` (sobrescribir).
+1. `cd frontend-tienda && npm run build` → subir `dist/` a la raíz de `public_html`
+   (sobrescribir; incluye sitemap, robots y HTML prerenderizado).
 2. `cd frontend-panel && npm run build` → subir `dist/` a `public_html/panel/`.
 3. Backend: subir solo los archivos PHP modificados.
-4. Cambios en BD (migraciones nuevas): generarlas y actualizar el dump, o ejecutar las queries nuevas en phpMyAdmin.
+4. Cambios en BD (migraciones nuevas): generarlas y actualizar el dump, o ejecutar
+   las queries nuevas en phpMyAdmin.
 
 ---
 
 ## 7. SEO — Google Search Console y Analytics
 
-1. **Search Console**: descomenta la línea del `index.html` de la tienda
-   (`<meta name="google-site-verification" ...>`) y pega tu código de verificación, o verifica por DNS.
-   Luego envía `https://pragamedellin.com/sitemap.xml`.
-2. **GA4**: en `index.html` reemplaza `G-XXXXXXXXXX` por tu ID de medición.
-3. **Google Business Profile**: crea una ficha por sede (Andalucía, Aranjuez, Akron Castilla, Praga Woman) con el mismo nombre/dirección/teléfono del sitio.
-4. El `sitemap.xml` se genera automáticamente en cada `npm run build` consultando la API (incluye todos los productos). Si la API no responde durante el build, genera solo las URLs estáticas.
-
----
-
-## Actualización: imágenes múltiples y tallas (S–2XL, jeans 30–38)
-
-1. **Base de datos**: ejecuta en phpMyAdmin el contenido de **`docs/ACTUALIZAR_PRODUCCION.sql`**
-   (agrega la columna `imagenes` y cambia la etiqueta `XXL` → `2XL` en subcategorías y categorías).
-2. **Backend** → `public_html/api-app/` (sobrescribir):
-   - `app/Http/Controllers/ProductoController.php`
-   - `app/Models/Producto.php`
-   - `database/migrations/2026_09_19_002001_add_imagenes_to_productos_table.php` (referencia; la columna ya se crea con el SQL)
-3. **Frontends**: recompilados y listos en:
-   - `frontend-tienda/dist/` → raíz `public_html/`
-   - `frontend-panel/dist/` → `public_html/panel/`
-
----
-
-## Actualización: ofertas, Promociones, tiempo real y escalabilidad
-
-1. **Base de datos** (phpMyAdmin → SQL): ejecuta la **sección 8** de `docs/ACTUALIZAR_PRODUCCION.sql`:
-   ```sql
-   ALTER TABLE `productos` ADD COLUMN `precio_antes` INT NULL AFTER `precio`;
-   ALTER TABLE `productos` ADD INDEX `productos_precio_antes_index` (`precio_antes`);
-   ```
-2. **Backend** → `public_html/api-app/` (sobrescribir):
-   - `app/Models/Producto.php`
-   - `app/Http/Controllers/ProductoController.php`
-   - `app/Http/Controllers/CategoriaController.php`
-   - `app/Http/Controllers/SubcategoriaController.php`
-   - `app/Http/Controllers/InventarioController.php`
-   - `app/Http/Controllers/VentaController.php`
-   - `app/Http/Controllers/DevolucionController.php`
-   - Y **borra** `bootstrap/cache/config.php` si existe.
-3. **Frontends**: recompilados en
-   - `frontend-tienda/dist/` → raíz `public_html/`
-   - `frontend-panel/dist/` → `public_html/panel/`
-4. Limpia la caché de Hostinger (Turbo/Performance) y recarga en incógnito.
-
-> **Cómo funciona el tiempo real**: la tienda se auto-refresca cada 30 s y el POS cada 20 s
-> (polling). El backend cachea categorías, subcategorías (24 h) e inventario por sede (20 s),
-> e invalida la caché de inventario al vender/devolver/ajustar. Las ventas van en transacción
-> con validación de stock (evita sobreventa entre sedes). Si algún día hay SSH:
-> `php artisan optimize` (config/route/view cache).
+1. **Search Console**: en `frontend-tienda/.env.production` agrega tu código de
+   verificación en `VITE_GSC_CODE=...` y recompila (se inyecta en el `<head>` del
+   `index.html`). O verifica por DNS. Luego envía `https://pragamedellin.com/sitemap.xml`.
+2. **GA4**: en `frontend-tienda/.env.production` pon tu ID de medición en
+   `VITE_GA_ID=G-XXXXXXXXXX` y recompila (se inyecta el script de gtag).
+3. **Google Business Profile**: crea una ficha por sede (Andalucía, Aranjuez,
+   Akron Castilla, Praga Woman) con el mismo nombre/dirección/teléfono del sitio.
+4. El `sitemap.xml` **y el HTML prerenderizado** se generan automáticamente en cada
+   `npm run build` consultando la API (productos). Si la API no responde durante el
+   build, el sitemap genera solo las URLs estáticas y se omite el prerender.
+   > El prerender requiere que la API de producción responda por HTTPS durante el
+   > build (por eso el SSL debe estar activo antes de compilar la tienda).
 
 ---
 
 ## Notas
-- **Wompi**: el checkout de la tienda todavía es un placeholder; cuando se integre, completa `VITE_WOMPI_PUBLIC_KEY` en `frontend-tienda/.env.production` y reconstruye.
-- El `.htaccess` raíz redirige HTTP→HTTPS, rutea `/api` y `/images` hacia Laravel, deja `/panel` a su propio SPA y agrega caché/compresión para rendimiento (Core Web Vitals).
-- El panel no se indexa (`X-Robots-Tag: noindex`).
 - **Imágenes**: la API arma la URL de cada imagen con el host de la petición actual
-  (`request()->getSchemeAndHttpHost()`). Por eso las imágenes funcionan con el dominio temporal
-  y luego con `pragamedellin.com` sin tocar la base de datos.
-
----
-
-## Cambio a pragamedellin.com (cuando la transferencia termine)
-
-1. En ambos `frontend-tienda/.env.production` y `frontend-panel/.env.production` cambia:
-   ```
-   VITE_API_URL=https://pragamedellin.com/api
-   ```
-2. Recompila y re-subi por FTP:
-   - `frontend-tienda/dist/` → raíz de `public_html/`
-   - `frontend-panel/dist/` → `public_html/panel/`
-3. Activa el **SSL** de `pragamedellin.com` en hPanel.
-4. (Opcional) en `api-app/config/cors.php` puedes quitar el dominio temporal; `pragamedellin.com` ya está permitido.
-5. Verifica `https://pragamedellin.com/`, `/panel` y `/api/sedes`.
-6. **No hay que tocar la base de datos ni recargar productos**: todo sigue intacto.
+  (`request()->getSchemeAndHttpHost()`), por eso funcionan en cualquier dominio sin
+  tocar la base de datos. Al subir imágenes desde el panel, el backend las optimiza
+  (WebP, thumb 400px, medium 1200px) y devuelve las variantes.
+- El `.htaccess` raíz redirige HTTP→HTTPS, rutea `/api` y `/images` hacia Laravel,
+  deja `/panel` a su propio SPA y agrega caché/compresión para rendimiento.
+- El panel no se indexa (`X-Robots-Tag: noindex`).
+- **Wompi**: el checkout de la tienda todavía es un placeholder; cuando se integre,
+  completa `VITE_WOMPI_PUBLIC_KEY` en `frontend-tienda/.env.production` y reconstruye.
+- **API protegida**: las rutas de escritura del panel requieren token (`auth:sanctum`);
+  las rutas públicas (catálogo y pedidos online) siguen abiertas.

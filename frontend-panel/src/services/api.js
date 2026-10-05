@@ -55,6 +55,8 @@ const mockRoutes = {
   'POST /devoluciones': (body) => mockApi.crearDevolucion(body),
   'GET /devoluciones': (params) => mockApi.getDevoluciones(params),
   'GET /devoluciones/:id': (params, url) => mockApi.getDevolucionDetalle(url.split('/').pop()),
+  'GET /dueno/resumen': () => mockApi.getDuenoResumen(),
+  'PUT /dueno/productos/:id/costo': (body, url) => mockApi.updateCosto(url.split('/').pop(), body),
 }
 
 // Busca el handler mock: primero coincidencia exacta; luego con :id dinámico
@@ -155,6 +157,13 @@ export const pedidosApi = {
   getPedidos: () => request('GET', '/pedidos'),
 }
 
+export const duenoApi = {
+  // Panel del dueño: resumen por sede + lista de productos con costo/stock
+  getResumen: () => request('GET', '/dueno/resumen'),
+  // Edita el costo de un producto: { costo } (null limpia el costo)
+  updateCosto: (id, costo) => request('PUT', `/dueno/productos/${id}/costo`, { costo }),
+}
+
 export default {
   authApi,
   catalogApi,
@@ -167,4 +176,5 @@ export default {
   comisionesApi,
   clientesApi,
   pedidosApi,
+  duenoApi,
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import Seo from '../components/Seo'
 import CatalogoResultados from '../components/CatalogoResultados'
@@ -9,14 +9,18 @@ const inputCls =
   'w-full rounded-2xl border border-line bg-white py-3 pl-11 pr-4 text-sm placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
 
 export default function Catalogo() {
+  // URLs limpias: /catalogo/:catalogo/:categoria/:subcategoria (ids numéricos)
+  const params = useParams()
+  const catalogo = params.catalogo || ''
+  const categoria = params.categoria || ''
+  const subcategoria = params.subcategoria || ''
+
   const [searchParams, setSearchParams] = useSearchParams()
-  const catalogo = searchParams.get('catalogo') || ''
-  const categoria = searchParams.get('categoria') || ''
-  const subcategoria = searchParams.get('subcategoria') || ''
   const q = searchParams.get('q') || ''
 
   const [categorias, setCategorias] = useState([])
   const [subcategorias, setSubcategorias] = useState([])
+  const [productos, setProductos] = useState([])
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -32,6 +36,7 @@ export default function Catalogo() {
   const categoriaActual = categorias.find((c) => c.id === Number(categoria))
   const subcategoriaActual = subcategorias.find((s) => s.id === Number(subcategoria))
   const titulo =
+    subcategoriaActual?.nombre ||
     categoriaActual?.nombre ||
     (catalogo === 'mujer' ? 'Catálogo Mujer' : catalogo === 'hombre' ? 'Catálogo Hombre' : 'Catálogo')
 
@@ -52,22 +57,77 @@ export default function Catalogo() {
     [catalogo, categoria, subcategoria, q],
   )
 
+  const urlActual = `https://pragamedellin.com${window.location.pathname}${window.location.search}`
+
+  const breadcrumb = useMemo(() => {
+    const items = [
+      { '@type': 'ListItem', position: 1, name: 'Inicio', item: 'https://pragamedellin.com/' },
+      { '@type': 'ListItem', position: 2, name: 'Catálogo', item: 'https://pragamedellin.com/catalogo' },
+    ]
+    let pos = 3
+    if (catalogo) {
+      items.push({
+        '@type': 'ListItem',
+        position: pos++,
+        name: catalogo === 'mujer' ? 'Mujer' : 'Hombre',
+        item: `https://pragamedellin.com/catalogo/${catalogo}`,
+      })
+    }
+    if (categoriaActual) {
+      items.push({
+        '@type': 'ListItem',
+        position: pos++,
+        name: categoriaActual.nombre,
+        item: `https://pragamedellin.com/catalogo/${catalogo}/${categoriaActual.id}`,
+      })
+    }
+    if (subcategoriaActual) {
+      items.push({
+        '@type': 'ListItem',
+        position: pos++,
+        name: subcategoriaActual.nombre,
+      })
+    }
+    return items
+  }, [catalogo, categoriaActual, subcategoriaActual])
+
+  const jsonLd = useMemo(() => {
+    const ld = [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: `${titulo} | Praga Medellín`,
+        description: 'Catálogo de ropa y accesorios urbanos en Medellín.',
+        url: urlActual,
+        mainEntity: {
+          '@type': 'ItemList',
+          itemListElement: (q ? [] : productos.slice(0, 40)).map((p, i) => ({
+            '@type': 'ListItem',
+            position: i + 1,
+            url: `https://pragamedellin.com/producto/${p.id}`,
+            name: p.nombre,
+            image: p.imagen_url,
+          })),
+        },
+      },
+    ]
+    if (categoriaActual || subcategoriaActual) {
+      ld.push({
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: breadcrumb,
+      })
+    }
+    return ld
+  }, [titulo, urlActual, productos, q, categoriaActual, subcategoriaActual, breadcrumb])
+
   return (
     <>
       <Seo
         title={titulo}
-        description="Explora el catálogo de Praga Medellín: camisetas, buzos, tenis, gorras y más."
-        url={`https://pragamedellin.com${window.location.pathname}${window.location.search}`}
-        jsonLd={[
-          {
-            '@context': 'https://schema.org',
-            '@type': 'CollectionPage',
-            name: `${titulo} | Praga Medellín`,
-            description: 'Catálogo de ropa y accesorios urbanos en Medellín.',
-            url: `https://pragamedellin.com${window.location.pathname}${window.location.search}`,
-            mainEntity: { '@type': 'ItemList', itemListElement: [] },
-          },
-        ]}
+        description={`${titulo} en Praga Medellín: camisetas, buzos, tenis, gorras y más. 4 sedes en Medellín y envíos a todo Colombia.`}
+        url={urlActual}
+        jsonLd={jsonLd}
       />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -77,7 +137,7 @@ export default function Catalogo() {
             {titulo}
           </h1>
           {subcategoriaActual && (
-            <p className="mt-2 text-sm text-ink-2">· {subcategoriaActual.nombre}</p>
+            <p className="mt-2 text-sm text-ink-2">· {categoriaActual?.nombre}</p>
           )}
         </div>
 
@@ -102,6 +162,7 @@ export default function Catalogo() {
         <CatalogoResultados
           key={`${catalogo}|${categoria}|${subcategoria}|${q}`}
           parametros={parametros}
+          onProductos={setProductos}
         />
       </div>
     </>

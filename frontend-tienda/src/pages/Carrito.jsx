@@ -9,7 +9,11 @@ export default function Carrito() {
 
   return (
     <>
-      <Seo title="Carrito de compras" description="Revisa tu carrito de compras en Praga Medellín." />
+      <Seo
+        title="Carrito de compras"
+        description="Revisa tu carrito de compras en Praga Medellín."
+        noindex
+      />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex items-end justify-between gap-4">
@@ -61,6 +65,9 @@ export default function Carrito() {
                   <img
                     src={item.imagen_url}
                     alt={item.nombre}
+                    width={96}
+                    height={96}
+                    loading="lazy"
                     className="h-24 w-24 shrink-0 rounded-xl bg-surface-2 object-cover"
                   />
                   <div className="flex min-w-0 flex-1 flex-col">

@@ -53,4 +53,42 @@ WHERE `categoria_id` IN (SELECT `id` FROM `categorias` WHERE `nombre` = 'Gorras'
 -- 8) Ofertas: precio anterior (tachado) + índice para el filtro en_oferta
 ALTER TABLE `productos` ADD COLUMN `precio_antes` INT NULL AFTER `precio`;
 ALTER TABLE `productos` ADD INDEX `productos_precio_antes_index` (`precio_antes`);
+
+-- 9) Consecutivos race-safe (FAC-/DEV-) para varias cajas en paralelo.
+--    El valor inicial se auto-ajusta al último número real usado + 1 la primera
+--    vez que se genera un número, así que basta con crear la tabla.
+CREATE TABLE IF NOT EXISTS `consecutivos` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `tipo` VARCHAR(255) NOT NULL,
+  `valor` BIGINT UNSIGNED NOT NULL DEFAULT 1001,
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `consecutivos_tipo_unique` (`tipo`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 10) Formas de pago por venta (POS): Efectivo, Banco, Addi, Sistecredito, Bold.
+--     Una venta puede tener varias filas (pago dividido); la suma debe ser el total.
+CREATE TABLE IF NOT EXISTS `pagos` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `venta_id` BIGINT UNSIGNED NOT NULL,
+  `metodo_pago` VARCHAR(50) NOT NULL,
+  `monto` INT NOT NULL,
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL,
+  PRIMARY KEY (`id`),
+  KEY `pagos_venta_id_foreign` (`venta_id`),
+  CONSTRAINT `pagos_venta_id_foreign` FOREIGN KEY (`venta_id`) REFERENCES `ventas` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 11) Descuento por línea de venta (precio final < estándar). El descuento está en pesos.
+ALTER TABLE `detalle_ventas` ADD COLUMN `descuento` INT NOT NULL DEFAULT 0 AFTER `precio_unitario`;
+
+-- 12) Panel del DUEÑO: costo por producto (cuánto le sale al dueño). Null = sin costo.
+ALTER TABLE `productos` ADD COLUMN `costo` INT NULL AFTER `precio`;
+
+-- 13) Usuario del dueño (rol 'dueno') para el panel del dueño.
+--     Correo: oscar@pragamedellin.com · Contraseña: Oscar#2026 (hash bcrypt)
+INSERT INTO `users` (`name`, `email`, `rol`, `password`, `created_at`, `updated_at`)
+VALUES ('Oscar', 'oscar@pragamedellin.com', 'dueno', '$2y$10$vzg6IsVrz.RsBhKO/dYIUunxXIex3FVaJilfi.aRTPvuDaYJ5uQue', NOW(), NOW());
 -- =============================================================================

@@ -215,7 +215,14 @@ async function createProducto(body) {
     }
     variantes.push(variante)
     const inicial = Number(f.stock_inicial) || 0
-    sedes.forEach((s) => inventario.push({ variante_id: variante.id, sede_id: s.id, cantidad: inicial }))
+    const aplicar = Array.isArray(body.sedes) && body.sedes.length ? body.sedes.map(Number) : null
+    sedes.forEach((s) =>
+      inventario.push({
+        variante_id: variante.id,
+        sede_id: s.id,
+        cantidad: aplicar === null || aplicar.includes(s.id) ? inicial : 0,
+      }),
+    )
   })
   return nuevo
 }
@@ -283,10 +290,55 @@ async function updateProducto(id, body) {
       sedes.forEach((s) => inventario.push({ variante_id: variante.id, sede_id: s.id, cantidad: 0 }))
     })
   } else if (variantesForm.length) {
-    // Misma combinación: solo se actualizan los códigos de barras de las variantes
+    // Misma combinación: se actualizan los códigos de barras, se aplica el stock
+    // inicial por talla (a las 4 sedes), se agregan tallas nuevas y se quitan las
+    // que ya no vienen en el formulario.
     const lista = variantes.filter((v) => v.producto_id === p.id)
-    variantesForm.forEach((f, idx) => {
-      if (f && f.codigo_barras && lista[idx]) lista[idx].codigo_barras = f.codigo_barras
+    const claveTalla = (t) => (t === null || t === '' ? '__unica__' : String(t))
+    variantesForm.forEach((f) => {
+      const clave = claveTalla(f.talla)
+      const barra = f.codigo_barras
+      const tieneStock = f.stock_inicial !== '' && f.stock_inicial != null
+      let v = lista.find((x) => claveTalla(x.talla) === clave)
+      const aplicar = Array.isArray(body.sedes) && body.sedes.length ? body.sedes.map(Number) : null
+      if (!v) {
+        v = {
+          id: nextVarianteId(),
+          producto_id: p.id,
+          talla: f.talla === '' ? null : f.talla,
+          codigo_barras: barra || siguienteBarra(),
+        }
+        variantes.push(v)
+        const inicial = tieneStock ? Number(f.stock_inicial) : 0
+        sedes.forEach((s) =>
+          inventario.push({
+            variante_id: v.id,
+            sede_id: s.id,
+            cantidad: aplicar === null || aplicar.includes(s.id) ? inicial : 0,
+          }),
+        )
+      } else {
+        if (barra) v.codigo_barras = barra
+        if (tieneStock) {
+          inventario.forEach((i) => {
+            if (
+              i.variante_id === v.id &&
+              (aplicar === null || aplicar.includes(i.sede_id))
+            ) {
+              i.cantidad = Number(f.stock_inicial)
+            }
+          })
+        }
+      }
+    })
+    const presentes = new Set(variantesForm.map((f) => claveTalla(f.talla)))
+    lista.forEach((v) => {
+      if (!presentes.has(claveTalla(v.talla))) {
+        for (let j = inventario.length - 1; j >= 0; j -= 1) {
+          if (inventario[j].variante_id === v.id) inventario.splice(j, 1)
+        }
+        variantes.splice(variantes.indexOf(v), 1)
+      }
     })
   }
   return p
@@ -358,9 +410,12 @@ async function ajustarInventario({ variante_id, sede_id, tipo, cantidad, motivo 
 async function createVenta(body) {
   await delay()
 
-  const { empleado_id, sede_venta_id, tipo, items } = body
+  const { empleado_id, sede_venta_id, tipo, items, pagos } = body
   if (!empleado_id || !sede_venta_id || !Array.isArray(items) || items.length === 0) {
     throw new Error('Faltan datos para registrar la venta')
+  }
+  if (!Array.isArray(pagos) || pagos.length === 0) {
+    throw new Error('Debe registrar al menos una forma de pago')
   }
 
   const detalle = items.map((item) => {
@@ -371,15 +426,23 @@ async function createVenta(body) {
       throw new Error('Stock insuficiente en la sede para la variante solicitada')
     }
     reg.cantidad -= item.cantidad
+    const precioUnitario = Number(item.precio_unitario)
+    const precioFinal = item.precio_final ? Number(item.precio_final) : precioUnitario
+    if (precioFinal > precioUnitario) throw new Error('El precio final no puede ser mayor al unitario')
     return {
       variante_id: item.variante_id,
       sede_stock_id: Number(sede_venta_id),
       cantidad: item.cantidad,
-      precio_unitario: item.precio_unitario,
+      precio_unitario: precioUnitario,
+      precio_final: precioFinal,
+      descuento: (precioUnitario - precioFinal) * item.cantidad,
+      subtotal: precioFinal * item.cantidad,
     }
   })
 
-  const total = detalle.reduce((sum, d) => sum + d.cantidad * d.precio_unitario, 0)
+  const total = detalle.reduce((sum, d) => sum + d.subtotal, 0)
+  const sumaPagos = pagos.reduce((sum, p) => sum + (Number(p.monto) || 0), 0)
+  if (sumaPagos !== total) throw new Error('El total de los pagos no coincide con el total de la venta')
 
   const venta = {
     id: ventas.length + 1,
@@ -392,6 +455,8 @@ async function createVenta(body) {
   detalle.forEach((d) => (d.venta_id = venta.id))
   ventas.push(venta)
   detalleVentas.push(...detalle)
+  const pagosVenta = pagos.map((p) => ({ venta_id: venta.id, metodo_pago: p.metodo_pago, monto: Number(p.monto) || 0 }))
+  venta.pagos = pagosVenta
 
   const numero_interno = `FAC-${String(++facturaCounter).padStart(4, '0')}`
   const factura = { venta_id: venta.id, numero_interno, fecha: venta.fecha }
@@ -412,9 +477,12 @@ async function createVenta(body) {
         talla: v ? v.talla : null,
         cantidad: d.cantidad,
         precio_unitario: d.precio_unitario,
-        subtotal: d.cantidad * d.precio_unitario,
+        precio_final: d.precio_final,
+        descuento: d.descuento,
+        subtotal: d.subtotal,
       }
     }),
+    pagos: pagosVenta.map((p) => ({ metodo_pago: p.metodo_pago, monto: p.monto })),
     sede: sede ? sede.nombre : null,
     vendedor: vendedor ? vendedor.nombre : null,
     total,
@@ -579,6 +647,8 @@ async function getVentas(params = {}) {
     const e = empleados.find((em) => em.id === v.empleado_id)
     const sede = sedes.find((s) => s.id === v.sede_venta_id)
     const factura = facturas.find((f) => f.venta_id === v.id)
+    const detallesVenta = detalleVentas.filter((d) => d.venta_id === v.id)
+    const descuentoTotal = detallesVenta.reduce((s, d) => s + (d.descuento || 0), 0)
     return {
       id: v.id,
       factura: factura ? factura.numero_interno : null,
@@ -587,6 +657,8 @@ async function getVentas(params = {}) {
       sede_venta: sede ? sede.nombre : '—',
       tipo: v.tipo,
       total: v.total,
+      descuento_total: descuentoTotal,
+      pagos: (v.pagos || []).map((p) => ({ metodo_pago: p.metodo_pago, monto: p.monto })),
     }
   })
 
@@ -841,6 +913,90 @@ async function getDevolucionDetalle(id) {
   return formatearDevolucion(d, detalle)
 }
 
+// Panel del DUEÑO: valoración de mercancía por sede + lista de productos.
+async function getDuenoResumen() {
+  await delay()
+  const stockPorVarianteSede = (varianteId, sedeId) =>
+    (inventario.find((i) => i.variante_id === varianteId && i.sede_id === sedeId) || {}).cantidad || 0
+
+  const productosData = productos.map((p) => {
+    const vars = variantes.filter((v) => v.producto_id === p.id)
+    const stockPorSede = sedes.map((s) => ({
+      sede_id: s.id,
+      sede: s.nombre,
+      cantidad: vars.reduce((sum, v) => sum + stockPorVarianteSede(v.id, s.id), 0),
+    }))
+    const unidades = stockPorSede.reduce((sum, s) => sum + s.cantidad, 0)
+    const valorCosto = p.costo != null ? unidades * Number(p.costo) : 0
+    const valorVenta = unidades * Number(p.precio)
+    return {
+      producto_id: p.id,
+      nombre: p.nombre,
+      nombre_interno: p.nombre_interno,
+      categoria: categorias.find((c) => c.id === p.categoria_id)?.nombre || null,
+      subcategoria: subcategorias.find((s) => s.id === p.subcategoria_id)?.nombre || null,
+      catalogo: categorias.find((c) => c.id === p.categoria_id)?.catalogo || null,
+      precio: Number(p.precio),
+      costo: p.costo != null ? Number(p.costo) : null,
+      unidades,
+      valor_costo: valorCosto,
+      valor_venta: valorVenta,
+      margen: valorVenta - valorCosto,
+      stock_por_sede: stockPorSede,
+    }
+  })
+
+  const sedesData = sedes.map((s) => {
+    const stock = productosData.map((pd) => pd.stock_por_sede.find((x) => x.sede_id === s.id)?.cantidad || 0)
+    const unidades = stock.reduce((a, b) => a + b, 0)
+    const valorVenta = productosData.reduce(
+      (sum, pd) => sum + (pd.stock_por_sede.find((x) => x.sede_id === s.id)?.cantidad || 0) * pd.precio,
+      0,
+    )
+    const valorCosto = productosData.reduce(
+      (sum, pd) =>
+        sum +
+        (pd.costo != null ? (pd.stock_por_sede.find((x) => x.sede_id === s.id)?.cantidad || 0) * pd.costo : 0),
+      0,
+    )
+    const unidadesSinCosto = productosData.reduce(
+      (sum, pd) =>
+        sum + (pd.costo == null ? pd.stock_por_sede.find((x) => x.sede_id === s.id)?.cantidad || 0 : 0),
+      0,
+    )
+    return {
+      sede_id: s.id,
+      sede: s.nombre,
+      unidades,
+      valor_costo: valorCosto,
+      valor_venta: valorVenta,
+      margen: valorVenta - valorCosto,
+      unidades_sin_costo: unidadesSinCosto,
+    }
+  })
+
+  return {
+    sedes: sedesData,
+    total: {
+      unidades: productosData.reduce((s, p) => s + p.unidades, 0),
+      valor_costo: productosData.reduce((s, p) => s + p.valor_costo, 0),
+      valor_venta: productosData.reduce((s, p) => s + p.valor_venta, 0),
+      margen: productosData.reduce((s, p) => s + p.margen, 0),
+      productos_sin_costo: productos.filter((p) => p.costo == null).length,
+    },
+    productos: productosData,
+  }
+}
+
+// Edita el costo de un producto (panel del dueño).
+async function updateCosto(id, body) {
+  await delay(150)
+  const p = productos.find((pr) => pr.id === Number(id))
+  if (!p) throw new Error('Producto no encontrado')
+  p.costo = body.costo != null && body.costo !== '' ? Number(body.costo) : null
+  return { ok: true, id: Number(id), costo: p.costo }
+}
+
 export default {
   login,
   subirImagen,
@@ -865,4 +1021,6 @@ export default {
   crearDevolucion,
   getDevoluciones,
   getDevolucionDetalle,
+  getDuenoResumen,
+  updateCosto,
 }

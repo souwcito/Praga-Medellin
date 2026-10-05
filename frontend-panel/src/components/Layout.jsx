@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { catalogApi } from '../services/api'
+import { useCategorias } from '../hooks/useData'
 import BrandLogos from './BrandLogos'
 import {
   CartIcon,
@@ -30,6 +30,12 @@ const navItems = [
 const comercioItems = [
   { to: '/pedidos', label: 'Pedidos online', icon: PackageIcon },
   { to: '/clientes', label: 'Clientes', icon: UserIcon },
+]
+
+// Menú exclusivo del DUEÑO (rol 'dueno'): costos y mercancía
+const duenoItems = [
+  { to: '/dueno', label: 'Resumen', icon: DashboardIcon },
+  { to: '/dueno/productos', label: 'Productos y costos', icon: PackageIcon },
 ]
 
 // Item de navegación del sidebar
@@ -109,17 +115,11 @@ function CatalogoGrupo({ catalogo, titulo, lista, abierto, alternar, onNavigate 
 // drawer deslizable (hamburguesa en la barra superior); en lg+ queda fijo.
 export default function Layout() {
   const { user, logout } = useAuth()
-  const [categorias, setCategorias] = useState([])
+  const { data: categorias = [] } = useCategorias()
   const [catalogoAbierto, setCatalogoAbierto] = useState(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
 
-  useEffect(() => {
-    catalogApi
-      .getCategorias()
-      .then(setCategorias)
-      .catch(() => {})
-  }, [])
-
+  const esDueno = user?.rol === 'dueno'
   const hombres = categorias.filter((c) => c.catalogo === 'hombre')
   const mujeres = categorias.filter((c) => c.catalogo === 'mujer')
 
@@ -181,39 +181,52 @@ export default function Layout() {
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
-              Catálogos
-            </p>
-            <CatalogoGrupo
-              catalogo="hombre"
-              titulo="Catálogo Hombre"
-              lista={hombres}
-              abierto={catalogoAbierto === 'hombre'}
-              alternar={alternarCatalogo}
-              onNavigate={cerrarMenu}
-            />
-            <CatalogoGrupo
-              catalogo="mujer"
-              titulo="Catálogo Mujer"
-              lista={mujeres}
-              abierto={catalogoAbierto === 'mujer'}
-              alternar={alternarCatalogo}
-              onNavigate={cerrarMenu}
-            />
+            {esDueno ? (
+              <>
+                <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+                  Panel del dueño
+                </p>
+                {duenoItems.map((item) => (
+                  <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
+                ))}
+              </>
+            ) : (
+              <>
+                <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+                  Catálogos
+                </p>
+                <CatalogoGrupo
+                  catalogo="hombre"
+                  titulo="Catálogo Hombre"
+                  lista={hombres}
+                  abierto={catalogoAbierto === 'hombre'}
+                  alternar={alternarCatalogo}
+                  onNavigate={cerrarMenu}
+                />
+                <CatalogoGrupo
+                  catalogo="mujer"
+                  titulo="Catálogo Mujer"
+                  lista={mujeres}
+                  abierto={catalogoAbierto === 'mujer'}
+                  alternar={alternarCatalogo}
+                  onNavigate={cerrarMenu}
+                />
 
-            <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
-              Gestión
-            </p>
-            {navItems.map((item) => (
-              <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
-            ))}
+                <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+                  Gestión
+                </p>
+                {navItems.map((item) => (
+                  <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
+                ))}
 
-            <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
-              Comercial
-            </p>
-            {comercioItems.map((item) => (
-              <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
-            ))}
+                <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+                  Comercial
+                </p>
+                {comercioItems.map((item) => (
+                  <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
+                ))}
+              </>
+            )}
           </nav>
 
           <div className="border-t border-white/10 px-5 py-4">

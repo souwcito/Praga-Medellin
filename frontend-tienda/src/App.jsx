@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import ScrollToTop from './components/ScrollToTop'
 import { CartProvider } from './context/CartContext.jsx'
 import { FavoritesProvider } from './context/FavoritesContext.jsx'
 
@@ -25,11 +26,15 @@ export default function App() {
     <CartProvider>
       <FavoritesProvider>
         <BrowserRouter>
+          <ScrollToTop />
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route element={<Layout />}>
                 <Route path="/" element={<Home />} />
                 <Route path="/catalogo" element={<Catalogo />} />
+                <Route path="/catalogo/:catalogo" element={<Catalogo />} />
+                <Route path="/catalogo/:catalogo/:categoria" element={<Catalogo />} />
+                <Route path="/catalogo/:catalogo/:categoria/:subcategoria" element={<Catalogo />} />
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/producto/:id" element={<Producto />} />
                 <Route path="/carrito" element={<Carrito />} />

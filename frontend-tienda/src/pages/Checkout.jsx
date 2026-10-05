@@ -11,7 +11,11 @@ export default function Checkout() {
 
   return (
     <>
-      <Seo title="Finalizar compra" description="Finaliza tu compra en Praga Medellín con pago seguro Wompi." />
+      <Seo
+        title="Finalizar compra"
+        description="Finaliza tu compra en Praga Medellín con pago seguro Wompi."
+        noindex
+      />
 
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <h1 className="font-display text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">

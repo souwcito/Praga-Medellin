@@ -48,9 +48,11 @@ Backend Laravel 12 + Sanctum, probado en local con SQLite en `127.0.0.1:8000`.
 - `GET /api/inventario/completo` → matriz variante × sede:
   `[{ variante_id, producto_id, nombre, talla, sku, codigo_barras, imagen_url, stock: [{ sede_id, sede, cantidad }] }]`
 - `POST /api/inventario/ajustes` → `{ variante_id, sede_id, tipo: entrada|salida, cantidad, motivo? }`
-- `POST /api/ventas` → `{ empleado_id, sede_venta_id, tipo, items: [{ variante_id, cantidad, precio_unitario }] }`
-  → respuesta `{ venta, factura: { numero_interno }, items, sede, vendedor, total }`
-- `GET /api/ventas?periodo=&sede_id=&empleado_id=&tipo=&page=&per_page=` → `{ data: [...], meta: { total, per_page, current_page, last_page }, resumen: { totalVendido } }`
+- `POST /api/ventas` → `{ empleado_id, sede_venta_id, tipo, items: [{ variante_id, cantidad, precio_unitario, precio_final? }], pagos: [{ metodo_pago: efectivo|banco|addi|sistecredito|bold, monto }] }`
+  - `precio_final` opcional por línea (precio con descuento; debe ser ≤ `precio_unitario`). Si se omite, se vende al precio estándar.
+  - `pagos` obligatorio (mín. 1); la suma de montos debe ser exactamente el total de la venta.
+  → respuesta `{ venta, factura: { numero_interno }, items, pagos, sede, vendedor, total }`
+- `GET /api/ventas?periodo=&sede_id=&empleado_id=&tipo=&page=&per_page=` → `{ data: [{ ..., total, descuento_total, pagos: [{ metodo_pago, monto }] }], meta: {...}, resumen: { totalVendido } }`
 - `GET /api/dashboard?periodo=dia|semana|mes` →
   `{ total, numVentas, ticketPromedio, totalPorSede[], productosMasVendidos[], empleadoDestacado, ventasPorDia[] }`
 - `GET /api/comisiones?periodo=&sede_id=` → `[{ empleado_id, nombre, sede_id, sede, total, numVentas, ventas: [{ venta_id, fecha, sede_venta_id, tipo, total, factura }] }]`

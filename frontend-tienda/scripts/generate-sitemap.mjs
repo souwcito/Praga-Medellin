@@ -1,5 +1,6 @@
 // Genera dist/sitemap.xml y dist/robots.txt después del build de Vite.
-// - Consulta la API de producción (VITE_API_URL) para listar los productos.
+// - Consulta la API de producción (VITE_API_URL) para listar productos, categorías
+//   y subcategorías (URLs limpias /catalogo/:catalogo/:categoria/:subcategoria).
 // - Fail-soft: si la API no responde, genera el sitemap solo con las URLs estáticas.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
@@ -24,10 +25,10 @@ function apiUrl() {
 const BASE = 'https://pragamedellin.com'
 const API = apiUrl()
 
-async function obtenerProductos() {
+async function obtenerJson(ruta) {
   if (!API) return []
   try {
-    const res = await fetch(`${API}/productos`)
+    const res = await fetch(`${API}/${ruta}`)
     if (!res.ok) return []
     const data = await res.json()
     return Array.isArray(data) ? data : []
@@ -46,35 +47,69 @@ function escapar(s) {
     .replace(/"/g, '&quot;')
 }
 
-function generarSitemap(productos) {
+function urlBase(url) {
+  return {
+    loc: url,
+    lastmod: hoy,
+    changefreq: 'daily',
+    priority: '0.8',
+  }
+}
+
+function generarSitemap({ productos, categorias, subcategorias }) {
   const urls = [
-    { loc: `${BASE}/`, changefreq: 'daily', priority: '1.0' },
-    { loc: `${BASE}/catalogo`, changefreq: 'daily', priority: '0.9' },
-    { loc: `${BASE}/promociones`, changefreq: 'daily', priority: '0.8' },
+    { loc: `${BASE}/`, lastmod: hoy, changefreq: 'daily', priority: '1.0' },
+    { loc: `${BASE}/catalogo`, lastmod: hoy, changefreq: 'daily', priority: '0.9' },
+    { loc: `${BASE}/catalogo/hombre`, lastmod: hoy, changefreq: 'daily', priority: '0.9' },
+    { loc: `${BASE}/catalogo/mujer`, lastmod: hoy, changefreq: 'daily', priority: '0.9' },
+    { loc: `${BASE}/promociones`, lastmod: hoy, changefreq: 'daily', priority: '0.8' },
   ]
+
+  // Categorías → /catalogo/:catalogo/:categoria
+  categorias.forEach((c) => {
+    urls.push(urlBase(`${BASE}/catalogo/${c.catalogo || 'hombre'}/${c.id}`))
+  })
+
+  // Subcategorías → /catalogo/:catalogo/:categoria/:subcategoria
+  subcategorias.forEach((s) => {
+    const cat = categorias.find((c) => c.id === s.categoria_id)
+    urls.push(urlBase(`${BASE}/catalogo/${cat?.catalogo || 'hombre'}/${s.categoria_id}/${s.id}`))
+  })
+
+  // Productos (con imagen y fecha real si la API la entrega)
   productos.forEach((p) => {
-    urls.push({ loc: `${BASE}/producto/${p.id}`, changefreq: 'weekly', priority: '0.8', lastmod: hoy })
+    const fecha = p.updated_at ? String(p.updated_at).slice(0, 10) : hoy
+    urls.push({ loc: `${BASE}/producto/${p.id}`, lastmod: fecha, changefreq: 'weekly', priority: '0.8' })
   })
 
   const cuerpo = urls
-    .map(
-      (u) =>
-        `  <url>\n    <loc>${escapar(u.loc)}</loc>\n    <lastmod>${u.lastmod || hoy}</lastmod>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`,
-    )
+    .map((u) => {
+      let bloque = `  <url>\n    <loc>${escapar(u.loc)}</loc>\n    <lastmod>${escapar(u.lastmod)}</lastmod>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n`
+      if (u.imagen) bloque += `    <image:image>\n      <image:loc>${escapar(u.imagen)}</image:loc>\n    </image:image>\n`
+      bloque += `  </url>`
+      return bloque
+    })
     .join('\n')
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${cuerpo}\n</urlset>\n`
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${cuerpo}\n</urlset>\n`
 }
 
 const robots = `User-agent: *
 Allow: /
+Disallow: /carrito
+Disallow: /checkout
 Sitemap: ${BASE}/sitemap.xml
 `
 
-const productos = await obtenerProductos()
-writeFileSync(resolve(ROOT, 'dist/sitemap.xml'), generarSitemap(productos))
+const [productos, categorias, subcategorias] = await Promise.all([
+  obtenerJson('productos'),
+  obtenerJson('categorias'),
+  obtenerJson('subcategorias'),
+])
+
+writeFileSync(resolve(ROOT, 'dist/sitemap.xml'), generarSitemap({ productos, categorias, subcategorias }))
 writeFileSync(resolve(ROOT, 'dist/robots.txt'), robots)
 
 console.log(
-  `[sitemap] generado con ${productos.length + 2} URLs (${productos.length} productos)`,
+  `[sitemap] ${3 + categorias.length + subcategorias.length + productos.length} URLs (${productos.length} productos, ${categorias.length} categorías, ${subcategorias.length} subcategorías)`,
 )

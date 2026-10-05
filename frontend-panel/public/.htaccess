@@ -19,7 +19,12 @@
   ExpiresByType text/html "access plus 0 seconds"
 </IfModule>
 
-# Seguridad: impedir que el panel se indexe
+# Seguridad: impedir que el panel se indexe + nunca cachear el HTML del panel
+# (el raíz pone s-maxage al HTML; aquí se sobreescribe para que la CDN no sirva
+# builds viejos del SPA tras un deploy).
 <IfModule mod_headers.c>
   Header set X-Robots-Tag "noindex, nofollow"
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
 </IfModule>

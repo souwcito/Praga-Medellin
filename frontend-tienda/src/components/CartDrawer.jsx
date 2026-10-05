@@ -70,6 +70,9 @@ export default function CartDrawer() {
                   <img
                     src={item.imagen_url}
                     alt={item.nombre}
+                    width={64}
+                    height={64}
+                    loading="lazy"
                     className="h-16 w-16 shrink-0 rounded-lg bg-surface-2 object-cover"
                   />
                   <div className="min-w-0 flex-1">

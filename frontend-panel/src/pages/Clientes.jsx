@@ -1,22 +1,9 @@
-import { useEffect, useState } from 'react'
-import { clientesApi } from '../services/api'
+import { useClientes } from '../hooks/useData'
 import { AlertIcon, UserIcon } from '../components/icons'
 
 export default function Clientes() {
-  const [clientes, setClientes] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    clientesApi
-      .getClientes()
-      .then((c) => {
-        setClientes(c || [])
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando clientes'))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data: clientes = [], isLoading: loading, isError, error: errorRaw } = useClientes()
+  const error = errorRaw?.message || (isError ? 'Error cargando clientes' : null)
 
   return (
     <div className="animate-fade-up mx-auto max-w-6xl">

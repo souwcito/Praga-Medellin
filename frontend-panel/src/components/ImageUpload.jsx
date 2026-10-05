@@ -1,10 +1,11 @@
 // Subida de imagen del producto desde el administrador de archivos (no por URL).
-// En modo mock se guarda como data URL; en producción el backend devuelve la URL.
+// La imagen se comprime en el navegador antes de subir para que sea rápida.
 import { useRef, useState } from 'react'
 import { imagenesApi } from '../services/api'
+import { prepararArchivoImagen } from '../utils/imagenes'
 import { AlertIcon, UploadIcon, XIcon } from './icons'
 
-const MAX_MB = 3
+const MAX_MB = 25
 const INPUT_ID = 'imagen-producto'
 
 export default function ImageUpload({ value, onChange }) {
@@ -25,7 +26,8 @@ export default function ImageUpload({ value, onChange }) {
     setSubiendo(true)
     setError(null)
     try {
-      const res = await imagenesApi.subir(file)
+      const preparada = await prepararArchivoImagen(file)
+      const res = await imagenesApi.subir(preparada)
       onChange(res.imagen_url)
       if (inputRef.current) inputRef.current.value = ''
     } catch (err) {
@@ -83,7 +85,7 @@ export default function ImageUpload({ value, onChange }) {
         >
           <UploadIcon className="h-6 w-6 text-ink-2/60" />
           {subiendo ? 'Subiendo imagen…' : 'Haz clic o arrastra la imagen aquí'}
-          <span className="text-xs text-ink-2/60">PNG o JPG · máx. {MAX_MB} MB</span>
+          <span className="text-xs text-ink-2/60">JPG, PNG, WebP o HEIC · se optimiza antes de subir</span>
         </label>
       )}
 

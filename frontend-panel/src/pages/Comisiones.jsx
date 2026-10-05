@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { catalogApi, comisionesApi } from '../services/api'
+import { useMemo, useState } from 'react'
+import { useSedes, useComisiones } from '../hooks/useData'
 import PeriodFilter from '../components/PeriodFilter'
 import { AlertIcon, ChevronDownIcon, StoreIcon } from '../components/icons'
 
@@ -32,39 +32,23 @@ const inicialesDe = (nombre) =>
 export default function Comisiones() {
   const [periodo, setPeriodo] = useState('mes')
   const [sedeId, setSedeId] = useState('')
-  const [sedes, setSedes] = useState([])
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const { data: sedes = [] } = useSedes()
   const [expanded, setExpanded] = useState(null)
 
-  useEffect(() => {
-    catalogApi
-      .getSedes()
-      .then(setSedes)
-      .catch((err) => setError(err?.message || 'Error cargando sedes'))
-  }, [])
-
-  useEffect(() => {
-    comisionesApi
-      .getResumen({ periodo, sede_id: sedeId || undefined })
-      .then((d) => {
-        setData(d)
-        setError(null)
-      })
-      .catch((err) => setError(err?.message || 'Error cargando el informe'))
-      .finally(() => setLoading(false))
-  }, [periodo, sedeId])
+  const params = useMemo(
+    () => ({ periodo, sede_id: sedeId || undefined }),
+    [periodo, sedeId],
+  )
+  const { data, isLoading: loading, isError, error: errorRaw } = useComisiones(params)
+  const error = errorRaw?.message || (isError ? 'Error cargando el informe' : null)
 
   function cambiarPeriodo(p) {
     if (p === periodo) return
     setPeriodo(p)
-    setLoading(true)
   }
 
   function cambiarSede(e) {
     setSedeId(e.target.value)
-    setLoading(true)
   }
 
   const totalPeriodo = data ? data.reduce((sum, e) => sum + e.total, 0) : 0

@@ -6,6 +6,7 @@ use App\Models\Venta;
 use App\Models\Empleado;
 use App\Models\Sede;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ComisionController extends Controller
 {
@@ -19,7 +20,10 @@ class ComisionController extends Controller
     // Ventas por vendedor (informativo, sin cálculo de comisión)
     public function index(Request $request)
     {
-        $query = Venta::with('factura');
+        $clave = 'comisiones_' . md5(json_encode($request->only(['periodo', 'sede_id']))) . '_' . $this->cacheVersion();
+
+        $lista = Cache::remember($clave, 20, function () use ($request) {
+            $query = Venta::with('factura');
         if ($request->filled('periodo')) {
             $query->where('created_at', '>=', $this->inicioPeriodo($request->periodo));
         }
@@ -63,6 +67,9 @@ class ComisionController extends Controller
         }
 
         usort($lista, fn ($a, $b) => $b['total'] <=> $a['total']);
+            return $lista;
+        });
+
         return response()->json($lista);
     }
 }
