@@ -5,9 +5,9 @@
 // vivir como datos semilla en la base de datos real. Aquí se replica como seed.
 
 export const sedes = [
-  { id: 1, nombre: 'Praga Medellín - Aranjuez', direccion: 'Calle 78 # 54-20, Aranjuez' },
+  { id: 1, nombre: 'Praga Medellin - Aranjuez', direccion: 'Calle 78 # 54-20, Aranjuez' },
   { id: 2, nombre: 'Praga Woman', direccion: 'Carrera 65 # 45-30, Prado Centro' },
-  { id: 3, nombre: 'Praga Medellín - Andalucía', direccion: 'Carrera 65 # 73-45, Andalucía' },
+  { id: 3, nombre: 'Praga Medellin - Andalucia', direccion: 'Carrera 65 # 73-45, Andalucia' },
   { id: 4, nombre: 'Akron Store', direccion: 'Calle 30 # 35-10, Buenos Aires' },
 ]
 
@@ -15,10 +15,11 @@ export const sedes = [
 // y el vendedor se elige al facturar en el POS.
 export const empleados = [
   { id: 1, nombre: 'Michael', sede_id: 1, rol: 'cajero' },
-  { id: 2, nombre: 'María Fernanda', sede_id: 2, rol: 'cajero' },
+  { id: 2, nombre: 'Miguel', sede_id: 2, rol: 'cajero' },
   { id: 3, nombre: 'Liseth', sede_id: 3, rol: 'cajero' },
   { id: 4, nombre: 'Bibiana', sede_id: 3, rol: 'cajero' },
   { id: 5, nombre: 'Sara', sede_id: 4, rol: 'cajero' },
+  { id: 6, nombre: 'Oscar', sede_id: 3, rol: 'administrador' },
 ]
 
 // ---------------------------------------------------------------------------

@@ -362,7 +362,7 @@ function Registrar() {
             <option value="">Selecciona un vendedor…</option>
             {empleados.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.nombre} — {v.sede_nombre}
+                {v.rol === 'administrador' ? `${v.nombre} Administrador` : v.nombre}
               </option>
             ))}
           </select>

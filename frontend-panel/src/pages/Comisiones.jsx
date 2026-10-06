@@ -170,8 +170,7 @@ export default function Comisiones() {
                       {inicialesDe(emp.nombre)}
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium text-ink">{emp.nombre}</span>
-                      <span className="block truncate text-xs text-ink-2">{emp.sede}</span>
+                      <span className="block truncate text-sm font-medium text-ink">{emp.nombre}</span>
                     </span>
                   </span>
                   <span className="text-center text-sm text-ink">{emp.numVentas}</span>

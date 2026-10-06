@@ -106,6 +106,7 @@ async function getInventario({ sede_id }) {
         sku: p.sku,
         codigo_barras: v.codigo_barras,
         imagen_url: p.imagen_url,
+        imagenes: p.imagenes && p.imagenes.length ? p.imagenes : p.imagen_url ? [p.imagen_url] : [],
         stock: i.cantidad,
       }
     })

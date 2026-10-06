@@ -29,8 +29,8 @@ class SedeSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'nombre' => 'Praga Andalucía',
-                'direccion' => 'Calle 107 # 47-27, Andalucía',
+                'nombre' => 'Praga Andalucia',
+                'direccion' => 'Calle 107 # 47-27, Andalucia',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

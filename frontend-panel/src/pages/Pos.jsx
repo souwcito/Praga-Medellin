@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ventasApi } from '../services/api'
 import { useSedes, useEmpleados, useInventarioSede } from '../hooks/useData'
@@ -8,6 +8,8 @@ import {
   AlertIcon,
   CartIcon,
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   MinusIcon,
   PlusIcon,
   PrinterIcon,
@@ -45,15 +47,40 @@ const precioFinalItem = (item) =>
 const descuentoLinea = (item) => (item.precio - precioFinalItem(item)) * item.cantidad
 
 // Tarjeta de producto (memoizada: el grid no se re-renderiza al escribir en el carrito)
-const ProductoCard = memo(function ProductoCard({ v, i, onAgregar }) {
+// La foto abre un visor grande (hover con retardo o clic); el resto de la tarjeta agrega al carrito.
+const ProductoCard = memo(function ProductoCard({ v, i, onAgregar, onVer }) {
+  const hoverRef = useRef(null)
+
+  const cancelar = useCallback(() => {
+    if (hoverRef.current) {
+      clearTimeout(hoverRef.current)
+      hoverRef.current = null
+    }
+  }, [])
+
+  const programar = useCallback(() => {
+    cancelar()
+    hoverRef.current = setTimeout(() => onVer(v), 400)
+  }, [cancelar, onVer, v])
+
+  useEffect(() => cancelar, [cancelar])
+
   return (
-    <button
-      type="button"
-      onClick={() => onAgregar(v)}
+    <div
       style={{ animationDelay: `${Math.min(i, 14) * 35}ms` }}
-      className="animate-fade-up group flex flex-col overflow-hidden rounded-2xl border border-line bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:border-metal hover:shadow-[0_12px_32px_-12px_rgba(10,10,10,0.18)]"
+      className="animate-fade-up group flex flex-col overflow-hidden rounded-2xl border border-line bg-white transition-all duration-300 hover:-translate-y-1 hover:border-metal hover:shadow-[0_12px_32px_-12px_rgba(10,10,10,0.18)]"
     >
-      <div className="relative aspect-square overflow-hidden bg-surface-2">
+      {/* Foto: abre el visor de imágenes */}
+      <button
+        type="button"
+        onClick={() => onVer(v)}
+        onMouseEnter={programar}
+        onMouseLeave={cancelar}
+        onFocus={programar}
+        onBlur={cancelar}
+        title="Ver imágenes del producto"
+        className="relative block aspect-square w-full cursor-zoom-in overflow-hidden bg-surface-2"
+      >
         <img
           src={v.imagen_url}
           alt={v.nombre}
@@ -70,8 +97,22 @@ const ProductoCard = memo(function ProductoCard({ v, i, onAgregar }) {
             {v.talla}
           </span>
         )}
-      </div>
-      <div className="flex flex-1 flex-col p-3">
+        {v.imagenes?.length > 1 && (
+          <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-ink/85 px-2 py-0.5 text-[10px] font-semibold text-white">
+            {v.imagenes.length} fotos
+          </span>
+        )}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent pb-2 pt-8 text-[11px] font-medium text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <SearchIcon className="h-3.5 w-3.5" /> Ver fotos
+        </span>
+      </button>
+
+      {/* Info + agregar al carrito */}
+      <button
+        type="button"
+        onClick={() => onAgregar(v)}
+        className="flex flex-1 flex-col p-3 text-left transition-colors hover:bg-surface-2/40 active:bg-surface-2/60"
+      >
         <p className="line-clamp-2 text-sm font-medium text-ink">{v.nombre}</p>
         <p className="mt-0.5 text-[11px] text-ink-2/70">Cód. {v.codigo_barras}</p>
         <div className="mt-auto flex items-center justify-between pt-3">
@@ -80,10 +121,94 @@ const ProductoCard = memo(function ProductoCard({ v, i, onAgregar }) {
             <PlusIcon className="h-4 w-4" />
           </span>
         </div>
-      </div>
-    </button>
+      </button>
+    </div>
   )
 })
+
+// Visor de imágenes grande: flechas a los lados si hay más de una, teclado y cierre.
+function GaleriaModal({ data, onClose }) {
+  const total = data.imagenes.length
+  const [index, setIndex] = useState(() =>
+    Math.min(Math.max(data.index || 0, 0), Math.max(total - 1, 0)),
+  )
+
+  const anterior = useCallback(
+    () => setIndex((i) => (i - 1 + total) % total),
+    [total],
+  )
+  const siguiente = useCallback(() => setIndex((i) => (i + 1) % total), [total])
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowLeft') anterior()
+      else if (e.key === 'ArrowRight') siguiente()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [anterior, siguiente, onClose])
+
+  return (
+    <div
+      className="animate-fade-in fixed inset-0 z-[60] flex flex-col bg-dark/90 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div className="flex items-center justify-between gap-4 px-4 py-3 text-white sm:px-6">
+        <p className="min-w-0 truncate text-sm font-medium">{data.nombre}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          aria-label="Cerrar visor"
+        >
+          <XIcon className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center px-3 pb-2 sm:px-20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <img
+          src={data.imagenes[index]}
+          alt={`${data.nombre} — imagen ${index + 1}`}
+          onClick={total > 1 ? siguiente : undefined}
+          className={`max-h-full max-w-full rounded-2xl object-contain shadow-2xl shadow-black/50 ${
+            total > 1 ? 'cursor-pointer' : ''
+          }`}
+        />
+
+        {total > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={anterior}
+              className="absolute left-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/25 active:scale-90 sm:left-4"
+              aria-label="Imagen anterior"
+            >
+              <ChevronLeftIcon className="h-6 w-6" />
+            </button>
+            <button
+              type="button"
+              onClick={siguiente}
+              className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/25 active:scale-90 sm:right-4"
+              aria-label="Imagen siguiente"
+            >
+              <ChevronRightIcon className="h-6 w-6" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {total > 1 && (
+        <div className="pb-4 text-center text-xs font-medium text-white/60">
+          {index + 1} / {total}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Pos() {
   const queryClient = useQueryClient()
@@ -108,8 +233,16 @@ export default function Pos() {
   const [modalAbierto, setModalAbierto] = useState(false)
   const [resumenAbierto, setResumenAbierto] = useState(false)
   const [pagos, setPagos] = useState([])
+  const [galeria, setGaleria] = useState(null)
 
   const searchRef = useRef(null)
+
+  // Abre el visor grande con las imágenes del producto (o su principal si solo hay una).
+  const verImagenes = useCallback((v) => {
+    const imgs = v.imagenes && v.imagenes.length ? v.imagenes : v.imagen_url ? [v.imagen_url] : []
+    if (!imgs.length) return
+    setGaleria({ nombre: v.nombre, imagenes: imgs, index: 0 })
+  }, [])
 
   // La búsqueda con useDeferredValue mantiene la UI fluida mientras se filtra
   const busquedaDeferred = useDeferredValue(busqueda)
@@ -300,7 +433,7 @@ export default function Pos() {
             <option value="">Selecciona un vendedor…</option>
             {empleados.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.nombre} — {v.sede_nombre}
+                {v.rol === 'administrador' ? `${v.nombre} Administrador` : v.nombre}
               </option>
             ))}
           </select>
@@ -370,7 +503,7 @@ export default function Pos() {
           ) : (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
               {variantesFiltradas.map((v, i) => (
-                <ProductoCard key={v.variante_id} v={v} i={i} onAgregar={agregar} />
+                <ProductoCard key={v.variante_id} v={v} i={i} onAgregar={agregar} onVer={verImagenes} />
               ))}
             </div>
           )}
@@ -726,6 +859,9 @@ export default function Pos() {
           </div>
         </div>
       )}
+
+      {/* Visor grande de imágenes del producto */}
+      {galeria && <GaleriaModal data={galeria} onClose={() => setGaleria(null)} />}
     </div>
   )
 }

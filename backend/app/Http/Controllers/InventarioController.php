@@ -40,12 +40,21 @@ class InventarioController extends Controller
                     'productos.sku',
                     'variantes.codigo_barras',
                     'productos.imagen_url',
+                    'productos.imagenes',
                     'inventarios.stock'
                 )
                 ->orderBy('productos.nombre')
                 ->get()
                 ->map(function ($r) {
+                    // Galería del POS: todas las imágenes del producto (URL absoluta).
+                    // Fallback a la principal si el producto solo tiene una.
                     $r->imagen_url = $this->imagenUrl($r->imagen_url);
+                    $imgs = json_decode($r->imagenes ?? '[]', true);
+                    $imgs = is_array($imgs) ? array_values(array_filter($imgs)) : [];
+                    if (!$imgs && $r->imagen_url) {
+                        $imgs = [$r->imagen_url];
+                    }
+                    $r->imagenes = array_map(fn ($i) => $this->imagenUrl($i), $imgs);
                     return $r;
                 });
         });

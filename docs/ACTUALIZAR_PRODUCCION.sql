@@ -108,4 +108,17 @@ WHERE `catalogo`='hombre' AND `nombre`='Correas'
 AND NOT EXISTS (
   SELECT 1 FROM (SELECT `id` FROM `subcategorias` WHERE `nombre`='Correas Premium 1.1') AS t
 );
+
+-- 15) Vendedores: 'María Fernanda' → 'Miguel' (empleado id=2) y sede 'Praga Andalucía'
+--     sin tilde (la í se veía como símbolo en el selector de vendedor). Se fija por
+--     id para que funcione aunque el texto esté mal codificado. Oscar queda como
+--     administrador que también factura (se muestra "Oscar Administrador").
+UPDATE `empleados` SET `nombre` = 'Miguel' WHERE `id` = 2;
+UPDATE `sedes` SET `nombre` = 'Praga Andalucia', `direccion` = 'Calle 107 # 47-27, Andalucia' WHERE `id` = 4;
+
+INSERT INTO `empleados` (`nombre`, `rol`, `sede_id`, `created_at`, `updated_at`)
+SELECT 'Oscar', 'administrador', 3, NOW(), NOW()
+WHERE NOT EXISTS (
+  SELECT 1 FROM (SELECT `id` FROM `empleados` WHERE `nombre` = 'Oscar' AND `rol` = 'administrador') AS t
+);
 -- =============================================================================

@@ -159,6 +159,18 @@ export const ChevronDownIcon = (p) => (
   </Icon>
 )
 
+export const ChevronLeftIcon = (p) => (
+  <Icon {...p}>
+    <path d="m15 18-6-6 6-6" />
+  </Icon>
+)
+
+export const ChevronRightIcon = (p) => (
+  <Icon {...p}>
+    <path d="m9 18 6-6-6-6" />
+  </Icon>
+)
+
 export const EditIcon = (p) => (
   <Icon {...p}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />

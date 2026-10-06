@@ -1,6 +1,6 @@
 // Sedes de Praga Medellín con sus direcciones (enlace a Google Maps).
 export const sedes = [
-  { nombre: 'Praga Medellín · Andalucía', direccion: 'Calle 107 # 47-27' },
+  { nombre: 'Praga Medellín · Andalucia', direccion: 'Calle 107 # 47-27' },
   { nombre: 'Praga Medellín · Aranjuez', direccion: 'Cra 49 A # 92-24' },
   { nombre: 'Akron Store Castilla', direccion: 'Cra 68 # 93-24' },
   { nombre: 'Praga Woman Castilla', direccion: 'Calle 92B # 66 A 47' },
