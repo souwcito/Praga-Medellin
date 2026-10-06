@@ -91,4 +91,21 @@ ALTER TABLE `productos` ADD COLUMN `costo` INT NULL AFTER `precio`;
 --     Correo: oscar@pragamedellin.com · Contraseña: Oscar#2026 (hash bcrypt)
 INSERT INTO `users` (`name`, `email`, `rol`, `password`, `created_at`, `updated_at`)
 VALUES ('Oscar', 'oscar@pragamedellin.com', 'dueno', '$2y$10$vzg6IsVrz.RsBhKO/dYIUunxXIex3FVaJilfi.aRTPvuDaYJ5uQue', NOW(), NOW());
+
+-- 14) Categoría CORREAS en el catálogo Hombre, con su subcategoría Premium 1.1.
+--     Tallas OPCIONALES: el administrador decide si la correa es talla única o
+--     le pone tallas libres (numéricas o en letras) al crearla en el panel.
+INSERT INTO `categorias` (`catalogo`, `nombre`, `tallas`, `tallas_opcionales`, `created_at`, `updated_at`)
+SELECT 'hombre', 'Correas', NULL, 1, NOW(), NOW()
+WHERE NOT EXISTS (
+  SELECT 1 FROM (SELECT `id` FROM `categorias` WHERE `catalogo`='hombre' AND `nombre`='Correas') AS t
+);
+
+INSERT INTO `subcategorias` (`categoria_id`, `nombre`, `tallas`, `created_at`, `updated_at`)
+SELECT `id`, 'Correas Premium 1.1', NULL, NOW(), NOW()
+FROM `categorias`
+WHERE `catalogo`='hombre' AND `nombre`='Correas'
+AND NOT EXISTS (
+  SELECT 1 FROM (SELECT `id` FROM `subcategorias` WHERE `nombre`='Correas Premium 1.1') AS t
+);
 -- =============================================================================

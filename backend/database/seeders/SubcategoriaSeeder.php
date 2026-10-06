@@ -31,6 +31,7 @@ class SubcategoriaSeeder extends Seeder
             ['hombre|Chanclas', 'Chanclas Turcas', $chanclasH],
             ['hombre|Conjuntos', 'Conjuntos Premium 1.1', $ropaH],
             ['hombre|Conjuntos', 'Conjuntos Turcos', $ropaH],
+            ['hombre|Correas', 'Correas Premium 1.1', null],
             ['hombre|Gorras', 'Gorras Originales', $gorrasH],
             ['hombre|Gorras', 'Gorras Premium 1.1', $gorrasH],
             ['hombre|Gorras', 'Gorras Turcas', $gorrasH],

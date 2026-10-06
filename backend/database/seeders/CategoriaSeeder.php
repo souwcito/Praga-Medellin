@@ -17,6 +17,7 @@ class CategoriaSeeder extends Seeder
             ['hombre', 'Camisetas', null],
             ['hombre', 'Chanclas', null],
             ['hombre', 'Conjuntos', null],
+            ['hombre', 'Correas', null],
             ['hombre', 'Gorras', null],
             ['hombre', 'Jeans', json_encode(['30', '32', '34', '36', '38'])],
             ['hombre', 'Mochos', json_encode(['28', '30', '32', '34', '36', '38'])],
@@ -50,7 +51,7 @@ class CategoriaSeeder extends Seeder
                 'catalogo' => $catalogo,
                 'nombre' => $nombre,
                 'tallas' => $tallas,
-                'tallas_opcionales' => $nombre === 'Gorras',
+                'tallas_opcionales' => in_array($nombre, ['Gorras', 'Correas'], true),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

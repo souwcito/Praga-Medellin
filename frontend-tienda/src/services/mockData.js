@@ -20,6 +20,7 @@ export const categorias = [
   { id: 11, nombre: 'Sudaderas', catalogo: 'hombre' },
   { id: 12, nombre: 'Tenis', catalogo: 'hombre' },
   { id: 29, nombre: 'Relojes', catalogo: 'hombre' },
+  { id: 30, nombre: 'Correas', tallas_opcionales: true, catalogo: 'hombre' },
 
   // Catálogo Mujer
   { id: 13, nombre: 'Blusas', tallas: ['XS/S', 'S/M', 'M/L'], catalogo: 'mujer' },
@@ -61,6 +62,9 @@ export const subcategorias = [
   { id: 18, categoria_id: 12, nombre: 'Tenis Originales', tallas: TALLAS_TENIS },
   { id: 19, categoria_id: 12, nombre: 'Tenis Premium 1.1', tallas: TALLAS_TENIS },
   { id: 20, categoria_id: 12, nombre: 'Tenis Turcos', tallas: TALLAS_TENIS },
+
+  // Correas (Hombre)
+  { id: 29, categoria_id: 30, nombre: 'Correas Premium 1.1', tallas: [] },
 
   // Relojes (Hombre y Mujer)
   { id: 25, categoria_id: 29, nombre: 'Relojes Originales', tallas: [] },
