@@ -6,6 +6,7 @@ import { useCategorias, useSedes, useSubcategorias, useProductos } from '../hook
 import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
 import { urlImagen } from '../utils/imagenes'
 import MultiImageUpload from '../components/MultiImageUpload'
+import Modal from '../components/Modal'
 import {
   AlertIcon,
   CheckIcon,
@@ -542,7 +543,7 @@ export default function Productos() {
 
       {/* Formulario crear/editar */}
       {form !== null && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
+        <Modal className="animate-fade-in z-50 flex items-center justify-center bg-dark/70 p-4">
           <div className="animate-scale-in flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-line px-6 py-4">
               <div>
@@ -985,12 +986,12 @@ export default function Productos() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Confirmación de eliminación */}
       {modalDelete && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
+        <Modal className="animate-fade-in z-50 flex items-center justify-center bg-dark/70 p-4">
           <div className="animate-scale-in w-full max-w-sm rounded-2xl bg-white p-6">
             <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
               ¿Eliminar producto?
@@ -1019,7 +1020,7 @@ export default function Productos() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

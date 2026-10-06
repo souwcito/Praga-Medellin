@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { inventarioApi } from '../services/api'
 import { useCategorias, useInventarioCompleto } from '../hooks/useData'
+import Modal from '../components/Modal'
 import {
   AlertIcon,
   CheckIcon,
@@ -361,7 +362,7 @@ export default function Inventario() {
 
       {/* Modal de ajuste de stock */}
       {modal && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
+        <Modal className="animate-fade-in z-50 flex items-center justify-center bg-dark/70 p-4">
           <div className="animate-scale-in w-full max-w-sm rounded-2xl bg-white p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-display text-xl font-semibold tracking-tight text-ink">Ajustar stock</h3>
@@ -456,7 +457,7 @@ export default function Inventario() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

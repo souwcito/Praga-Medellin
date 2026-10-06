@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { devolucionesApi, ventasApi } from '../services/api'
 import { useSedes, useEmpleados, useInventarioSede, useDevoluciones, useDevolucionDetalle } from '../hooks/useData'
 import PeriodFilter from '../components/PeriodFilter'
+import Modal from '../components/Modal'
 import {
   AlertIcon,
   CheckIcon,
@@ -799,7 +800,7 @@ function Registrar() {
 
       {/* Modal de éxito */}
       {resultado && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
+        <Modal className="animate-fade-in z-50 flex items-center justify-center bg-dark/70 p-4">
           <div className="animate-scale-in w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -865,7 +866,7 @@ function Registrar() {
               Seguir registrando
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
@@ -1114,7 +1115,7 @@ function Historial() {
 
       {/* Modal de detalle */}
       {detalle && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-dark/70 p-4">
+        <Modal className="animate-fade-in z-50 flex items-center justify-center bg-dark/70 p-4">
           <div className="animate-scale-in max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -1221,7 +1222,7 @@ function Historial() {
               </>
             )}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

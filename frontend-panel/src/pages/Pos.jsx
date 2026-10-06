@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ventasApi } from '../services/api'
 import { useSedes, useEmpleados, useInventarioSede } from '../hooks/useData'
 import { Comprobante } from '../components/Comprobante'
+import Modal from '../components/Modal'
 import { imprimirComprobante } from '../utils/print'
 import {
   AlertIcon,
@@ -47,37 +48,24 @@ const precioFinalItem = (item) =>
 const descuentoLinea = (item) => (item.precio - precioFinalItem(item)) * item.cantidad
 
 // Tarjeta de producto (memoizada: el grid no se re-renderiza al escribir en el carrito)
-// La foto abre un visor grande (hover con retardo o clic); el resto de la tarjeta agrega al carrito.
+// Al pasar el cursor sobre la foto aparece el botón "Ver fotos"; hay que hacer clic
+// para abrir el visor. El resto de la tarjeta agrega al carrito.
 const ProductoCard = memo(function ProductoCard({ v, i, onAgregar, onVer }) {
-  const hoverRef = useRef(null)
-
-  const cancelar = useCallback(() => {
-    if (hoverRef.current) {
-      clearTimeout(hoverRef.current)
-      hoverRef.current = null
-    }
-  }, [])
-
-  const programar = useCallback(() => {
-    cancelar()
-    hoverRef.current = setTimeout(() => onVer(v), 400)
-  }, [cancelar, onVer, v])
-
-  useEffect(() => cancelar, [cancelar])
+  const [mostrarBtn, setMostrarBtn] = useState(false)
 
   return (
     <div
       style={{ animationDelay: `${Math.min(i, 14) * 35}ms` }}
       className="animate-fade-up group flex flex-col overflow-hidden rounded-2xl border border-line bg-white transition-all duration-300 hover:-translate-y-1 hover:border-metal hover:shadow-[0_12px_32px_-12px_rgba(10,10,10,0.18)]"
     >
-      {/* Foto: abre el visor de imágenes */}
+      {/* Foto: el clic abre el visor de imágenes */}
       <button
         type="button"
         onClick={() => onVer(v)}
-        onMouseEnter={programar}
-        onMouseLeave={cancelar}
-        onFocus={programar}
-        onBlur={cancelar}
+        onMouseEnter={() => setMostrarBtn(true)}
+        onMouseLeave={() => setMostrarBtn(false)}
+        onFocus={() => setMostrarBtn(true)}
+        onBlur={() => setMostrarBtn(false)}
         title="Ver imágenes del producto"
         className="relative block aspect-square w-full cursor-zoom-in overflow-hidden bg-surface-2"
       >
@@ -102,9 +90,14 @@ const ProductoCard = memo(function ProductoCard({ v, i, onAgregar, onVer }) {
             {v.imagenes.length} fotos
           </span>
         )}
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent pb-2 pt-8 text-[11px] font-medium text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <SearchIcon className="h-3.5 w-3.5" /> Ver fotos
-        </span>
+        {/* Botón que aparece al pasar el cursor: hay que hacerle clic */}
+        {mostrarBtn && (
+          <span className="animate-pop absolute inset-0 flex items-center justify-center bg-dark/25 backdrop-blur-[1px]">
+            <span className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-xs font-semibold text-white shadow-xl ring-1 ring-white/20 transition-transform duration-200 group-hover:scale-105">
+              <SearchIcon className="h-4 w-4" /> Ver fotos
+            </span>
+          </span>
+        )}
       </button>
 
       {/* Info + agregar al carrito */}
@@ -126,7 +119,7 @@ const ProductoCard = memo(function ProductoCard({ v, i, onAgregar, onVer }) {
   )
 })
 
-// Visor de imágenes grande: flechas a los lados si hay más de una, teclado y cierre.
+// Visor de imágenes: tarjeta grande centrada, con X, flechas y miniaturas.
 function GaleriaModal({ data, onClose }) {
   const total = data.imagenes.length
   const [index, setIndex] = useState(() =>
@@ -150,63 +143,91 @@ function GaleriaModal({ data, onClose }) {
   }, [anterior, siguiente, onClose])
 
   return (
-    <div
-      className="animate-fade-in fixed inset-0 z-[60] flex flex-col bg-dark/90 backdrop-blur-sm"
+    <Modal
+      className="animate-fade-in z-[60] flex items-center justify-center bg-dark/80 p-3 backdrop-blur-sm sm:p-6"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Imágenes de ${data.nombre}`}
     >
-      <div className="flex items-center justify-between gap-4 px-4 py-3 text-white sm:px-6">
-        <p className="min-w-0 truncate text-sm font-medium">{data.nombre}</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-          aria-label="Cerrar visor"
-        >
-          <XIcon className="h-5 w-5" />
-        </button>
-      </div>
-
       <div
-        className="relative flex min-h-0 flex-1 items-center justify-center px-3 pb-2 sm:px-20"
+        className="animate-scale-in flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <img
-          src={data.imagenes[index]}
-          alt={`${data.nombre} — imagen ${index + 1}`}
-          onClick={total > 1 ? siguiente : undefined}
-          className={`max-h-full max-w-full rounded-2xl object-contain shadow-2xl shadow-black/50 ${
-            total > 1 ? 'cursor-pointer' : ''
-          }`}
-        />
+        {/* Encabezado */}
+        <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3 sm:px-6">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink">{data.nombre}</p>
+            <p className="text-xs text-ink-2">
+              {total > 1 ? `Imagen ${index + 1} de ${total}` : 'Imagen del producto'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-surface-2 hover:text-ink active:scale-90"
+            aria-label="Cerrar visor de imágenes"
+          >
+            <XIcon className="h-5 w-5" />
+          </button>
+        </div>
 
+        {/* Imagen grande + flechas */}
+        <div className="relative flex min-h-0 flex-1 items-center justify-center bg-surface-2">
+          <img
+            src={data.imagenes[index]}
+            alt={`${data.nombre} — imagen ${index + 1}`}
+            className="max-h-[68vh] w-full object-contain"
+          />
+
+          {total > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={anterior}
+                className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-ink/70 text-white backdrop-blur transition-all duration-200 hover:bg-ink active:scale-90 sm:left-4"
+                aria-label="Imagen anterior"
+              >
+                <ChevronLeftIcon className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={siguiente}
+                className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-ink/70 text-white backdrop-blur transition-all duration-200 hover:bg-ink active:scale-90 sm:right-4"
+                aria-label="Imagen siguiente"
+              >
+                <ChevronRightIcon className="h-6 w-6" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Miniaturas */}
         {total > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={anterior}
-              className="absolute left-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/25 active:scale-90 sm:left-4"
-              aria-label="Imagen anterior"
-            >
-              <ChevronLeftIcon className="h-6 w-6" />
-            </button>
-            <button
-              type="button"
-              onClick={siguiente}
-              className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/25 active:scale-90 sm:right-4"
-              aria-label="Imagen siguiente"
-            >
-              <ChevronRightIcon className="h-6 w-6" />
-            </button>
-          </>
+          <div className="flex items-center justify-center gap-2 overflow-x-auto border-t border-line bg-white px-4 py-3">
+            {data.imagenes.map((img, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setIndex(i)}
+                className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 transition-all duration-200 ${
+                  i === index
+                    ? 'border-ink'
+                    : 'border-transparent opacity-60 hover:opacity-100'
+                }`}
+                aria-label={`Ver imagen ${i + 1}`}
+              >
+                <img
+                  src={img}
+                  alt={`${data.nombre} — miniatura ${i + 1}`}
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
         )}
       </div>
-
-      {total > 1 && (
-        <div className="pb-4 text-center text-xs font-medium text-white/60">
-          {index + 1} / {total}
-        </div>
-      )}
-    </div>
+    </Modal>
   )
 }
 
@@ -654,7 +675,7 @@ export default function Pos() {
 
       {/* Resumen previo a registrar la venta (el stock se descuenta al confirmar aquí) */}
       {resumenAbierto && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+        <Modal className="animate-fade-in z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
           <div className="animate-scale-in flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <div>
@@ -810,12 +831,12 @@ export default function Pos() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal de comprobante tras confirmar */}
       {modalAbierto && ventaResult && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+        <Modal className="animate-fade-in z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
           <div className="animate-scale-in flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <div className="flex items-center gap-2">
@@ -857,7 +878,7 @@ export default function Pos() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Visor grande de imágenes del producto */}
