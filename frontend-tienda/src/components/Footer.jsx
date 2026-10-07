@@ -44,6 +44,14 @@ export default function Footer() {
                 </a>
               ))}
             </div>
+            <div className="mt-4">
+              <Link
+                to="/fragancia-exclusiva"
+                className="text-sm font-medium text-white/70 underline-offset-2 transition-colors hover:text-white hover:underline"
+              >
+                Fragancia Exclusiva de Praga
+              </Link>
+            </div>
           </div>
 
           {/* Categorías */}

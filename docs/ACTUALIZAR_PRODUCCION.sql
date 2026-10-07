@@ -121,4 +121,13 @@ SELECT 'Oscar', 'administrador', 3, NOW(), NOW()
 WHERE NOT EXISTS (
   SELECT 1 FROM (SELECT `id` FROM `empleados` WHERE `nombre` = 'Oscar' AND `rol` = 'administrador') AS t
 );
+
+-- 16) Catálogo aparte "Fragancia Exclusiva" (fragancia de marca, no es un perfume).
+--     Se agrega/edita como producto desde el panel eligiendo el catálogo "Fragancias"
+--     y se muestra en la página pública /fragancia-exclusiva.
+INSERT INTO `categorias` (`catalogo`, `nombre`, `tallas`, `created_at`, `updated_at`)
+SELECT 'fragancia', 'Fragancia Exclusiva', NULL, NOW(), NOW()
+WHERE NOT EXISTS (
+  SELECT 1 FROM (SELECT `id` FROM `categorias` WHERE `catalogo`='fragancia' AND `nombre`='Fragancia Exclusiva') AS t
+);
 -- =============================================================================

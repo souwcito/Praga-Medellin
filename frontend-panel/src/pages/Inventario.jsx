@@ -207,6 +207,7 @@ export default function Inventario() {
           <option value="">Ambos catálogos</option>
           <option value="hombre">Hombre</option>
           <option value="mujer">Mujer</option>
+          <option value="fragancia">Fragancias</option>
         </select>
 
         <select

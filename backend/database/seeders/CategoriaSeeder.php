@@ -44,6 +44,9 @@ class CategoriaSeeder extends Seeder
             ['mujer', 'Shorts', json_encode(['XS', 'S', 'M'])],
             ['mujer', 'Vestidos', json_encode(['S', 'M', 'L'])],
             ['mujer', 'Tenis', null],
+
+            // ---------- CATÁLOGO FRAGANCIA (exclusiva de marca) ----------
+            ['fragancia', 'Fragancia Exclusiva', null],
         ];
 
         foreach ($categorias as [$catalogo, $nombre, $tallas]) {

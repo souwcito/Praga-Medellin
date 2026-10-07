@@ -149,6 +149,7 @@ export default function DuenoProductos() {
           <option value="">Ambos catálogos</option>
           <option value="hombre">Hombre</option>
           <option value="mujer">Mujer</option>
+          <option value="fragancia">Fragancias</option>
         </select>
         <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className={`${inputCls} w-48`}>
           <option value="">Todas las categorías</option>

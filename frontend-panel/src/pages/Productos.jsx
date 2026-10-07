@@ -373,7 +373,14 @@ export default function Productos() {
     )
   }
 
-  const tituloCatalogo = catalogo === 'mujer' ? 'Catálogo Mujer' : catalogo === 'hombre' ? 'Catálogo Hombre' : 'Productos'
+  const tituloCatalogo =
+    catalogo === 'mujer'
+      ? 'Catálogo Mujer'
+      : catalogo === 'hombre'
+        ? 'Catálogo Hombre'
+        : catalogo === 'fragancia'
+          ? 'Fragancias'
+          : 'Productos'
 
   return (
     <div className="animate-fade-up mx-auto max-w-7xl">
@@ -423,6 +430,7 @@ export default function Productos() {
           <option value="">Ambos catálogos</option>
           <option value="hombre">Catálogo Hombre</option>
           <option value="mujer">Catálogo Mujer</option>
+          <option value="fragancia">Catálogo Fragancias</option>
         </select>
 
         <select
@@ -688,6 +696,7 @@ export default function Productos() {
                         >
                           <option value="hombre">Hombre</option>
                           <option value="mujer">Mujer</option>
+                          <option value="fragancia">Fragancias</option>
                         </select>
                       </div>
                       <div>

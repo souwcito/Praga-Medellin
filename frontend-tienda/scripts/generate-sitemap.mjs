@@ -63,6 +63,7 @@ function generarSitemap({ productos, categorias, subcategorias }) {
     { loc: `${BASE}/catalogo/hombre`, lastmod: hoy, changefreq: 'daily', priority: '0.9' },
     { loc: `${BASE}/catalogo/mujer`, lastmod: hoy, changefreq: 'daily', priority: '0.9' },
     { loc: `${BASE}/promociones`, lastmod: hoy, changefreq: 'daily', priority: '0.8' },
+    { loc: `${BASE}/fragancia-exclusiva`, lastmod: hoy, changefreq: 'daily', priority: '0.8' },
   ]
 
   // Categorías → /catalogo/:catalogo/:categoria

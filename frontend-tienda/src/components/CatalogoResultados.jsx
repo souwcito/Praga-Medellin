@@ -10,7 +10,7 @@ const REFRESCO_MS = 30000
 // auto-refresco cada 30s para reflejar productos nuevos, ofertas y stock sin
 // recargar la página (merge por id, sin saltos).
 // parametros: { catalogo?, categoria_id?, subcategoria_id?, q?, en_oferta? }
-export default function CatalogoResultados({ parametros, onProductos }) {
+export default function CatalogoResultados({ parametros, onProductos, emptyMessage }) {
   const [productos, setProductos] = useState([])
   const [loading, setLoading] = useState(true)
   const [cargandoMas, setCargandoMas] = useState(false)
@@ -77,10 +77,10 @@ export default function CatalogoResultados({ parametros, onProductos }) {
 
   if (productos.length === 0) {
     return (
-      <div className="grid h-64 place-items-center rounded-2xl border border-dashed border-line text-sm text-ink-2/70">
+      <div className="grid h-64 place-items-center rounded-2xl border border-dashed border-line px-6 text-center text-sm text-ink-2/70">
         {parametros.q
           ? 'Sin resultados para esa búsqueda.'
-          : 'No hay productos en esta selección.'}
+          : emptyMessage || 'No hay productos en esta selección.'}
       </div>
     )
   }

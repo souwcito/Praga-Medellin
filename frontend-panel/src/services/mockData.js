@@ -65,6 +65,9 @@ export const categorias = [
   { id: 26, nombre: 'Shorts', tallas: ['XS', 'S', 'M'], catalogo: 'mujer' },
   { id: 27, nombre: 'Vestidos', tallas: ['S', 'M', 'L'], catalogo: 'mujer' },
   { id: 28, nombre: 'Tenis', catalogo: 'mujer' },
+
+  // Catálogo Fragancias (exclusiva de marca)
+  { id: 31, nombre: 'Fragancia Exclusiva', catalogo: 'fragancia' },
 ]
 
 export const subcategorias = [

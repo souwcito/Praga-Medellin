@@ -166,6 +166,13 @@ export default function Header() {
                 >
                   Promociones
                 </Link>
+                <Link
+                  to="/fragancia-exclusiva"
+                  onClick={cerrar}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
+                >
+                  Fragancia Exclusiva
+                </Link>
               </div>
 
               {/* Catálogo Hombre y Catálogo Mujer */}

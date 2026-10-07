@@ -9,6 +9,7 @@ import { FavoritesProvider } from './context/FavoritesContext.jsx'
 const Home = lazy(() => import('./pages/Home'))
 const Catalogo = lazy(() => import('./pages/Catalogo'))
 const Promociones = lazy(() => import('./pages/Promociones'))
+const FraganciaExclusiva = lazy(() => import('./pages/FraganciaExclusiva'))
 const Producto = lazy(() => import('./pages/Producto'))
 const Carrito = lazy(() => import('./pages/Carrito'))
 const Checkout = lazy(() => import('./pages/Checkout'))
@@ -36,6 +37,7 @@ export default function App() {
                 <Route path="/catalogo/:catalogo/:categoria" element={<Catalogo />} />
                 <Route path="/catalogo/:catalogo/:categoria/:subcategoria" element={<Catalogo />} />
                 <Route path="/promociones" element={<Promociones />} />
+                <Route path="/fragancia-exclusiva" element={<FraganciaExclusiva />} />
                 <Route path="/producto/:id" element={<Producto />} />
                 <Route path="/carrito" element={<Carrito />} />
                 <Route path="/checkout" element={<Checkout />} />
