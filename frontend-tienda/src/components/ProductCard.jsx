@@ -54,20 +54,32 @@ export default function ProductCard({ producto }) {
       {/* Imagen */}
       <div className="relative aspect-square overflow-hidden bg-surface-2">
         <Link to={`/producto/${producto.id}`} className="absolute inset-0">
-          <img
-            src={producto.imagen_thumb || producto.imagen_url}
-            srcSet={
-              producto.imagen_thumb && producto.imagen_medium
-                ? `${producto.imagen_thumb} 400w, ${producto.imagen_medium} 800w, ${producto.imagen_url} 1200w`
-                : undefined
-            }
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            alt={producto.nombre}
-            width={600}
-            height={600}
-            loading="lazy"
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-          />
+          <div className="relative h-full w-full">
+            <img
+              src={producto.imagen_thumb || producto.imagen_url}
+              srcSet={
+                producto.imagen_thumb && producto.imagen_medium
+                  ? `${producto.imagen_thumb} 400w, ${producto.imagen_medium} 800w, ${producto.imagen_url} 1200w`
+                  : undefined
+              }
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              alt={producto.nombre}
+              width={600}
+              height={600}
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:opacity-0 group-hover:scale-105"
+            />
+            {(producto.imagenes?.[1] || producto.imagen_medium) && (
+              <img
+                src={producto.imagenes?.[1] || producto.imagen_medium}
+                alt={`${producto.nombre} — vista alternativa`}
+                width={600}
+                height={600}
+                loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover opacity-0 transition duration-500 group-hover:opacity-100 group-hover:scale-105"
+              />
+            )}
+          </div>
         </Link>
         <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
           {producto.es_oferta && (

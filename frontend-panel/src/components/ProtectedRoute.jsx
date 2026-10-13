@@ -2,7 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 // Guarda de rutas: sin sesión redirige a /login; con requiresAdmin solo deja
-// pasar admins; con requiresOwner solo deja pasar al dueño (rol 'dueno').
+// pasar a roles de gestión (admin o dueno); con requiresOwner solo al dueño.
 export default function ProtectedRoute({ children, requiresAdmin = false, requiresOwner = false }) {
   const { isAuthenticated, user } = useAuth()
   const location = useLocation()
@@ -15,7 +15,7 @@ export default function ProtectedRoute({ children, requiresAdmin = false, requir
     return <Navigate to="/dashboard" replace />
   }
 
-  if (requiresAdmin && user?.rol !== 'admin') {
+  if (requiresAdmin && !['admin', 'dueno'].includes(user?.rol)) {
     return <Navigate to="/dashboard" replace />
   }
 

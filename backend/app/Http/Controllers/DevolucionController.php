@@ -27,6 +27,7 @@ class DevolucionController extends Controller
         $request->validate([
             'venta_id' => 'required|integer',
             'sede_id' => 'required|integer',
+            'sede_cambio_id' => 'nullable|integer|exists:sedes,id',
             'empleado_id' => 'required|integer',
             'tipo' => 'nullable|string|in:cambio,reembolso',
             'devueltos' => 'required|array|min:1',
@@ -45,6 +46,10 @@ class DevolucionController extends Controller
             DB::beginTransaction();
 
             $tipo = $request->tipo ?? 'cambio';
+
+            // Sede de la que salen los productos del cambio: si no se indica, es
+            // la misma sede donde se recibe la devolución.
+            $sedeCambioId = (int) ($request->sede_cambio_id ?? $request->sede_id);
 
             $venta = Venta::find($request->venta_id);
             if (!$venta) {
@@ -73,11 +78,11 @@ class DevolucionController extends Controller
             $cambiosDetalle = [];
             foreach (($request->cambios ?? []) as $item) {
                 $cantidad = (int) $item['cantidad'];
-                $inv = Inventario::where('sede_id', $request->sede_id)
+                $inv = Inventario::where('sede_id', $sedeCambioId)
                     ->where('variante_id', $item['variante_id'])
                     ->first();
                 if (!$inv || $inv->stock < $cantidad) {
-                    throw new \Exception('Stock insuficiente para el producto de cambio.');
+                    throw new \Exception('Stock insuficiente para el producto de cambio en la sede seleccionada.');
                 }
                 $totalCambio += $cantidad * (int) $item['precio_unitario'];
                 $cambiosDetalle[] = [
@@ -113,6 +118,7 @@ class DevolucionController extends Controller
             $devolucion = Devolucion::create([
                 'venta_id' => $venta->id,
                 'sede_id' => $request->sede_id,
+                'sede_cambio_id' => $tipo === 'cambio' ? $sedeCambioId : null,
                 'empleado_id' => $request->empleado_id,
                 'numero_interno' => $numeroInterno,
                 'tipo' => $tipo,
@@ -157,15 +163,19 @@ class DevolucionController extends Controller
                     'tipo' => 'cambio',
                 ]);
 
-                $reg = Inventario::where('sede_id', $request->sede_id)
+                $reg = Inventario::where('sede_id', $sedeCambioId)
                     ->where('variante_id', $item['variante_id'])
                     ->first();
                 $reg->stock -= $item['cantidad'];
                 $reg->save();
             }
 
-            // Invalida la caché del stock de la sede (devueltos suman, cambios restan)
+            // Invalida la caché del stock de ambas sedes (devueltos suman en la
+            // sede de la devolución; cambios restan de la sede del cambio).
             Cache::forget(InventarioController::claveSede((int) $request->sede_id));
+            if ($sedeCambioId !== (int) $request->sede_id) {
+                Cache::forget(InventarioController::claveSede($sedeCambioId));
+            }
 
             DB::commit();
             $this->bumpCache();
@@ -180,7 +190,7 @@ class DevolucionController extends Controller
     // Historial de devoluciones con paginación y filtros (estilo ventas)
     public function index(Request $request)
     {
-        $query = Devolucion::with(['empleado', 'sede', 'venta', 'detalles.variante.producto'])->orderByDesc('id');
+        $query = Devolucion::with(['empleado', 'sede', 'sedeCambio', 'venta', 'detalles.variante.producto'])->orderByDesc('id');
 
         if ($request->filled('periodo')) {
             $query->where('created_at', '>=', $this->inicioPeriodo($request->periodo));
@@ -228,7 +238,7 @@ class DevolucionController extends Controller
     // Detalle de una devolución con sus artículos
     public function show($id)
     {
-        $devolucion = Devolucion::with(['empleado', 'sede', 'venta', 'detalles.variante.producto'])
+        $devolucion = Devolucion::with(['empleado', 'sede', 'sedeCambio', 'venta', 'detalles.variante.producto'])
             ->find($id);
 
         if (!$devolucion) {
@@ -259,6 +269,7 @@ class DevolucionController extends Controller
                 'precio_unitario' => (int) $det->precio_unitario,
                 'subtotal' => (int) ($det->cantidad * $det->precio_unitario),
                 'tipo' => $det->tipo,
+                'imagen_url' => $producto ? $this->imagenUrl($producto->imagen_url) : null,
             ];
         });
 
@@ -271,6 +282,8 @@ class DevolucionController extends Controller
             'fecha' => $d->created_at->toISOString(),
             'empleado' => ['id' => $d->empleado_id, 'nombre' => optional($d->empleado)->nombre ?? '—'],
             'sede' => optional($d->sede)->nombre ?? '—',
+            'sede_cambio_id' => $d->sede_cambio_id,
+            'sede_cambio' => optional($d->sedeCambio)->nombre ?? optional($d->sede)->nombre ?? '—',
             'total_devuelto' => (int) $d->total_devuelto,
             'total_cambio' => (int) $d->total_cambio,
             'diferencia' => (int) $d->diferencia,

@@ -59,27 +59,27 @@ export default function Header() {
         Envíos a todo el país · Pago seguro con Wompi
       </div>
 
-      <div className="border-b border-line bg-white/95 backdrop-blur">
+      <div className="border-b border-white/10 bg-dark text-white">
         <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 md:h-20 lg:px-8">
           {/* Menú hamburguesa (izquierda) */}
           <div className="flex items-center">
             <button
               type="button"
               onClick={() => setMenuAbierto(true)}
-              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface-2"
+              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white"
               aria-label="Abrir menú de categorías"
             >
               <MenuIcon className="h-6 w-6" />
             </button>
           </div>
 
-          {/* Marca centrada: los 3 logos juntos, más grandes en escritorio (el header no crece) */}
+          {/* Marca centrada: los 3 logos juntos, más grandes en escritorio */}
           <Link
             to="/"
             className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center"
             aria-label="Praga Medellín — inicio"
           >
-            <BrandLogos header />
+            <BrandLogos header ring="ring-white/15" />
           </Link>
 
           {/* Acciones (derecha) */}
@@ -87,7 +87,7 @@ export default function Header() {
             <button
               type="button"
               onClick={() => setBusquedaAbierta(true)}
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
               aria-label="Buscar productos"
             >
               <SearchIcon className="h-5 w-5" />
@@ -96,12 +96,12 @@ export default function Header() {
             <button
               type="button"
               onClick={abrirDrawer}
-              className="relative flex h-11 w-11 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+              className="relative flex h-11 w-11 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
               aria-label={`Abrir favoritos, ${favCount} artículos`}
             >
               <HeartIcon className="h-5 w-5" />
               {favCount > 0 && (
-                <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ink px-1 text-[10px] font-bold text-white">
+                <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-ink">
                   {favCount}
                 </span>
               )}
@@ -110,12 +110,12 @@ export default function Header() {
             <button
               type="button"
               onClick={abrirCarrito}
-              className="relative flex h-11 items-center gap-2 rounded-lg px-3 text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+              className="relative flex h-11 items-center gap-2 rounded-lg px-3 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
               aria-label={`Abrir carrito, ${count} artículos`}
             >
               <CartIcon className="h-5 w-5" />
               {count > 0 && (
-                <span className="absolute -top-0.5 right-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[11px] font-bold text-white">
+                <span className="absolute -top-0.5 right-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-ink">
                   {count}
                 </span>
               )}

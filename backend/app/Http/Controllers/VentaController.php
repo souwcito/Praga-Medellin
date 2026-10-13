@@ -188,6 +188,7 @@ class VentaController extends Controller
                 'cantidad' => (int) $det->cantidad,
                 'precio_unitario' => (int) $det->precio_unitario,
                 'subtotal' => (int) $det->subtotal,
+                'imagen_url' => $producto ? $this->imagenUrl($producto->imagen_url) : null,
             ];
         });
 
@@ -197,6 +198,7 @@ class VentaController extends Controller
                 'factura' => $venta->numero_interno,
                 'fecha' => $venta->created_at->toISOString(),
                 'sede_venta' => optional($venta->sedeVenta)->nombre ?? '—',
+                'sede_venta_id' => $venta->sede_venta_id,
                 'empleado' => optional($venta->empleado)->nombre ?? '—',
                 'total' => (int) $venta->total,
             ],
@@ -215,7 +217,7 @@ class VentaController extends Controller
     // Historial de ventas con paginación (estilo Laravel)
     public function index(Request $request)
     {
-        $query = Venta::with(['empleado', 'sedeVenta', 'factura', 'pagos', 'detalles'])->orderByDesc('id');
+        $query = Venta::with(['empleado', 'sedeVenta', 'factura', 'pagos', 'detalles.variante.producto'])->orderByDesc('id');
 
         if ($request->filled('periodo')) {
             $query->where('created_at', '>=', $this->inicioPeriodo($request->periodo));
@@ -241,11 +243,26 @@ class VentaController extends Controller
                 'factura' => optional($v->factura)->numero_interno,
                 'fecha' => $v->created_at->toISOString(),
                 'empleado' => ['id' => $v->empleado_id, 'nombre' => optional($v->empleado)->nombre ?? '—'],
+                'empleado_id' => $v->empleado_id,
                 'sede_venta' => optional($v->sedeVenta)->nombre ?? '—',
+                'sede_venta_id' => $v->sede_venta_id,
                 'tipo' => $v->tipo,
                 'total' => (int) $v->total,
                 'descuento_total' => (int) $v->detalles->sum(fn ($d) => $d->descuento),
                 'pagos' => $v->pagos->map(fn ($p) => ['metodo_pago' => $p->metodo_pago, 'monto' => (int) $p->monto])->values(),
+                'items' => $v->detalles->map(function ($d) {
+                    $variante = $d->variante;
+                    $producto = $variante ? $variante->producto : null;
+                    return [
+                        'variante_id' => $d->variante_id,
+                        'nombre' => $producto ? $producto->nombre : 'Producto ' . $d->variante_id,
+                        'talla' => $variante ? $variante->talla : null,
+                        'cantidad' => (int) $d->cantidad,
+                        'precio_unitario' => (int) $d->precio_unitario,
+                        'subtotal' => (int) $d->subtotal,
+                        'imagen_url' => $producto ? $this->imagenUrl($producto->imagen_url) : null,
+                    ];
+                })->values(),
             ];
         });
 

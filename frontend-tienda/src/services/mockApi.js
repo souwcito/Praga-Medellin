@@ -63,17 +63,85 @@ async function getProducto(id) {
   return conDetalle(p)
 }
 
-// Pedido simulado (cuando exista el backend, será POST /api/pedidos).
-async function createPedido({ items, cliente, total }) {
+// Pedido simulado (misma forma que el real: recibe variante_id + cantidad; el
+// total se recalcula con el precio real del catálogo).
+async function createPedido({ cliente, items }) {
   await delay()
+  const snapshot = items.map((it) => {
+    const v = variantes.find(
+      (x) => x.producto_id === Number(it.producto_id) && x.talla === (it.talla || null),
+    )
+    const p = productos.find((pr) => pr.id === Number(it.producto_id))
+    const precio = Number(p?.precio) || 0
+    const cant = Number(it.cantidad) || 1
+    return {
+      variante_id: v ? v.id : null,
+      producto_id: Number(it.producto_id),
+      nombre: p ? p.nombre : `Producto ${it.producto_id}`,
+      talla: v ? v.talla : (it.talla ?? null),
+      sku: p ? p.sku : null,
+      codigo_barras: v ? v.codigo_barras : null,
+      imagen_url: p ? p.imagen_url : null,
+      cantidad: cant,
+      precio_unitario: precio,
+      subtotal: precio * cant,
+    }
+  })
+  const total = snapshot.reduce((s, i) => s + i.subtotal, 0)
   const numero = `PD-${String(Date.now()).slice(-6)}`
   return {
+    id: 1,
     numero,
-    estado: 'aprobado',
-    total,
-    items,
-    cliente,
+    referencia: numero,
     fecha: new Date().toISOString(),
+    total,
+    estado: 'nuevo',
+    payment_status: null,
+    wompi_transaction_id: null,
+    metodo_pago: null,
+    franquicia: null,
+    cliente: {
+      nombre: cliente?.nombre || '',
+      email: cliente?.email || null,
+      telefono: cliente?.telefono || null,
+      direccion: cliente?.direccion || null,
+      ciudad: cliente?.ciudad || 'Medellín',
+      documento: cliente?.documento || null,
+    },
+    items: snapshot,
+  }
+}
+
+// Config del widget en modo mock (para no romper el VITE_USE_MOCK=true).
+async function pedidoWompi(numero) {
+  await delay(150)
+  return {
+    public_key: 'pub_test_mock',
+    reference: numero,
+    amount_in_cents: 1,
+    currency: 'COP',
+    signature: 'mock-signature',
+    widget_url: 'https://checkout.wompi.co/widget.js',
+    base_url: 'https://sandbox.wompi.co/v1',
+  }
+}
+
+async function confirmarPedido(numero, { wompi_transaction_id }) {
+  await delay(250)
+  if (!wompi_transaction_id) throw new Error('Falta el id de transacción')
+  return {
+    id: 1,
+    numero,
+    referencia: numero,
+    fecha: new Date().toISOString(),
+    total: 1,
+    estado: 'pagado',
+    payment_status: 'APPROVED',
+    wompi_transaction_id,
+    metodo_pago: 'tarjeta',
+    franquicia: 'VISA',
+    cliente: { nombre: 'Cliente' },
+    items: [],
   }
 }
 
@@ -83,4 +151,6 @@ export default {
   getProductos,
   getProducto,
   createPedido,
+  pedidoWompi,
+  confirmarPedido,
 }

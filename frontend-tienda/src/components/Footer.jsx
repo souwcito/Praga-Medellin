@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import { mapsLink, sedes } from '../utils/sedes'
 import BrandLogos from './BrandLogos'
-import { FacebookIcon, InstagramIcon, WhatsAppIcon } from './icons'
+import { InstagramIcon, TikTokIcon, WhatsAppIcon } from './icons'
 
 export default function Footer() {
   const [categorias, setCategorias] = useState([])
@@ -15,13 +15,19 @@ export default function Footer() {
       .catch(() => {})
   }, [])
 
+  const redes = [
+    { icon: InstagramIcon, href: 'https://www.instagram.com/praga_medellin_/', label: 'Instagram' },
+    { icon: TikTokIcon, href: 'https://www.tiktok.com/@praga_medellin_', label: 'TikTok' },
+    { icon: WhatsAppIcon, href: 'https://wa.me/573216573427', label: 'WhatsApp' },
+  ]
+
   return (
     <footer className="bg-dark text-white">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <div className="container-page py-14">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           {/* Marca */}
           <div>
-            <BrandLogos ring="ring-white/30" />
+            <BrandLogos ring="ring-white/15" />
             <p className="mt-3 font-display text-xl font-semibold leading-none tracking-wide text-white">
               PRAGA
             </p>
@@ -32,25 +38,18 @@ export default function Footer() {
               Ropa y accesorios urbanos. 4 sedes en Medellín con el mismo catálogo.
             </p>
             <div className="mt-4 flex gap-2">
-              {[InstagramIcon, FacebookIcon, WhatsAppIcon].map((Icon, i) => (
+              {redes.map((r) => (
                 <a
-                  key={i}
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
+                  key={r.label}
+                  href={r.href}
+                  target="_blank"
+                  rel="noreferrer"
                   className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white/70 transition-colors hover:bg-white/20 hover:text-white"
-                  aria-label="Red social"
+                  aria-label={r.label}
                 >
-                  <Icon className="h-4 w-4" />
+                  <r.icon className="h-4 w-4" />
                 </a>
               ))}
-            </div>
-            <div className="mt-4">
-              <Link
-                to="/fragancia-exclusiva"
-                className="text-sm font-medium text-white/70 underline-offset-2 transition-colors hover:text-white hover:underline"
-              >
-                Fragancia Exclusiva de Praga
-              </Link>
             </div>
           </div>
 
@@ -73,14 +72,44 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Ayuda */}
+          {/* Contacto y servicio */}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">Ayuda</h3>
-            <ul className="mt-4 space-y-2">
-              <li><a href="#" onClick={(e) => e.preventDefault()} className="text-sm text-white/70 transition-colors hover:text-white">Envíos y entregas</a></li>
-              <li><a href="#" onClick={(e) => e.preventDefault()} className="text-sm text-white/70 transition-colors hover:text-white">Cambios y devoluciones</a></li>
-              <li><a href="#" onClick={(e) => e.preventDefault()} className="text-sm text-white/70 transition-colors hover:text-white">Pago seguro con Wompi</a></li>
-              <li><a href="#" onClick={(e) => e.preventDefault()} className="text-sm text-white/70 transition-colors hover:text-white">Términos y condiciones</a></li>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+              Contacto y servicio
+            </h3>
+            <ul className="mt-4 space-y-2 text-sm text-white/70">
+              <li>
+                <a
+                  href="https://wa.me/573216573427"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="transition-colors hover:text-white"
+                >
+                  WhatsApp: +57 321 6573427
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:ventas@pragamedellin.com"
+                  className="transition-colors hover:text-white"
+                >
+                  ventas@pragamedellin.com
+                </a>
+              </li>
+              <li className="text-white/50">Horario: lunes a sábado, 9:00 a.m. – 8:00 p.m.</li>
+              <li>
+                <Link to="/promociones" className="font-medium text-red-400 transition-colors hover:text-red-300">
+                  Promociones actuales
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/fragancia-exclusiva"
+                  className="font-medium text-white/80 transition-colors hover:text-white"
+                >
+                  Fragancia Exclusiva de Praga
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -106,6 +135,9 @@ export default function Footer() {
                 </li>
               ))}
             </ul>
+            <p className="mt-4 text-xs text-white/40">
+              Pago seguro con Wompi · Envíos a todo el país
+            </p>
           </div>
         </div>
 

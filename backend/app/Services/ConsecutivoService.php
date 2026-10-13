@@ -47,6 +47,11 @@ class ConsecutivoService
                 ->where('numero_interno', 'like', 'DEV-%')
                 ->max(DB::raw('CAST(SUBSTRING(numero_interno, 5) AS UNSIGNED)'));
         }
+        if ($tipo === 'apartado') {
+            return (int) \App\Models\Apartado::query()
+                ->where('numero_interno', 'like', 'SEP-%')
+                ->max(DB::raw('CAST(SUBSTRING(numero_interno, 5) AS UNSIGNED)'));
+        }
 
         return 0;
     }

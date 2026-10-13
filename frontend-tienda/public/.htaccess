@@ -52,6 +52,18 @@
   ExpiresByType application/json "access plus 0 seconds"
 </IfModule>
 
+# ---------- API y panel: NUNCA cachear (evita 404/estados viejos en el CDN) ----------
+<IfModule mod_setenvif.c>
+  SetEnvIf Request_URI "^/api/" NO_CACHE=1
+  SetEnvIf Request_URI "^/panel/" NO_CACHE=1
+</IfModule>
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0" env=NO_CACHE
+  Header set X-LiteSpeed-Cache-Control "no-cache" env=NO_CACHE
+  Header set X-Hcdn-Cache-Control "no-cache" env=NO_CACHE
+  Header unset Expires env=NO_CACHE
+</IfModule>
+
 # ---------- Cabeceras de caché ----------
 <IfModule mod_headers.c>
   <FilesMatch "\.(css|js|mjs|woff2|woff|ttf|eot|png|jpg|jpeg|gif|webp|svg|ico)$">

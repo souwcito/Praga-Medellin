@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { catalogApi } from '../services/api'
 import ProductCard from './ProductCard'
 import usePolling from '../hooks/usePolling'
+import { ChevronDownIcon, PlusIcon } from './icons'
 
 const LIMITE = 40
 const REFRESCO_MS = 30000
@@ -14,6 +15,7 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
   const [productos, setProductos] = useState([])
   const [loading, setLoading] = useState(true)
   const [cargandoMas, setCargandoMas] = useState(false)
+  const [hayMas, setHayMas] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -21,6 +23,8 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
       .getProductos({ ...parametros, limit: LIMITE, offset: 0 })
       .then((p) => {
         setProductos(p)
+        // Si la primera página trae menos del límite, no hay más por cargar.
+        setHayMas(p.length >= LIMITE)
         onProductos?.(p)
         setError(null)
       })
@@ -32,7 +36,15 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
     setCargandoMas(true)
     catalogApi
       .getProductos({ ...parametros, limit: LIMITE, offset: productos.length })
-      .then((p) => setProductos((prev) => [...prev, ...p]))
+      .then((p) => {
+        // Evita duplicados si el backend repite productos (por si ignora el offset).
+        const ids = new Set(productos.map((x) => x.id))
+        const nuevos = p.filter((x) => !ids.has(x.id))
+        setProductos((prev) => [...prev, ...nuevos])
+        // Hay más solo si la respuesta trajo otra página completa Y aportó ítems nuevos.
+        setHayMas(p.length >= LIMITE && nuevos.length > 0)
+        setError(null)
+      })
       .catch((err) => setError(err?.message || 'Error cargando más productos'))
       .finally(() => setCargandoMas(false))
   }
@@ -54,8 +66,6 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
   }
 
   usePolling(refrescar, REFRESCO_MS, !loading)
-
-  const hayMas = productos.length >= LIMITE
 
   if (error) {
     return (
@@ -85,34 +95,51 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
     )
   }
 
+  // Oculta de la web los productos sin stock (p. ej. los apartados por Plan Separe).
+  const visibles = productos.filter((p) => (p.stock_total ?? 0) > 0)
+
   return (
     <>
       <p className="mb-4 text-sm text-ink-2">
-        {productos.length} producto{productos.length === 1 ? '' : 's'} mostrados
+        {visibles.length} producto{visibles.length === 1 ? '' : 's'} disponibles
       </p>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {productos.map((p) => (
-          <ProductCard key={p.id} producto={p} />
-        ))}
-      </div>
+      {visibles.length === 0 ? (
+        <div className="grid h-48 place-items-center rounded-2xl border border-dashed border-line px-6 text-center text-sm text-ink-2/70">
+          Volveremos a tener stock pronto.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {visibles.map((p) => (
+            <ProductCard key={p.id} producto={p} />
+          ))}
+        </div>
+      )}
 
       {hayMas && (
-        <div className="mt-10 flex justify-center">
+        <div className="mt-12 flex flex-col items-center gap-3">
           <button
             type="button"
             onClick={cargarMas}
             disabled={cargandoMas}
-            className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-8 py-3 text-sm font-semibold text-ink transition-all duration-200 hover:border-ink-2/40 hover:bg-surface-2 active:scale-[0.98] disabled:opacity-50"
+            className="group inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-ink via-ink to-metal-2 px-10 py-4 text-base font-semibold text-white shadow-lg shadow-ink/25 ring-1 ring-inset ring-white/15 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-ink/35 active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {cargandoMas ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-2/30 border-t-ink-2" />
-                Cargando…
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Cargando más…
               </>
             ) : (
-              'Cargar más productos'
+              <>
+                <PlusIcon className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110" />
+                Cargar más productos
+                <ChevronDownIcon className="h-4 w-4 opacity-70 transition-transform duration-300 group-hover:translate-y-0.5" />
+              </>
             )}
           </button>
+          <p className="text-xs text-ink-2/70">
+            Ya viste {productos.length} producto{productos.length === 1 ? '' : 's'} · sigue
+            descubriendo
+          </p>
         </div>
       )}
     </>

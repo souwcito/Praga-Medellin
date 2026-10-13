@@ -49,12 +49,18 @@ const mockRoutes = {
   'DELETE /productos/:id': (url) => mockApi.deleteProducto(url.split('/').pop()),
   'GET /inventario/completo': () => mockApi.getInventarioCompleto(),
   'POST /inventario/ajustes': (body) => mockApi.ajustarInventario(body),
-  'GET /clientes': () => mockApi.getClientes(),
+  'GET /clientes': (params) => mockApi.getClientes(params),
+  'POST /clientes': (body) => mockApi.crearCliente(body),
   'GET /pedidos': () => mockApi.getPedidos(),
   'GET /ventas/buscar': (params) => mockApi.buscarVentaPorFactura(params),
   'POST /devoluciones': (body) => mockApi.crearDevolucion(body),
   'GET /devoluciones': (params) => mockApi.getDevoluciones(params),
   'GET /devoluciones/:id': (params, url) => mockApi.getDevolucionDetalle(url.split('/').pop()),
+  'GET /apartados': (params) => mockApi.getApartados(params),
+  'POST /apartados': (body) => mockApi.crearApartado(body),
+  'GET /apartados/:id': (params, url) => mockApi.getApartadoDetalle(url.split('/').pop()),
+  'POST /apartados/:id/abonos': (body, url) => mockApi.abonarApartado(url.split('/').pop(), body),
+  'POST /apartados/:id/cancelar': (url) => mockApi.cancelarApartado(url.split('/').pop()),
   'GET /dueno/resumen': () => mockApi.getDuenoResumen(),
   'PUT /dueno/productos/:id/costo': (body, url) => mockApi.updateCosto(url.split('/').pop(), body),
 }
@@ -148,8 +154,18 @@ export const comisionesApi = {
 }
 
 export const clientesApi = {
-  // Clientes que compran en el sitio web
-  getClientes: () => request('GET', '/clientes'),
+  // Clientes (web + Plan Separe). Con ?q= filtra por nombre o cédula.
+  getClientes: (params) => request('GET', '/clientes', params),
+  create: (payload) => request('POST', '/clientes', payload),
+}
+
+export const apartadosApi = {
+  // Plan Separe
+  list: (params) => request('GET', '/apartados', params),
+  create: (payload) => request('POST', '/apartados', payload),
+  detalle: (id) => request('GET', `/apartados/${id}`),
+  abonar: (id, payload) => request('POST', `/apartados/${id}/abonos`, payload),
+  cancelar: (id) => request('POST', `/apartados/${id}/cancelar`),
 }
 
 export const pedidosApi = {
@@ -175,6 +191,7 @@ export default {
   dashboardApi,
   comisionesApi,
   clientesApi,
+  apartadosApi,
   pedidosApi,
   duenoApi,
 }

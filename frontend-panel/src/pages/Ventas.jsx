@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useSedes, useEmpleados, useVentas } from '../hooks/useData'
 import PeriodFilter from '../components/PeriodFilter'
-import { AlertIcon, StoreIcon, UserIcon } from '../components/icons'
+import { AlertIcon, ChevronDownIcon, StoreIcon, UserIcon } from '../components/icons'
+import ProductImage from '../components/ProductImage'
 
 const formato = (n) =>
   new Intl.NumberFormat('es-CO', {
@@ -45,6 +46,9 @@ export default function Ventas() {
   const [empleadoId, setEmpleadoId] = useState('')
   const [tipo, setTipo] = useState('')
   const [page, setPage] = useState(1)
+  const [abiertaId, setAbiertaId] = useState(null)
+
+  const cols = 'grid-cols-[6.5rem_1fr_9rem_1fr_8rem_5.5rem_7.5rem_2rem]'
 
   const params = useMemo(
     () => ({
@@ -180,8 +184,11 @@ export default function Ventas() {
           Sin ventas para los filtros seleccionados.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[6.5rem_1fr_9rem_1fr_8rem_5.5rem_7.5rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
+        <div className="rounded-2xl border border-line bg-white">
+          {/* Cabecera (solo pantallas ≥md) */}
+          <div
+            className={`hidden md:grid ${cols} items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2`}
+          >
             <span>Factura</span>
             <span>Fecha</span>
             <span>Vendedor</span>
@@ -189,43 +196,130 @@ export default function Ventas() {
             <span className="text-center">Pago</span>
             <span className="text-center">Tipo</span>
             <span className="text-right">Total</span>
+            <span />
           </div>
 
           <ul className="divide-y divide-line">
-            {filas.map((v) => (
-              <li
-                key={v.id}
-                className="grid grid-cols-[6.5rem_1fr_9rem_1fr_8rem_5.5rem_7.5rem] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-surface-2/50"
-              >
-                <span className="font-medium text-ink">{v.factura || '—'}</span>
-                <span className="text-ink">{fechaLarga(v.fecha)}</span>
-                <span className="truncate text-ink">{v.empleado.nombre}</span>
-                <span className="truncate text-ink-2">{v.sede_venta}</span>
-                <span className="flex flex-wrap justify-center gap-1">
-                  {(v.pagos || []).map((p) => (
-                    <span
-                      key={p.metodo_pago}
-                      className="inline-flex rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium capitalize text-ink-2"
-                    >
-                      {METODO_LABEL[p.metodo_pago] || p.metodo_pago}
-                    </span>
-                  ))}
-                </span>
-                <span className="justify-self-center">
-                  <span className="inline-flex rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium capitalize text-ink-2">
-                    {v.tipo}
-                  </span>
-                </span>
-                <span className="text-right">
-                  <span className="font-semibold text-ink">{formato(v.total)}</span>
-                  {v.descuento_total > 0 && (
-                    <span className="block text-[10px] font-medium text-emerald-700">
-                      Dcto −{formato(v.descuento_total)}
-                    </span>
+            {filas.map((v) => {
+              const abierta = abiertaId === v.id
+              return (
+                <li key={v.id}>
+                  <button
+                    type="button"
+                    onClick={() => setAbiertaId(abierta ? null : v.id)}
+                    className={`w-full text-left text-sm transition-colors hover:bg-surface-2/50 ${
+                      abierta ? 'bg-surface-2/40' : ''
+                    }`}
+                  >
+                    {/* Fila desktop */}
+                    <div className={`hidden md:grid ${cols} items-center gap-4 px-5 py-3`}>
+                      <span className="font-medium text-ink">{v.factura || '—'}</span>
+                      <span className="text-ink">{fechaLarga(v.fecha)}</span>
+                      <span className="truncate text-ink">{v.empleado.nombre}</span>
+                      <span className="truncate text-ink-2">{v.sede_venta}</span>
+                      <span className="flex flex-wrap justify-center gap-1">
+                        {(v.pagos || []).map((p) => (
+                          <span
+                            key={p.metodo_pago}
+                            className="inline-flex rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium capitalize text-ink-2"
+                          >
+                            {METODO_LABEL[p.metodo_pago] || p.metodo_pago}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="justify-self-center">
+                        <span className="inline-flex rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium capitalize text-ink-2">
+                          {v.tipo}
+                        </span>
+                      </span>
+                      <span className="text-right">
+                        <span className="font-semibold text-ink">{formato(v.total)}</span>
+                        {v.descuento_total > 0 && (
+                          <span className="block text-[10px] font-medium text-emerald-700">
+                            Dcto −{formato(v.descuento_total)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="justify-self-end">
+                        <ChevronDownIcon
+                          className={`h-4 w-4 text-ink-2/70 transition-transform duration-200 ${abierta ? 'rotate-180' : ''}`}
+                        />
+                      </span>
+                    </div>
+
+                    {/* Fila móvil */}
+                    <div className="flex items-center gap-3 px-4 py-3 md:hidden">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate font-semibold text-ink">
+                            {v.factura || '—'}
+                          </span>
+                          <span className="shrink-0 font-bold text-ink">{formato(v.total)}</span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-ink-2">{fechaLarga(v.fecha)}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
+                          <span className="truncate">{v.empleado.nombre}</span>
+                          <span className="text-ink-2/40">·</span>
+                          <span className="truncate">{v.sede_venta}</span>
+                          <span className="inline-flex shrink-0 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium capitalize">
+                            {v.tipo}
+                          </span>
+                        </p>
+                      </div>
+                      <ChevronDownIcon
+                        className={`h-4 w-4 shrink-0 text-ink-2/70 transition-transform duration-200 ${abierta ? 'rotate-180' : ''}`}
+                      />
+                    </div>
+                  </button>
+
+                  {abierta && (
+                    <div className="animate-fade-in border-t border-line bg-surface-2/40 px-4 py-4 md:px-5">
+                      <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-2">
+                        Resumen de la venta
+                        <span className="inline-flex rounded-full border border-line bg-white px-2 py-0.5 font-medium normal-case text-ink-2">
+                          {v.items.length} {v.items.length === 1 ? 'artículo' : 'artículos'}
+                        </span>
+                      </p>
+                      <ul className="space-y-2">
+                        {v.items.map((it, idx) => (
+                          <li
+                            key={`${it.variante_id}-${idx}`}
+                            className="flex items-center gap-3 rounded-xl border border-line bg-white p-2.5"
+                          >
+                            <ProductImage
+                              src={it.imagen_url}
+                              alt={it.nombre}
+                              className="h-14 w-14 rounded-lg md:h-16 md:w-16"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-ink">{it.nombre}</p>
+                              <p className="text-xs text-ink-2">
+                                {it.talla ? `Talla ${it.talla} · ` : ''}
+                                {it.cantidad} × {formato(it.precio_unitario)}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-sm font-semibold text-ink">
+                              {formato(it.subtotal)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-3 flex flex-wrap items-center justify-end gap-3 rounded-xl bg-white px-4 py-3">
+                        {v.descuento_total > 0 && (
+                          <span className="text-xs text-emerald-700">
+                            Descuento −{formato(v.descuento_total)}
+                          </span>
+                        )}
+                        <span className="text-right">
+                          <span className="block text-xs text-ink-2">Total pagado</span>
+                          <span className="text-lg font-bold text-ink">{formato(v.total)}</span>
+                        </span>
+                      </div>
+                    </div>
                   )}
-                </span>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

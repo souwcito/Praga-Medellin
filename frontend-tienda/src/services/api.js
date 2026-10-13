@@ -22,6 +22,8 @@ const mockRoutes = {
   'GET /productos': (params) => mockApi.getProductos(params),
   'GET /productos/:id': (params, url) => mockApi.getProducto(url.split('/').pop()),
   'POST /pedidos': (body) => mockApi.createPedido(body),
+  'POST /pedidos/:numero/wompi': (body, url) => mockApi.pedidoWompi(url.split('/')[2], body),
+  'POST /pedidos/:numero/confirmar': (body, url) => mockApi.confirmarPedido(url.split('/')[2], body),
 }
 
 function mockHandler(method, url) {
@@ -50,6 +52,8 @@ export const catalogApi = {
 
 export const pedidosApi = {
   create: (payload) => request('POST', '/pedidos', payload),
+  wompiConfig: (numero) => request('POST', `/pedidos/${numero}/wompi`),
+  confirmar: (numero, payload) => request('POST', `/pedidos/${numero}/confirmar`, payload),
 }
 
 export default {

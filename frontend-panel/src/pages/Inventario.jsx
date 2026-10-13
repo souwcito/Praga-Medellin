@@ -20,6 +20,17 @@ const inputCls =
 const selectCls =
   'select-field w-full rounded-lg border border-line bg-white px-3 py-2 pr-9 text-sm text-ink transition-colors focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
 
+// Orden natural de tallas (XS→XXL; numéricas y "Única" al final)
+const ORDEN_TALLAS = ['XS', 'XS/S', 'S', 'S/M', 'M', 'M/L', 'L', 'XL', 'XXL', 'XXXL']
+function ordenTalla(a, b) {
+  const ia = ORDEN_TALLAS.indexOf(a)
+  const ib = ORDEN_TALLAS.indexOf(b)
+  if (ia !== -1 && ib !== -1) return ia - ib
+  if (ia !== -1) return -1
+  if (ib !== -1) return 1
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
 export default function Inventario() {
   const queryClient = useQueryClient()
   const { data: categorias = [] } = useCategorias()
@@ -31,6 +42,7 @@ export default function Inventario() {
   const [categoriaId, setCategoriaId] = useState('')
   const [soloBajo, setSoloBajo] = useState(false)
   const [expandido, setExpandido] = useState(null)
+  const [categoriaAbierta, setCategoriaAbierta] = useState(null)
 
   const [aviso, setAviso] = useState(null)
 
@@ -67,7 +79,10 @@ export default function Inventario() {
     return [...map.values()]
   }, [variantes])
 
-  const sedes = variantes[0]?.stock.map((s) => ({ sede_id: s.sede_id, sede: s.sede })) || []
+  const sedes = useMemo(
+    () => variantes[0]?.stock.map((s) => ({ sede_id: s.sede_id, sede: s.sede })) || [],
+    [variantes],
+  )
 
   const stockDe = (g, sedeId) =>
     g.variantes.reduce(
@@ -96,6 +111,42 @@ export default function Inventario() {
   }, [grupos, busqueda, catalogoId, categoriaId, soloBajo])
 
   const categoriasFiltro = categorias.filter((c) => !catalogoId || c.catalogo === catalogoId)
+
+  // Resumen de unidades por CATEGORÍA sobre lo que está visible (respeta filtros).
+  // Incluye desglose de tallas por sede: porSedeTallas[sedeId][talla] = cantidad.
+  const resumen = useMemo(() => {
+    const map = new Map()
+    filtrados.forEach((g) => {
+      let r = map.get(g.categoria_id)
+      if (!r) {
+        r = {
+          categoria_id: g.categoria_id,
+          nombre: categorias.find((c) => c.id === g.categoria_id)?.nombre || 'Sin categoría',
+          total: 0,
+          porSede: {},
+          porSedeTallas: {},
+        }
+        map.set(g.categoria_id, r)
+      }
+      g.variantes.forEach((v) => {
+        const talla = v.talla || 'Única'
+        v.stock.forEach((s) => {
+          const cantidad = s.cantidad || 0
+          if (cantidad === 0) return
+          r.total += cantidad
+          r.porSede[s.sede_id] = (r.porSede[s.sede_id] || 0) + cantidad
+          const tallas = (r.porSedeTallas[s.sede_id] ||= {})
+          tallas[talla] = (tallas[talla] || 0) + cantidad
+        })
+      })
+    })
+    return [...map.values()].sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [filtrados, categorias])
+
+  const totalGeneral = resumen.reduce((sum, r) => sum + r.total, 0)
+  const categoriaSel = categoriaId ? categorias.find((c) => c.id === Number(categoriaId)) : null
+  const totalCategoriaSel = resumen.find((r) => r.categoria_id === Number(categoriaId))?.total ?? 0
+  const colsResumen = `minmax(9rem,1fr) repeat(${sedes.length},4rem) 5rem`
 
   // Lista virtualizada: con cientos de productos solo se montan las filas visibles
   const virtualizer = useVirtualizer({
@@ -356,6 +407,114 @@ export default function Inventario() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barra fija inferior: totales por categoría */}
+      {filtrados.length > 0 && (
+        <div className="sticky bottom-0 z-20 mt-4">
+          <div className="rounded-2xl border border-line bg-white/95 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.25)] backdrop-blur">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line px-5 py-3">
+              <p className="text-sm font-semibold text-ink">
+                {categoriaSel ? (
+                  <>
+                    Hay <span className="text-lg font-bold text-metal">{totalCategoriaSel}</span>{' '}
+                    {categoriaSel.nombre}
+                  </>
+                ) : (
+                  <>
+                    Total en vista:{' '}
+                    <span className="text-lg font-bold text-metal">{totalGeneral}</span> unidades
+                  </>
+                )}
+              </p>
+              <p className="text-xs text-ink-2">Resumen por categoría · clic para ver tallas por sede</p>
+            </div>
+
+            <div className="max-h-72 overflow-auto px-5 py-2">
+              <div
+                style={{ gridTemplateColumns: colsResumen }}
+                className="grid items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2"
+              >
+                <span>Categoría</span>
+                {sedes.map((s) => (
+                  <span key={s.sede_id} className="truncate text-center" title={s.sede}>
+                    {s.sede.split(' - ').pop()}
+                  </span>
+                ))}
+                <span className="text-right">Total</span>
+              </div>
+              <ul className="mt-1 space-y-0.5">
+                {resumen.map((r) => {
+                  const abierta = categoriaAbierta === r.categoria_id
+                  return (
+                    <li key={r.categoria_id}>
+                      <button
+                        type="button"
+                        onClick={() => setCategoriaAbierta(abierta ? null : r.categoria_id)}
+                        style={{ gridTemplateColumns: colsResumen }}
+                        className="grid w-full items-center gap-2 rounded-lg py-1 text-sm transition-colors hover:bg-surface-2/60"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <ChevronDownIcon
+                            className={`h-3.5 w-3.5 shrink-0 text-ink-2/70 transition-transform duration-200 ${abierta ? 'rotate-180' : ''}`}
+                          />
+                          <span className="truncate font-medium text-ink">{r.nombre}</span>
+                        </span>
+                        {sedes.map((s) => (
+                          <span
+                            key={s.sede_id}
+                            className={`text-center ${r.porSede[s.sede_id] ? 'text-ink' : 'text-ink-2/40'}`}
+                          >
+                            {r.porSede[s.sede_id] || 0}
+                          </span>
+                        ))}
+                        <span className="text-right font-bold text-ink">{r.total}</span>
+                      </button>
+
+                      {abierta && (
+                        <div
+                          style={{ gridTemplateColumns: colsResumen }}
+                          className="animate-fade-in grid items-start gap-2 px-0.5 pb-2 pt-1"
+                        >
+                          <span />
+                          {sedes.map((s) => {
+                            const tallas = Object.entries(r.porSedeTallas[s.sede_id] || {}).sort((a, b) =>
+                              ordenTalla(a[0], b[0]),
+                            )
+                            return (
+                              <div key={s.sede_id} className="rounded-lg border border-line bg-surface-2/50 p-2">
+                                <p className="mb-1 text-center text-[11px] font-bold text-ink">
+                                  {r.porSede[s.sede_id] || 0}
+                                </p>
+                                {tallas.length === 0 ? (
+                                  <p className="text-center text-[11px] text-ink-2/50">—</p>
+                                ) : (
+                                  <ul className="space-y-0.5">
+                                    {tallas.map(([talla, cant]) => (
+                                      <li
+                                        key={talla}
+                                        title={talla}
+                                        className="flex items-center justify-between gap-1 text-[11px] text-ink-2"
+                                      >
+                                        <span className="truncate">{talla}</span>
+                                        <span className="font-semibold text-ink">{cant}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            )
+                          })}
+                          <span />
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
           </div>
         </div>

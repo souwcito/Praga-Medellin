@@ -4,6 +4,8 @@ import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
 import { formato } from '../utils/formato'
 import Seo from '../components/Seo'
+import ProductCard from '../components/ProductCard'
+import SectionHeading from '../components/SectionHeading'
 import { AlertIcon, CartIcon, CheckIcon, MinusIcon, PlusIcon, XIcon } from '../components/icons'
 
 // Wrapper: remonta el detalle cuando cambia el id (reinicia estado limpio).
@@ -23,6 +25,7 @@ function ProductoDetalle({ productoId }) {
   const [cantidad, setCantidad] = useState(1)
   const [agregado, setAgregado] = useState(false)
   const [imgActiva, setImgActiva] = useState(0)
+  const [relacionados, setRelacionados] = useState([])
 
   useEffect(() => {
     catalogApi
@@ -31,6 +34,25 @@ function ProductoDetalle({ productoId }) {
       .catch((err) => setError(err?.message || 'No se pudo cargar el producto'))
       .finally(() => setLoading(false))
   }, [productoId])
+
+  // Relacionados reales de la misma categoría (con stock), excluyendo este.
+  useEffect(() => {
+    const cat = producto?.categoria_id
+    if (!cat) return
+    let activo = true
+    catalogApi
+      .getProductos({ categoria_id: cat, limit: 6 })
+      .then((p) => {
+        if (!activo) return
+        setRelacionados(
+          p.filter((x) => x.id !== Number(productoId) && (x.stock_total ?? 0) > 0).slice(0, 4),
+        )
+      })
+      .catch(() => {})
+    return () => {
+      activo = false
+    }
+  }, [producto?.categoria_id, productoId])
 
   // Variante seleccionada. Si es talla única, se usa sola; si hay tallas, se
   // requiere elegir una (no se autoselecciona la primera).
@@ -332,6 +354,18 @@ function ProductoDetalle({ productoId }) {
             </div>
           </div>
         </div>
+
+        {/* Relacionados (de la misma categoría, con stock) */}
+        {relacionados.length > 0 && (
+          <div className="mt-16">
+            <SectionHeading titulo="También te puede gustar" enlace="/catalogo" />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {relacionados.map((p) => (
+                <ProductCard key={p.id} producto={p} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </>
   )

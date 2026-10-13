@@ -2,6 +2,7 @@ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useSta
 import { useQueryClient } from '@tanstack/react-query'
 import { ventasApi } from '../services/api'
 import { useSedes, useEmpleados, useInventarioSede } from '../hooks/useData'
+import { useAuth } from '../hooks/useAuth'
 import { Comprobante } from '../components/Comprobante'
 import Modal from '../components/Modal'
 import { imprimirComprobante } from '../utils/print'
@@ -233,6 +234,10 @@ function GaleriaModal({ data, onClose }) {
 
 export default function Pos() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  // Solo admin/dueno pueden poner precio final (descuento) en el POS; los
+  // cajeros venden siempre al precio estándar.
+  const puedeEditarPrecio = ['admin', 'dueno'].includes(user?.rol)
   const { data: sedes = [] } = useSedes()
   const { data: empleados = [] } = useEmpleados()
   const [sedeId, setSedeId] = useState('')
@@ -624,26 +629,28 @@ export default function Pos() {
                         <TrashIcon className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <label className="flex items-center gap-1.5 text-[11px] text-ink-2">
-                        Precio final
-                        <input
-                          type="number"
-                          min={1}
-                          max={item.precio}
-                          value={item.precio_final ?? ''}
-                          onChange={(e) => cambiarPrecioFinal(item.variante_id, e.target.value)}
-                          placeholder={formato(item.precio)}
-                          title="Precio al que se vende (vacío = precio estándar)"
-                          className="w-24 rounded-lg border border-line bg-white px-2 py-1 text-right text-xs font-medium text-ink focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
-                        />
-                      </label>
-                      {descuentoLinea(item) > 0 && (
-                        <span className="text-[11px] font-semibold text-emerald-700">
-                          −{formato(descuentoLinea(item))}
-                        </span>
-                      )}
-                    </div>
+                    {puedeEditarPrecio && (
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <label className="flex items-center gap-1.5 text-[11px] text-ink-2">
+                          Precio final
+                          <input
+                            type="number"
+                            min={1}
+                            max={item.precio}
+                            value={item.precio_final ?? ''}
+                            onChange={(e) => cambiarPrecioFinal(item.variante_id, e.target.value)}
+                            placeholder={formato(item.precio)}
+                            title="Precio al que se vende (vacío = precio estándar)"
+                            className="w-24 rounded-lg border border-line bg-white px-2 py-1 text-right text-xs font-medium text-ink focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                          />
+                        </label>
+                        {descuentoLinea(item) > 0 && (
+                          <span className="text-[11px] font-semibold text-emerald-700">
+                            −{formato(descuentoLinea(item))}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <p className="mt-1 text-right text-sm font-semibold text-ink">
                       {formato(precioFinalItem(item) * item.cantidad)}
                     </p>

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { devolucionesApi, ventasApi } from '../services/api'
-import { useSedes, useEmpleados, useInventarioSede, useDevoluciones, useDevolucionDetalle } from '../hooks/useData'
+import { useSedes, useEmpleados, useInventarioSede, useVentas, useDevoluciones, useDevolucionDetalle } from '../hooks/useData'
 import PeriodFilter from '../components/PeriodFilter'
 import Modal from '../components/Modal'
 import {
   AlertIcon,
   CheckIcon,
+  ChevronDownIcon,
   CoinsIcon,
   MinusIcon,
   PlusIcon,
@@ -17,6 +18,7 @@ import {
   UserIcon,
   XIcon,
 } from '../components/icons'
+import ProductImage from '../components/ProductImage'
 
 const formato = (n) =>
   new Intl.NumberFormat('es-CO', {
@@ -39,6 +41,10 @@ const fechaLarga = (iso) =>
     hour: '2-digit',
     minute: '2-digit',
   })
+
+// Extrae el mensaje real del backend (Laravel responde { error: '...' })
+const msgError = (err) =>
+  err?.error || err?.message || 'No se pudo completar la operación'
 
 const METODOS_PAGO = [
   { value: 'efectivo', label: 'Efectivo' },
@@ -97,6 +103,7 @@ function Registrar() {
   const { data: sedes = [] } = useSedes()
   const { data: empleados = [] } = useEmpleados()
   const [sedeId, setSedeId] = useState('')
+  const [sedeCambioId, setSedeCambioId] = useState('')
   const [vendedorId, setVendedorId] = useState('')
 
   const [facturaInput, setFacturaInput] = useState('')
@@ -105,9 +112,10 @@ function Registrar() {
   const [ventaInfo, setVentaInfo] = useState(null)
   const [devueltos, setDevueltos] = useState([])
 
-  const { data: variantes = [], isLoading: cargandoCatalogo } = useInventarioSede(sedeId)
+  const { data: variantes = [], isLoading: cargandoCatalogo } = useInventarioSede(sedeCambioId)
   const [busqueda, setBusqueda] = useState('')
   const [cambioCart, setCambioCart] = useState([])
+  const [detalleVentaId, setDetalleVentaId] = useState(null)
 
   const [metodoPago, setMetodoPago] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -127,6 +135,13 @@ function Registrar() {
     )
   }, [variantes, busqueda])
 
+  // Ventas recientes del vendedor en la sede seleccionada: permite iniciar la
+  // devolución eligiendo una venta de la lista (sin escribir la factura).
+  const ventasDelVendedor = useVentas(
+    { sede_id: sedeId || undefined, empleado_id: vendedorId || undefined, per_page: 10, page: 1 },
+    { enabled: Boolean(sedeId && vendedorId && !ventaInfo) },
+  )
+
   const totalDevuelto = useMemo(
     () => devueltos.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0),
     [devueltos],
@@ -143,7 +158,10 @@ function Registrar() {
     tieneDevuelto &&
     (tipo === 'reembolso'
       ? Boolean(metodoPago)
-      : cambioCart.length > 0 && diferencia >= 0 && (diferencia === 0 || Boolean(metodoPago)))
+      : Boolean(sedeCambioId) &&
+        cambioCart.length > 0 &&
+        diferencia >= 0 &&
+        (diferencia === 0 || Boolean(metodoPago)))
 
   function cambiarTipo(nuevoTipo) {
     if (nuevoTipo === tipo) return
@@ -167,6 +185,11 @@ function Registrar() {
     try {
       const res = await ventasApi.buscarPorFactura(factura)
       setVentaInfo(res)
+      // Autoselecciona la sede donde se vendió (devolución y, por defecto, cambio)
+      if (res.venta?.sede_venta_id) {
+        setSedeId(String(res.venta.sede_venta_id))
+        setSedeCambioId(String(res.venta.sede_venta_id))
+      }
       setDevueltos(
         res.items.map((it) => ({
           variante_id: it.variante_id,
@@ -178,7 +201,7 @@ function Registrar() {
         })),
       )
     } catch (err) {
-      setFacturaError(err?.message || 'No se pudo buscar la factura')
+      setFacturaError(msgError(err))
     } finally {
       setBuscando(false)
     }
@@ -187,7 +210,49 @@ function Registrar() {
   function cambiarSede(e) {
     const value = e.target.value
     setSedeId(value)
+    // Por defecto el cambio sale de la misma sede de la devolución
+    setSedeCambioId(value)
     setCambioCart([])
+    setRegistroError(null)
+  }
+
+  function cambiarSedeCambio(e) {
+    setSedeCambioId(e.target.value)
+    setCambioCart([])
+    setRegistroError(null)
+  }
+
+  function usarVenta(v) {
+    if (!v?.id) return
+    setVentaInfo({
+      venta: {
+        id: v.id,
+        factura: v.factura,
+        fecha: v.fecha,
+        sede_venta: v.sede_venta,
+        sede_venta_id: v.sede_venta_id ?? Number(sedeId),
+        total: v.total,
+      },
+      items: v.items || [],
+    })
+    setDevueltos(
+      (v.items || []).map((it) => ({
+        variante_id: it.variante_id,
+        nombre: it.nombre,
+        talla: it.talla,
+        precio_unitario: it.precio_unitario,
+        vendido: it.cantidad,
+        cantidad: it.cantidad,
+      })),
+    )
+    if (v.sede_venta_id) {
+      setSedeId(String(v.sede_venta_id))
+      setSedeCambioId(String(v.sede_venta_id))
+    }
+    setCambioCart([])
+    setMetodoPago('')
+    setFacturaInput('')
+    setFacturaError(null)
     setRegistroError(null)
   }
 
@@ -236,6 +301,7 @@ function Registrar() {
       const payload = {
         venta_id: ventaInfo.venta.id,
         sede_id: Number(sedeId),
+        sede_cambio_id: tipo === 'cambio' ? Number(sedeCambioId) : undefined,
         empleado_id: Number(vendedorId),
         tipo,
         devueltos: devueltos
@@ -263,9 +329,12 @@ function Registrar() {
       setMotivo('')
       setFacturaInput('')
       queryClient.invalidateQueries({ queryKey: ['inventario', sedeId] })
+      if (sedeCambioId && sedeCambioId !== sedeId) {
+        queryClient.invalidateQueries({ queryKey: ['inventario', sedeCambioId] })
+      }
       queryClient.invalidateQueries({ queryKey: ['devoluciones'] })
     } catch (err) {
-      setRegistroError(err?.message || 'No se pudo registrar la devolución')
+      setRegistroError(msgError(err))
     } finally {
       setConfirmando(false)
     }
@@ -335,11 +404,11 @@ function Registrar() {
         </button>
       </div>
 
-      {/* Selectores de sede y vendedor */}
-      <div className="mb-5 grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Selectores de sede, vendedor y factura */}
+      <div className="mb-5 grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 xl:grid-cols-4">
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
-            <StoreIcon className="h-4 w-4" /> Sede
+            <StoreIcon className="h-4 w-4" /> Sede de devolución
           </span>
           <select value={sedeId} onChange={cambiarSede} className={selectCls}>
             <option value="">Selecciona una sede…</option>
@@ -350,6 +419,22 @@ function Registrar() {
             ))}
           </select>
         </label>
+
+        {tipo === 'cambio' && (
+          <label className="block">
+            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
+              <StoreIcon className="h-4 w-4" /> Sede del cambio
+            </span>
+            <select value={sedeCambioId} onChange={cambiarSedeCambio} className={selectCls}>
+              <option value="">Selecciona la sede del cambio…</option>
+              {sedes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
@@ -399,6 +484,170 @@ function Registrar() {
         </form>
       </div>
 
+      {/* Ventas recientes del vendedor en la sede seleccionada */}
+      {!ventaInfo && (
+        <div className="mb-5 rounded-2xl border border-line bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-base font-semibold tracking-tight text-ink">
+              Ventas de este vendedor
+            </h2>
+            {sedeId && vendedorId && !ventasDelVendedor.isLoading && (
+              <span className="text-xs text-ink-2">
+                {ventasDelVendedor.data?.meta?.total ?? 0} ventas en{' '}
+                {sedes.find((s) => String(s.id) === String(sedeId))?.nombre} ·{' '}
+                {empleados.find((e) => String(e.id) === String(vendedorId))?.nombre}
+              </span>
+            )}
+          </div>
+
+          {!sedeId || !vendedorId ? (
+            <p className="grid h-16 place-items-center rounded-xl border border-dashed border-line text-sm text-ink-2/70">
+              Selecciona la sede y el vendedor para ver sus ventas recientes.
+            </p>
+          ) : ventasDelVendedor.isLoading ? (
+            <div className="grid h-16 place-items-center">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-ink-2/30 border-t-ink-2" />
+            </div>
+          ) : ventasDelVendedor.data?.data?.length ? (
+            <ul className="max-h-[32rem] space-y-3 overflow-y-auto pr-1">
+              {ventasDelVendedor.data.data.map((v) => {
+                const detalleAbierto = detalleVentaId === v.id
+                const itemsVenta = v.items || []
+                return (
+                  <li key={v.id} className="overflow-hidden rounded-xl border border-line bg-white">
+                    {/* Cabecera de la venta */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 bg-surface-2/40 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink">
+                          {v.factura || '—'}{' '}
+                          <span className="font-normal text-ink-2">· {fechaLarga(v.fecha)}</span>
+                        </p>
+                        <p className="text-xs text-ink-2">
+                          {v.sede_venta} · {formato(v.total)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDetalleVentaId(detalleAbierto ? null : v.id)}
+                          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            detalleAbierto
+                              ? 'border-ink bg-ink text-white'
+                              : 'border-line bg-white text-ink hover:border-ink-2/40'
+                          }`}
+                        >
+                          <ChevronDownIcon
+                            className={`h-3.5 w-3.5 transition-transform duration-200 ${detalleAbierto ? 'rotate-180' : ''}`}
+                          />
+                          Ver detalle de la venta
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => usarVenta(v)}
+                          className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98]"
+                        >
+                          Usar esta venta
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Resumen compacto (primeras líneas) */}
+                    {!detalleAbierto && itemsVenta.length > 0 && (
+                      <ul className="divide-y divide-line">
+                        {itemsVenta.slice(0, 2).map((it, idx) => (
+                          <li
+                            key={`${it.variante_id}-${idx}`}
+                            className="flex items-center gap-3 px-3 py-2"
+                          >
+                            <ProductImage
+                              src={it.imagen_url}
+                              alt={it.nombre}
+                              className="h-9 w-9 rounded-lg"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm text-ink">{it.nombre}</p>
+                              <p className="text-xs text-ink-2">
+                                {it.talla ? `Talla ${it.talla} · ` : ''}
+                                {it.cantidad} × {formato(it.precio_unitario)}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-xs font-semibold text-ink">
+                              {formato(it.subtotal)}
+                            </span>
+                          </li>
+                        ))}
+                        {itemsVenta.length > 2 && (
+                          <li className="px-3 py-1.5 text-center text-xs text-ink-2/70">
+                            +{itemsVenta.length - 2} artículo(s) más · toca «Ver detalle de la
+                            venta»
+                          </li>
+                        )}
+                      </ul>
+                    )}
+
+                    {/* Detalle completo */}
+                    {detalleAbierto && (
+                      <div className="animate-fade-in">
+                        <ul className="divide-y divide-line">
+                          {itemsVenta.map((it, idx) => (
+                            <li
+                              key={`${it.variante_id}-${idx}`}
+                              className="flex items-center gap-3 px-3 py-2.5"
+                            >
+                              <ProductImage
+                                src={it.imagen_url}
+                                alt={it.nombre}
+                                className="h-14 w-14 rounded-lg"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-ink">
+                                  {it.nombre}
+                                </p>
+                                <p className="text-xs text-ink-2">
+                                  {it.talla ? `Talla ${it.talla} · ` : ''}
+                                  {it.cantidad} × {formato(it.precio_unitario)}
+                                </p>
+                              </div>
+                              <span className="shrink-0 text-sm font-semibold text-ink">
+                                {formato(it.subtotal)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line bg-surface-2/40 px-3 py-2.5">
+                          {v.descuento_total > 0 && (
+                            <span className="text-xs text-emerald-700">
+                              Descuento −{formato(v.descuento_total)}
+                            </span>
+                          )}
+                          <span className="text-right">
+                            <span className="block text-xs text-ink-2">Total pagado</span>
+                            <span className="text-lg font-bold text-ink">{formato(v.total)}</span>
+                          </span>
+                        </div>
+                        <div className="border-t border-line px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => usarVenta(v)}
+                            className="w-full rounded-lg bg-ink py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98]"
+                          >
+                            Usar esta venta para la devolución
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="grid h-16 place-items-center rounded-xl border border-dashed border-line text-sm text-ink-2/70">
+              No hay ventas recientes de este vendedor en esta sede.
+            </p>
+          )}
+        </div>
+      )}
+
       {!ventaInfo ? (
         <div className="grid h-48 place-items-center rounded-2xl border border-dashed border-line text-sm text-ink-2/70">
           Busca la factura de la compra para iniciar la operación.
@@ -406,7 +655,8 @@ function Registrar() {
       ) : (
         <>
           {/* Resumen de la venta original */}
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface-2/60 px-5 py-4">
+        <div className="mb-5 rounded-2xl border border-line bg-surface-2/60 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink text-white">
                 {tipo === 'reembolso' ? <CoinsIcon className="h-5 w-5" /> : <SwapIcon className="h-5 w-5" />}
@@ -425,6 +675,23 @@ function Registrar() {
               <p className="text-lg font-bold text-ink">{formato(ventaInfo.venta.total)}</p>
             </div>
           </div>
+
+          {(ventaInfo.items || []).length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ventaInfo.items.map((it, idx) => (
+                <span
+                  key={`${it.variante_id}-${idx}`}
+                  title={`${it.nombre}${it.talla ? ` · ${it.talla}` : ''} × ${it.cantidad}`}
+                  className="flex items-center gap-2 rounded-lg border border-line bg-white py-0.5 pl-0.5 pr-2 text-[11px] text-ink-2"
+                >
+                  <ProductImage src={it.imagen_url} alt={it.nombre} className="h-9 w-9 rounded-md" />
+                  <span className="max-w-44 truncate font-medium text-ink">{it.nombre}</span>
+                  <span>× {it.cantidad}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
           {tipo === 'reembolso' && (
             <div className="animate-fade-in mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -506,6 +773,16 @@ function Registrar() {
                 </h2>
                 <p className="mb-4 text-xs text-ink-2/70">
                   Elige del catálogo los productos de igual o mayor valor que lo devuelto.
+                  {sedeCambioId && (
+                    <>
+                      {' '}
+                      Salen de{' '}
+                      <span className="font-medium text-ink">
+                        {sedes.find((s) => String(s.id) === String(sedeCambioId))?.nombre}
+                      </span>
+                      .
+                    </>
+                  )}
                 </p>
 
                 <div className="relative mb-3">
@@ -519,9 +796,9 @@ function Registrar() {
                   />
                 </div>
 
-                {!sedeId ? (
+                {!sedeCambioId ? (
                   <div className="grid h-40 place-items-center rounded-xl border border-dashed border-line text-sm text-ink-2/70">
-                    Selecciona una sede para ver el stock disponible.
+                    Selecciona la sede del cambio para ver el stock disponible.
                   </div>
                 ) : cargandoCatalogo ? (
                   <div className="grid h-40 place-items-center text-sm text-ink-2/70">
@@ -855,7 +1132,8 @@ function Registrar() {
             </div>
 
             <p className="mt-3 text-center text-xs text-ink-2/70">
-              El inventario de la sede ya fue actualizado.
+              El inventario de {resultado.tipo === 'reembolso' ? 'la sede' : 'las sedes'} de la
+              devolución y del cambio ya fue actualizado.
             </p>
 
             <button
@@ -1144,6 +1422,14 @@ function Historial() {
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-2 px-4 py-2.5 text-sm">
                   <span className="text-ink-2">
                     {detalle.empleado.nombre} · {detalle.sede}
+                    {detalle.tipo === 'cambio' &&
+                      detalle.sede_cambio &&
+                      detalle.sede_cambio !== detalle.sede && (
+                        <span className="text-ink">
+                          {' '}
+                          → cambio en <span className="font-medium">{detalle.sede_cambio}</span>
+                        </span>
+                      )}
                   </span>
                   <span
                     className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${
@@ -1175,16 +1461,21 @@ function Historial() {
                         {items.map((i) => (
                           <li
                             key={i.id}
-                            className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-sm"
+                            className="flex items-center gap-3 rounded-lg border border-line px-3 py-2 text-sm"
                           >
-                            <span className="min-w-0">
+                            <ProductImage
+                              src={i.imagen_url}
+                              alt={i.nombre}
+                              className="h-10 w-10 rounded-lg"
+                            />
+                            <span className="min-w-0 flex-1">
                               <span className="block truncate font-medium text-ink">{i.nombre}</span>
                               <span className="block text-xs text-ink-2">
                                 {i.talla ? `Talla ${i.talla} · ` : ''}
                                 {formato(i.precio_unitario)} × {i.cantidad}
                               </span>
                             </span>
-                            <span className="font-semibold text-ink">{formato(i.subtotal)}</span>
+                            <span className="shrink-0 font-semibold text-ink">{formato(i.subtotal)}</span>
                           </li>
                         ))}
                       </ul>

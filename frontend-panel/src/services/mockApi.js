@@ -5,7 +5,11 @@
 // cada una con su propio código de barras único.
 
 import {
+  abonos,
+  apartadoItems,
+  apartados,
   categorias,
+  clientes,
   detalleVentas,
   devoluciones,
   detalleDevoluciones,
@@ -650,16 +654,32 @@ async function getVentas(params = {}) {
     const factura = facturas.find((f) => f.venta_id === v.id)
     const detallesVenta = detalleVentas.filter((d) => d.venta_id === v.id)
     const descuentoTotal = detallesVenta.reduce((s, d) => s + (d.descuento || 0), 0)
+    const items = detallesVenta.map((d) => {
+      const vr = variantes.find((x) => x.id === d.variante_id)
+      const pr = productos.find((p) => p.id === (vr ? vr.producto_id : null))
+      return {
+        variante_id: d.variante_id,
+        nombre: pr ? pr.nombre : `Producto ${d.variante_id}`,
+        talla: vr ? vr.talla : null,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.subtotal,
+        imagen_url: pr ? pr.imagen_url : null,
+      }
+    })
     return {
       id: v.id,
       factura: factura ? factura.numero_interno : null,
       fecha: v.fecha,
       empleado: { id: v.empleado_id, nombre: e ? e.nombre : '—' },
+      empleado_id: v.empleado_id,
       sede_venta: sede ? sede.nombre : '—',
+      sede_venta_id: v.sede_venta_id,
       tipo: v.tipo,
       total: v.total,
       descuento_total: descuentoTotal,
       pagos: (v.pagos || []).map((p) => ({ metodo_pago: p.metodo_pago, monto: p.monto })),
+      items,
     }
   })
 
@@ -670,10 +690,298 @@ async function getVentas(params = {}) {
   }
 }
 
-// Clientes y pedidos online (en el mock están vacíos; llegan con el checkout web)
-async function getClientes() {
+// Clientes (web + Plan Separe). Con ?q= filtra por nombre o cédula.
+async function getClientes({ q } = {}) {
+  await delay(200)
+  let lista = clientes.slice()
+  if (q) {
+    const s = String(q).toLowerCase()
+    lista = lista.filter(
+      (c) =>
+        c.nombre.toLowerCase().includes(s) ||
+        (c.documento || '').toLowerCase().includes(s),
+    )
+  }
+  return lista
+}
+
+async function crearCliente(body = {}) {
+  await delay(250)
+  const nombre = (body.nombre || '').trim()
+  if (!nombre) throw new Error('El nombre es obligatorio')
+  const duplicado = clientes.some(
+    (c) => c.documento && body.documento && String(c.documento) === String(body.documento),
+  )
+  if (duplicado) throw new Error('Ya existe un cliente con esa cédula')
+  const c = {
+    id: clientes.length + 1,
+    nombre,
+    documento: body.documento || null,
+    telefono: body.telefono || null,
+    email: null,
+    direccion: null,
+    ciudad: 'Medellín',
+    created_at: new Date().toISOString(),
+  }
+  clientes.push(c)
+  return c
+}
+
+// ---------------------------------------------------------------------------
+// PLAN SEPARE (apartado + abonos)
+// ---------------------------------------------------------------------------
+
+let _separeSeq = 1001
+
+function _infoItem(varianteId) {
+  const vr = variantes.find((x) => x.id === Number(varianteId))
+  const p = productos.find((pr) => pr.id === (vr ? vr.producto_id : null))
+  return { vr, p }
+}
+
+function _formatearApartado(ap, conDetalle = false) {
+  const c = clientes.find((x) => x.id === ap.cliente_id)
+  const sede = sedes.find((s) => s.id === ap.sede_id)
+  const e = empleados.find((em) => em.id === ap.empleado_id)
+  const items = apartadoItems
+    .filter((i) => i.apartado_id === ap.id)
+    .map((i) => {
+      const { vr, p } = _infoItem(i.variante_id)
+      return {
+        variante_id: i.variante_id,
+        nombre: p ? p.nombre : `Producto ${i.variante_id}`,
+        talla: vr ? vr.talla : null,
+        sku: p ? p.sku : null,
+        codigo_barras: vr ? vr.codigo_barras : null,
+        cantidad: i.cantidad,
+        precio_unitario: i.precio_unitario,
+        subtotal: i.subtotal,
+        imagen_url: p ? p.imagen_url : null,
+      }
+    })
+  const lsAbonos = abonos
+    .filter((a) => a.apartado_id === ap.id)
+    .map((a) => ({
+      id: a.id,
+      monto: a.monto,
+      metodo_pago: a.metodo_pago,
+      fecha: a.fecha,
+      empleado: {
+        id: a.empleado_id,
+        nombre: (empleados.find((em) => em.id === a.empleado_id) || {}).nombre || '—',
+      },
+    }))
+  const total = ap.total
+  const abonado = ap.abonado
+  const base = {
+    id: ap.id,
+    numero_interno: ap.numero_interno,
+    estado: ap.estado,
+    fecha: ap.fecha,
+    sede_id: ap.sede_id,
+    sede: sede ? sede.nombre : '—',
+    cliente: {
+      id: ap.cliente_id,
+      nombre: c ? c.nombre : '—',
+      documento: c ? c.documento : null,
+      telefono: c ? c.telefono : null,
+    },
+    empleado: { id: ap.empleado_id, nombre: e ? e.nombre : '—' },
+    total,
+    abonado,
+    saldo: Math.max(0, total - abonado),
+    porcentaje: total > 0 ? Math.min(100, Math.round((abonado * 100) / total)) : 0,
+    venta_id: ap.venta_id || null,
+    factura: ap.factura || null,
+  }
+  if (conDetalle) {
+    base.items = items
+    base.abonos = lsAbonos
+    base.num_abonos = lsAbonos.length
+  }
+  return base
+}
+
+// Genera la Venta (factura) cuando el plan llega al 100%, igual que el backend.
+function _generarVentaMock(ap) {
+  if (ap.venta_id) return
+  const venta = {
+    id: ventas.length + 1,
+    empleado_id: ap.empleado_id,
+    sede_venta_id: ap.sede_id,
+    tipo: 'presencial',
+    numero_interno: `FAC-${String(++facturaCounter).padStart(4, '0')}`,
+    fecha: new Date().toISOString(),
+    total: ap.total,
+    pagos: [],
+  }
+  const abonosPlan = abonos.filter((a) => a.apartado_id === ap.id)
+  venta.pagos = abonosPlan.map((a) => ({ venta_id: venta.id, metodo_pago: a.metodo_pago, monto: a.monto }))
+  ventas.push(venta)
+  apartadoItems
+    .filter((i) => i.apartado_id === ap.id)
+    .forEach((i) =>
+      detalleVentas.push({
+        venta_id: venta.id,
+        variante_id: i.variante_id,
+        cantidad: i.cantidad,
+        precio_unitario: i.precio_unitario,
+        precio_final: i.precio_unitario,
+        descuento: 0,
+        subtotal: i.subtotal,
+      }),
+    )
+  facturas.push({ venta_id: venta.id, numero_interno: venta.numero_interno, fecha: venta.fecha })
+  ap.venta_id = venta.id
+  ap.estado = 'completado'
+  ap.abonado = ap.total
+  ap.factura = venta.numero_interno
+}
+
+async function crearApartado(body = {}) {
+  await delay(300)
+
+  const { sede_id, empleado_id, items, abono_inicial, cliente_id, cliente } = body
+  if (!sede_id || !empleado_id) throw new Error('Faltan datos de sede o empleado')
+  if (!Array.isArray(items) || items.length === 0) throw new Error('Agrega al menos un producto')
+  if (!abono_inicial || !abono_inicial.monto || !['efectivo', 'transferencia'].includes(abono_inicial.metodo_pago)) {
+    throw new Error('Indica un abono inicial con método efectivo o transferencia')
+  }
+
+  let c = cliente_id ? clientes.find((x) => x.id === Number(cliente_id)) : null
+  if (!c && cliente) c = await crearCliente(cliente)
+  if (!c) throw new Error('Selecciona o crea un cliente')
+
+  let total = 0
+  const rows = items.map((it) => {
+    const varianteId = Number(it.variante_id)
+    const cant = Number(it.cantidad) || 1
+    const { vr, p } = _infoItem(varianteId)
+    if (!vr || !p) throw new Error('Producto inválido')
+    const precio = Number(p.precio) || 0
+    const reg = inventario.find((i) => i.variante_id === varianteId && i.sede_id === Number(sede_id))
+    if (!reg || reg.cantidad < cant) {
+      throw new Error(`Stock insuficiente para ${p.nombre}${vr.talla ? ` (Talla ${vr.talla})` : ''} en esta sede`)
+    }
+    const subtotal = precio * cant
+    total += subtotal
+    return { varianteId, cant, precio, subtotal }
+  })
+
+  const abonoMonto = Number(abono_inicial.monto) || 0
+  if (abonoMonto > total) throw new Error('El abono inicial no puede superar el valor total')
+
+  rows.forEach((r) => {
+    const reg = inventario.find((i) => i.variante_id === r.varianteId && i.sede_id === Number(sede_id))
+    reg.cantidad -= r.cant
+  })
+
+  const ap = {
+    id: apartados.length + 1,
+    numero_interno: `SEP-${_separeSeq++}`,
+    cliente_id: c.id,
+    sede_id: Number(sede_id),
+    empleado_id: Number(empleado_id),
+    total,
+    abonado: abonoMonto,
+    estado: 'activo',
+    venta_id: null,
+    factura: null,
+    fecha: new Date().toISOString(),
+  }
+  apartados.push(ap)
+  rows.forEach((r) =>
+    apartadoItems.push({
+      apartado_id: ap.id,
+      variante_id: r.varianteId,
+      cantidad: r.cant,
+      precio_unitario: r.precio,
+      subtotal: r.subtotal,
+    }),
+  )
+  abonos.push({
+    id: abonos.length + 1,
+    apartado_id: ap.id,
+    monto: abonoMonto,
+    metodo_pago: abono_inicial.metodo_pago,
+    empleado_id: Number(empleado_id),
+    fecha: new Date().toISOString(),
+  })
+  if (abonoMonto >= total) _generarVentaMock(ap)
+
+  return _formatearApartado(ap, true)
+}
+
+async function getApartados(params = {}) {
   await delay()
-  return []
+  const { estado, sede_id, q, page = 1, per_page = 10 } = params
+  let lista = apartados.slice().sort((a, b) => b.id - a.id)
+  if (estado) lista = lista.filter((a) => a.estado === estado)
+  if (sede_id) lista = lista.filter((a) => a.sede_id === Number(sede_id))
+  if (q) {
+    const s = String(q).toLowerCase()
+    lista = lista.filter((a) => {
+      const c = clientes.find((x) => x.id === a.cliente_id)
+      return (
+        (c && c.nombre.toLowerCase().includes(s)) || (c && (c.documento || '').toLowerCase().includes(s))
+      )
+    })
+  }
+  const total = lista.length
+  const last_page = Math.max(1, Math.ceil(total / per_page))
+  const current_page = Math.min(Math.max(1, Number(page)), last_page)
+  const start = (current_page - 1) * per_page
+  return {
+    data: lista.slice(start, start + per_page).map((a) => _formatearApartado(a)),
+    meta: { total, per_page, current_page, last_page },
+  }
+}
+
+async function getApartadoDetalle(id) {
+  await delay(150)
+  const ap = apartados.find((x) => x.id === Number(id))
+  if (!ap) throw new Error('Plan separe no encontrado')
+  return _formatearApartado(ap, true)
+}
+
+async function abonarApartado(id, body = {}) {
+  await delay(250)
+  const ap = apartados.find((x) => x.id === Number(id))
+  if (!ap) throw new Error('Plan separe no encontrado')
+  if (ap.estado !== 'activo') throw new Error('El plan ya fue completado o cancelado')
+  const monto = Number(body.monto) || 0
+  if (monto <= 0) throw new Error('El abono debe ser mayor a cero')
+  if (!['efectivo', 'transferencia'].includes(body.metodo_pago)) throw new Error('Método de abono inválido')
+  const saldo = ap.total - ap.abonado
+  if (monto > saldo) throw new Error('El abono supera el saldo pendiente')
+  if (!body.empleado_id) throw new Error('Falta el empleado')
+
+  abonos.push({
+    id: abonos.length + 1,
+    apartado_id: ap.id,
+    monto,
+    metodo_pago: body.metodo_pago,
+    empleado_id: Number(body.empleado_id),
+    fecha: new Date().toISOString(),
+  })
+  ap.abonado += monto
+  if (ap.abonado >= ap.total) _generarVentaMock(ap)
+  return _formatearApartado(ap, true)
+}
+
+async function cancelarApartado(id) {
+  await delay(250)
+  const ap = apartados.find((x) => x.id === Number(id))
+  if (!ap) throw new Error('Plan separe no encontrado')
+  if (ap.estado !== 'activo') throw new Error('Solo se puede cancelar un plan en estado activo')
+  apartadoItems
+    .filter((i) => i.apartado_id === ap.id)
+    .forEach((i) => {
+      const reg = inventario.find((inv) => inv.variante_id === i.variante_id && inv.sede_id === ap.sede_id)
+      if (reg) reg.cantidad += i.cantidad
+    })
+  ap.estado = 'cancelado'
+  return _formatearApartado(ap, true)
 }
 
 async function getPedidos() {
@@ -698,14 +1006,15 @@ async function buscarVentaPorFactura({ factura } = {}) {
     .map((d) => {
       const v = variantes.find((x) => x.id === d.variante_id)
       const p = productos.find((pr) => pr.id === v.producto_id)
-      return {
-        variante_id: d.variante_id,
-        nombre: p ? p.nombre : `Producto ${d.variante_id}`,
-        talla: v ? v.talla : null,
-        cantidad: d.cantidad,
-        precio_unitario: d.precio_unitario,
-        subtotal: d.cantidad * d.precio_unitario,
-      }
+return {
+    variante_id: d.variante_id,
+    nombre: p ? p.nombre : `Producto ${d.variante_id}`,
+    talla: v ? v.talla : null,
+    cantidad: d.cantidad,
+    precio_unitario: d.precio_unitario,
+    subtotal: d.cantidad * d.precio_unitario,
+    imagen_url: p ? p.imagen_url : null,
+  }
     })
 
   return {
@@ -714,6 +1023,7 @@ async function buscarVentaPorFactura({ factura } = {}) {
       factura: f.numero_interno,
       fecha: venta.fecha,
       sede_venta: sede ? sede.nombre : '—',
+      sede_venta_id: venta.sede_venta_id,
       empleado: empleado ? empleado.nombre : '—',
       total: venta.total,
     },
@@ -731,6 +1041,7 @@ async function crearDevolucion(body) {
   const {
     venta_id,
     sede_id,
+    sede_cambio_id,
     empleado_id,
     tipo = 'cambio',
     devueltos,
@@ -739,6 +1050,9 @@ async function crearDevolucion(body) {
     motivo,
   } = body
   if (!venta_id || !sede_id || !empleado_id) throw new Error('Faltan datos para registrar la devolución')
+
+  // Sede de la que salen los productos del cambio (por defecto, la de devolución)
+  const sedeCambioId = Number(sede_cambio_id ?? sede_id)
   if (!Array.isArray(devueltos) || devueltos.length === 0) throw new Error('Debes devolver al menos un artículo')
 
   const venta = ventas.find((v) => v.id === Number(venta_id))
@@ -758,10 +1072,10 @@ async function crearDevolucion(body) {
   let totalCambio = 0
   cambios.forEach((item) => {
     const reg = inventario.find(
-      (i) => i.sede_id === Number(sede_id) && i.variante_id === Number(item.variante_id),
+      (i) => i.sede_id === sedeCambioId && i.variante_id === Number(item.variante_id),
     )
     if (!reg || reg.cantidad < Number(item.cantidad)) {
-      throw new Error('Stock insuficiente para el producto de cambio')
+      throw new Error('Stock insuficiente para el producto de cambio en la sede seleccionada')
     }
     totalCambio += Number(item.cantidad) * Number(item.precio_unitario)
   })
@@ -782,6 +1096,7 @@ async function crearDevolucion(body) {
     id: devoluciones.length + 1,
     venta_id: Number(venta_id),
     sede_id: Number(sede_id),
+    sede_cambio_id: tipo === 'cambio' ? sedeCambioId : null,
     empleado_id: Number(empleado_id),
     numero_interno: numeroInterno,
     tipo,
@@ -812,7 +1127,7 @@ async function crearDevolucion(body) {
   })
   cambios.forEach((item) => {
     const reg = inventario.find(
-      (i) => i.sede_id === Number(sede_id) && i.variante_id === Number(item.variante_id),
+      (i) => i.sede_id === sedeCambioId && i.variante_id === Number(item.variante_id),
     )
     reg.cantidad -= Number(item.cantidad)
     detalle.push({
@@ -832,6 +1147,7 @@ function formatearDevolucion(d, detalle = []) {
   const factura = facturas.find((f) => f.venta_id === d.venta_id)
   const e = empleados.find((em) => em.id === d.empleado_id)
   const sede = sedes.find((s) => s.id === d.sede_id)
+  const sedeCambio = sedes.find((s) => s.id === d.sede_cambio_id)
 
   const items = detalle.length
     ? detalle.map((dd) => {
@@ -846,6 +1162,7 @@ function formatearDevolucion(d, detalle = []) {
           precio_unitario: dd.precio_unitario,
           subtotal: dd.cantidad * dd.precio_unitario,
           tipo: dd.tipo,
+          imagen_url: p ? p.imagen_url : null,
         }
       })
     : null
@@ -859,6 +1176,8 @@ function formatearDevolucion(d, detalle = []) {
     fecha: d.fecha,
     empleado: { id: d.empleado_id, nombre: e ? e.nombre : '—' },
     sede: sede ? sede.nombre : '—',
+    sede_cambio_id: d.sede_cambio_id ?? null,
+    sede_cambio: (sedeCambio || sede) ? (sedeCambio || sede).nombre : '—',
     total_devuelto: d.total_devuelto,
     total_cambio: d.total_cambio,
     diferencia: d.diferencia,
@@ -1017,11 +1336,17 @@ export default {
   getComisiones,
   getVentas,
   getClientes,
+  crearCliente,
   getPedidos,
   buscarVentaPorFactura,
   crearDevolucion,
   getDevoluciones,
   getDevolucionDetalle,
+  getApartados,
+  crearApartado,
+  getApartadoDetalle,
+  abonarApartado,
+  cancelarApartado,
   getDuenoResumen,
   updateCosto,
 }

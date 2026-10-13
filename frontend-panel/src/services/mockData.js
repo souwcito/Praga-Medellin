@@ -245,3 +245,19 @@ for (let offset = 29; offset >= 0; offset -= 1) {
 
 export const devoluciones = []
 export const detalleDevoluciones = []
+
+// ---------------------------------------------------------------------------
+// Clientes y Plan Separe (apartados + abonos). Clientes tienen base para probar
+// la búsqueda por cédula/nombre; apartados/abonos empiezan vacíos y crecen
+// durante la sesión con las funciones del mock.
+// ---------------------------------------------------------------------------
+
+export const clientes = [
+  { id: 1, nombre: 'Carlos Pérez', documento: '1036654321', telefono: '3001234567', email: null, direccion: null, ciudad: 'Medellín', created_at: '2026-09-01T15:00:00.000Z' },
+  { id: 2, nombre: 'María Fernanda Gómez', documento: '43987654', telefono: '3109876543', email: null, direccion: null, ciudad: 'Medellín', created_at: '2026-09-05T15:00:00.000Z' },
+  { id: 3, nombre: 'Andrés Felipe Rojas', documento: '1123456789', telefono: '3012345678', email: null, direccion: null, ciudad: 'Medellín', created_at: '2026-09-12T15:00:00.000Z' },
+]
+
+export const apartados = []
+export const apartadoItems = []
+export const abonos = []

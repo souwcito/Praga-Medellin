@@ -133,7 +133,8 @@ export default function Catalogo() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Encabezado */}
         <div className="mb-6">
-          <h1 className="font-display text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-ink-2">Catálogo</p>
+          <h1 className="mt-1 font-display text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
             {titulo}
           </h1>
           {subcategoriaActual && (

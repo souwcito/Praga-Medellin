@@ -15,16 +15,23 @@ import {
   ReceiptIcon,
   UserIcon,
   SwapIcon,
+  TagIcon,
   XIcon,
 } from './icons'
 
-const navItems = [
+// Item de navegación común para usuarios de gestión y cajeros
+const navItemsComunes = [
   { to: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
   { to: '/pos', label: 'Punto de venta', icon: CartIcon },
-  { to: '/inventario', label: 'Inventario General', icon: LayersIcon },
+  { to: '/apartados', label: 'Plan Separe', icon: TagIcon },
   { to: '/ventas', label: 'Ventas', icon: ReceiptIcon },
-  { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
   { to: '/comisiones', label: 'Comisiones', icon: CoinsIcon },
+]
+
+// Gestión (inventario y devoluciones): solo admin/dueno
+const navItemsGestion = [
+  { to: '/inventario', label: 'Inventario General', icon: LayersIcon },
+  { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
 ]
 
 const comercioItems = [
@@ -36,6 +43,11 @@ const comercioItems = [
 const duenoItems = [
   { to: '/dueno', label: 'Resumen', icon: DashboardIcon },
   { to: '/dueno/productos', label: 'Productos y costos', icon: PackageIcon },
+]
+
+// Gestión del dueño (además del panel del dueño)
+const duenoGestionItems = [
+  { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
 ]
 
 // Item de navegación del sidebar
@@ -120,6 +132,7 @@ export default function Layout() {
   const [menuAbierto, setMenuAbierto] = useState(false)
 
   const esDueno = user?.rol === 'dueno'
+  const esAdmin = user?.rol === 'admin'
   const hombres = categorias.filter((c) => c.catalogo === 'hombre')
   const mujeres = categorias.filter((c) => c.catalogo === 'mujer')
 
@@ -189,35 +202,50 @@ export default function Layout() {
                 {duenoItems.map((item) => (
                   <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
                 ))}
-              </>
-            ) : (
-              <>
-                <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
-                  Catálogos
-                </p>
-                <CatalogoGrupo
-                  catalogo="hombre"
-                  titulo="Catálogo Hombre"
-                  lista={hombres}
-                  abierto={catalogoAbierto === 'hombre'}
-                  alternar={alternarCatalogo}
-                  onNavigate={cerrarMenu}
-                />
-                <CatalogoGrupo
-                  catalogo="mujer"
-                  titulo="Catálogo Mujer"
-                  lista={mujeres}
-                  abierto={catalogoAbierto === 'mujer'}
-                  alternar={alternarCatalogo}
-                  onNavigate={cerrarMenu}
-                />
 
                 <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
                   Gestión
                 </p>
-                {navItems.map((item) => (
+                {duenoGestionItems.map((item) => (
                   <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
                 ))}
+              </>
+            ) : (
+              <>
+                {esAdmin && (
+                  <>
+                    <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+                      Catálogos
+                    </p>
+                    <CatalogoGrupo
+                      catalogo="hombre"
+                      titulo="Catálogo Hombre"
+                      lista={hombres}
+                      abierto={catalogoAbierto === 'hombre'}
+                      alternar={alternarCatalogo}
+                      onNavigate={cerrarMenu}
+                    />
+                    <CatalogoGrupo
+                      catalogo="mujer"
+                      titulo="Catálogo Mujer"
+                      lista={mujeres}
+                      abierto={catalogoAbierto === 'mujer'}
+                      alternar={alternarCatalogo}
+                      onNavigate={cerrarMenu}
+                    />
+                  </>
+                )}
+
+                <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+                  Gestión
+                </p>
+                {navItemsComunes.map((item) => (
+                  <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
+                ))}
+                {esAdmin &&
+                  navItemsGestion.map((item) => (
+                    <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
+                  ))}
 
                 <p className="px-3 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
                   Comercial

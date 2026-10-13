@@ -11,6 +11,7 @@ import {
   devolucionesApi,
   clientesApi,
   pedidosApi,
+  apartadosApi,
   duenoApi,
 } from '../services/api'
 
@@ -55,11 +56,12 @@ export const useProductos = (params) =>
     staleTime: 20000,
   })
 
-export const useVentas = (params) =>
+export const useVentas = (params, { enabled } = {}) =>
   useQuery({
     queryKey: ['ventas', params],
     queryFn: () => ventasApi.getHistorial(params),
     staleTime: 15000,
+    enabled,
   })
 
 export const useDevoluciones = (params) =>
@@ -91,8 +93,19 @@ export const useComisiones = (params) =>
     staleTime: 15000,
   })
 
-export const useClientes = () =>
-  useQuery({ queryKey: ['clientes'], queryFn: clientesApi.getClientes, staleTime: 30000 })
+export const useClientes = (q) =>
+  useQuery({
+    queryKey: ['clientes', q || ''],
+    queryFn: () => clientesApi.getClientes(q ? { q } : {}),
+    staleTime: 15000,
+  })
+
+export const useApartados = (params) =>
+  useQuery({
+    queryKey: ['apartados', params],
+    queryFn: () => apartadosApi.list(params),
+    staleTime: 15000,
+  })
 
 export const usePedidos = () =>
   useQuery({ queryKey: ['pedidos'], queryFn: pedidosApi.getPedidos, staleTime: 30000 })
