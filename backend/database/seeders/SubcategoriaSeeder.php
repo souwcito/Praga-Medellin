@@ -10,8 +10,8 @@ class SubcategoriaSeeder extends Seeder
     public function run(): void
     {
         $ropaH = json_encode(['S', 'M', 'L', 'XL', '2XL']);
-        $tenisH = json_encode(['7-40', '8-41', '9-42', '10-43', '11-44']);
-        $chanclasH = json_encode(['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']);
+        $tenisH = json_encode(['7', '8', '9', '10', '11']);
+        $chanclasH = json_encode(['6', '7', '8', '9', '10', '11']);
 
         $gorrasH = json_encode(['XS-S', 'M-L', 'XL']);
 
@@ -43,6 +43,7 @@ class SubcategoriaSeeder extends Seeder
             ['hombre|Tenis', 'Tenis Turcos', $tenisH],
             ['hombre|Relojes', 'Relojes Originales', null],
             ['hombre|Relojes', 'Relojes 1.1', null],
+            ['hombre|Tipo polo', 'Tipo polo Premium 1.1', $ropaH],
 
             // MUJER
             ['mujer|Perfumes', 'Perfumes Calidad 1.1', null],

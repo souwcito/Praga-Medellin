@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDuenoResumen } from '../hooks/useData'
 import { duenoApi } from '../services/api'
+import { coincideCodigoEtiqueta, coincideCodigoExacto } from '../utils/codigoEtiqueta'
 import { AlertIcon, CheckIcon, SearchIcon, XIcon } from '../components/icons'
 
 const formato = (n) =>
@@ -91,12 +92,34 @@ export default function DuenoProductos() {
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    return productos.filter(
-      (p) =>
-        (!q || p.nombre.toLowerCase().includes(q) || (p.nombre_interno || '').toLowerCase().includes(q)) &&
+
+    if (q) {
+      const exactos = productos.filter((p) =>
+        (p.variantes || []).some((v) =>
+          coincideCodigoExacto({ ...v, sku: p.sku }, q),
+        ),
+      )
+      if (exactos.length) return exactos
+    }
+
+    return productos.filter((p) => {
+      const coincideCodigo =
+        Boolean(q) &&
+        (p.variantes || []).some((v) =>
+          coincideCodigoEtiqueta({ ...v, sku: p.sku }, q),
+        )
+      // Un código escaneado muestra el producto aunque los filtros lo oculten.
+      if (coincideCodigo) return true
+
+      return (
+        (!q ||
+          p.nombre.toLowerCase().includes(q) ||
+          (p.nombre_interno || '').toLowerCase().includes(q) ||
+          (p.sku || '').toLowerCase().includes(q)) &&
         (!catalogo || p.catalogo === catalogo) &&
-        (!categoria || p.categoria === categoria),
-    )
+        (!categoria || p.categoria === categoria)
+      )
+    })
   }, [productos, busqueda, catalogo, categoria])
 
   async function guardarCosto(id, costo) {

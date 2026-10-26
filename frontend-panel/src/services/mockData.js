@@ -30,7 +30,7 @@ export const empleados = [
 // ---------------------------------------------------------------------------
 
 const TALLAS_ROPA = ['S', 'M', 'L', 'XL', 'XXL']
-const TALLAS_TENIS = ['7-40', '8-41', '9-42', '10-43', '11-44']
+const TALLAS_TENIS = ['7', '8', '9', '10', '11']
 const TALLAS_CHANCLAS = ['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']
 
 export const categorias = [

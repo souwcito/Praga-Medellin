@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { catalogApi } from '../services/api'
 import { useCart } from '../hooks/useCart'
+import usePolling from '../hooks/usePolling'
 import { formato } from '../utils/formato'
+import { esChanclas, esTenis, etiquetaTalla, ordenarPorTalla, ordenarTallas } from '../utils/tallas'
 import Seo from '../components/Seo'
 import ProductCard from '../components/ProductCard'
 import SectionHeading from '../components/SectionHeading'
-import { AlertIcon, CartIcon, CheckIcon, MinusIcon, PlusIcon, XIcon } from '../components/icons'
+import GuiaTallasModal from '../components/GuiaTallasModal'
+import { AlertIcon, CartIcon, CheckIcon, ChevronRightIcon, MinusIcon, PlusIcon, XIcon } from '../components/icons'
 
 // Wrapper: remonta el detalle cuando cambia el id (reinicia estado limpio).
 export default function Producto() {
@@ -17,26 +20,54 @@ export default function Producto() {
 function ProductoDetalle({ productoId }) {
   const { agregar, abrirCarrito } = useCart()
 
+  // En el prerender estático no pedimos "relacionados": es una petición pesada
+  // que no aporta al SEO y multiplica el tiempo del build por cientos de páginas.
+  const esPrerender =
+    typeof window !== 'undefined' && window.__PRAGA_PRERENDER__ === true
+
   const [producto, setProducto] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [intento, setIntento] = useState(0)
 
   const [talla, setTalla] = useState(null)
   const [cantidad, setCantidad] = useState(1)
   const [agregado, setAgregado] = useState(false)
   const [imgActiva, setImgActiva] = useState(0)
   const [relacionados, setRelacionados] = useState([])
+  const [guiaTallas, setGuiaTallas] = useState(false)
 
   useEffect(() => {
+    let activo = true
     catalogApi
       .getProducto(productoId)
-      .then(setProducto)
-      .catch((err) => setError(err?.message || 'No se pudo cargar el producto'))
-      .finally(() => setLoading(false))
-  }, [productoId])
+      .then((p) => {
+        if (activo) setProducto(p)
+      })
+      .catch((err) => {
+        if (activo) setError(err?.message || 'No pudimos cargar el producto. Intenta de nuevo.')
+      })
+      .finally(() => {
+        if (activo) setLoading(false)
+      })
+    return () => {
+      activo = false
+    }
+  }, [productoId, intento])
+
+  // Refresca precio/stock mientras el cliente está en la página.
+  function refrescarProducto() {
+    if (esPrerender) return
+    catalogApi
+      .getProducto(productoId)
+      .then((p) => setProducto(p))
+      .catch(() => {})
+  }
+  usePolling(refrescarProducto, 20000, !loading && !esPrerender)
 
   // Relacionados reales de la misma categoría (con stock), excluyendo este.
   useEffect(() => {
+    if (esPrerender) return
     const cat = producto?.categoria_id
     if (!cat) return
     let activo = true
@@ -52,7 +83,7 @@ function ProductoDetalle({ productoId }) {
     return () => {
       activo = false
     }
-  }, [producto?.categoria_id, productoId])
+  }, [producto?.categoria_id, productoId, esPrerender])
 
   // Variante seleccionada. Si es talla única, se usa sola; si hay tallas, se
   // requiere elegir una (no se autoselecciona la primera).
@@ -66,6 +97,35 @@ function ProductoDetalle({ productoId }) {
   }, [producto, talla])
 
   const tieneTallas = producto?.variantes.some((v) => v.talla !== null) || false
+  const esTenisProducto = esTenis(producto)
+  const esChanclasProducto = esChanclas(producto)
+  const variantesOrdenadas = useMemo(
+    () => ordenarPorTalla(producto?.variantes || []),
+    [producto],
+  )
+
+  // Para chanclas, una variante puede representar varios rangos ("6-7/8-9").
+  // En el detalle se muestran los rangos por separado; ambos eligen la misma
+  // variante y su stock.
+  const opcionesTalla = useMemo(() => {
+    const mapa = new Map()
+    variantesOrdenadas.forEach((v) => {
+      const etiqueta = etiquetaTalla(v.talla, producto) || 'Unitalla'
+      const partes =
+        esChanclasProducto && etiqueta.includes('/')
+          ? etiqueta.split('/').map((p) => p.trim())
+          : [etiqueta]
+
+      partes.forEach((label) => {
+        if (!label) return
+        const actual = mapa.get(label)
+        if (!actual || (actual.variante.stock <= 0 && v.stock > 0)) {
+          mapa.set(label, { label, variante: v })
+        }
+      })
+    })
+    return ordenarTallas([...mapa.keys()]).map((label) => mapa.get(label))
+  }, [variantesOrdenadas, producto, esChanclasProducto])
   const stockVariante = variante ? variante.stock : 0
   const agotadoProducto = (producto?.stock_total ?? 0) <= 0
   const stockDe = (t) => producto.variantes.find((v) => v.talla === t)?.stock ?? 0
@@ -105,12 +165,25 @@ function ProductoDetalle({ productoId }) {
           <AlertIcon className="h-5 w-5 shrink-0" />
           {error || 'Producto no encontrado'}
         </div>
-        <Link
-          to="/catalogo"
-          className="mt-4 inline-block text-sm font-medium text-ink-2 underline underline-offset-2 hover:text-ink"
-        >
-          Volver al catálogo
-        </Link>
+        <div className="mt-5 flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null)
+              setLoading(true)
+              setIntento((n) => n + 1)
+            }}
+            className="rounded-full bg-ink px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-85"
+          >
+            Reintentar
+          </button>
+          <Link
+            to="/catalogo"
+            className="text-sm font-medium text-ink-2 underline underline-offset-2 hover:text-ink"
+          >
+            Volver al catálogo
+          </Link>
+        </div>
       </div>
     )
   }
@@ -248,30 +321,48 @@ function ProductoDetalle({ productoId }) {
 
             {/* Tallas */}
             <div className="mt-8">
-              <p className="mb-2 text-sm font-semibold text-ink">
-                {tieneTallas ? 'Talla' : 'Presentación'}
-                {tieneTallas && (
-                  <span className="ml-1 font-normal text-ink-2">(elige tu talla)</span>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-ink">
+                  {tieneTallas
+                    ? esTenisProducto || esChanclasProducto
+                      ? 'Talla (US)'
+                      : 'Talla'
+                    : 'Presentación'}
+                  {tieneTallas && (
+                    <span className="ml-1 font-normal text-ink-2">(elige tu talla)</span>
+                  )}
+                </p>
+                {(esTenisProducto || esChanclasProducto) && tieneTallas && (
+                  <button
+                    type="button"
+                    onClick={() => setGuiaTallas(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:bg-metal-2 hover:shadow-md active:scale-95"
+                  >
+                    Guía de tallas
+                    <ChevronRightIcon className="h-3.5 w-3.5" />
+                  </button>
                 )}
-              </p>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {producto.variantes.map((v) => {
+                {opcionesTalla.map(({ label, variante: v }) => {
                   const agotada = v.stock <= 0
+                  const activa = talla === v.talla
                   return (
                     <button
-                      key={v.talla || 'unica'}
+                      key={label}
                       type="button"
                       onClick={() => elegirTalla(v.talla)}
                       disabled={agotada}
+                      title={`Talla ${label}${agotada ? ' agotada' : ''}`}
                       className={`relative min-w-14 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-95 ${
                         agotada
                           ? 'cursor-not-allowed border-line bg-surface-2 text-ink-2/40 line-through'
-                          : talla === v.talla
+                          : activa
                             ? 'border-ink bg-ink text-white'
                             : 'border-line text-ink hover:border-ink-2/50'
                       }`}
                     >
-                      {v.talla || 'Única'}
+                      {label}
                       {agotada && (
                         <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-700 text-white">
                           <XIcon className="h-3 w-3" />
@@ -319,7 +410,9 @@ function ProductoDetalle({ productoId }) {
                   agregado ? 'bg-emerald-700' : 'bg-ink hover:bg-metal-2'
                 }`}
               >
-                {stockVariante <= 0 ? (
+                {tieneTallas && talla === null ? (
+                  <>Selecciona una talla</>
+                ) : stockVariante <= 0 ? (
                   <>
                     <XIcon className="h-5 w-5" /> Agotado
                   </>
@@ -367,6 +460,12 @@ function ProductoDetalle({ productoId }) {
           </div>
         )}
       </div>
+
+      <GuiaTallasModal
+        abierta={guiaTallas}
+        onClose={() => setGuiaTallas(false)}
+        genero={producto.catalogo}
+      />
     </>
   )
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { pedidosApi } from '../services/api'
 import { usePedidos } from '../hooks/useData'
 import ProductImage from '../components/ProductImage'
-import { AlertIcon, CartIcon, ChevronDownIcon } from '../components/icons'
+import { AlertIcon, CartIcon, CheckIcon, ChevronDownIcon } from '../components/icons'
 
 const formato = (n) =>
   new Intl.NumberFormat('es-CO', {
@@ -27,10 +29,37 @@ function ChipEstado({ estado }) {
 }
 
 export default function Pedidos() {
+  const queryClient = useQueryClient()
   const { data, isLoading: loading, isError, error: errorRaw } = usePedidos()
   const pedidos = data?.data || []
   const error = errorRaw?.message || (isError ? 'Error cargando pedidos' : null)
   const [abiertaId, setAbiertaId] = useState(null)
+  const [tomando, setTomando] = useState(null)
+
+  // Marca quién se encarga del pedido (para no procesarlo dos veces).
+  async function tomar(p) {
+    const nombre = window.prompt('¿Quién toma el pedido?', '')?.trim()
+    if (!nombre) return
+    setTomando(p.id)
+    try {
+      await pedidosApi.tomar(p.id, nombre)
+      queryClient.invalidateQueries({ queryKey: ['pedidos'] })
+    } catch (err) {
+      window.alert(err?.error || err?.message || 'No se pudo marcar el pedido')
+    } finally {
+      setTomando(null)
+    }
+  }
+
+  async function liberar(p) {
+    setTomando(p.id)
+    try {
+      await pedidosApi.tomar(p.id, '')
+      queryClient.invalidateQueries({ queryKey: ['pedidos'] })
+    } finally {
+      setTomando(null)
+    }
+  }
 
   return (
     <div className="animate-fade-up mx-auto max-w-6xl">
@@ -102,7 +131,34 @@ export default function Pedidos() {
                       <p className="text-xs font-semibold uppercase tracking-wide text-ink-2">
                         Detalle del pedido
                       </p>
-                      <ChipEstado estado={p.estado} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        {p.tomado_por ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            <CheckIcon className="h-3.5 w-3.5" />
+                            Tomado por {p.tomado_por}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => tomar(p)}
+                            disabled={tomando === p.id}
+                            className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-metal-2 active:scale-[0.98] disabled:opacity-40"
+                          >
+                            {tomando === p.id ? 'Guardando…' : 'Tomar pedido'}
+                          </button>
+                        )}
+                        {p.tomado_por && (
+                          <button
+                            type="button"
+                            onClick={() => liberar(p)}
+                            disabled={tomando === p.id}
+                            className="text-xs font-medium text-ink-2 underline-offset-2 transition-colors hover:text-ink hover:underline disabled:opacity-40"
+                          >
+                            Liberar
+                          </button>
+                        )}
+                        <ChipEstado estado={p.estado} />
+                      </div>
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-2">
@@ -123,7 +179,14 @@ export default function Pedidos() {
                                 className="h-12 w-12 rounded-lg"
                               />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-ink">{it.nombre}</p>
+                                <p className="flex items-center gap-1.5 truncate text-sm font-medium text-ink">
+                                  <span className="truncate">{it.nombre}</span>
+                                  {it.es_regalo && (
+                                    <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                                      Regalo
+                                    </span>
+                                  )}
+                                </p>
                                 <p className="text-xs text-ink-2">
                                   {it.talla ? `Talla ${it.talla} · ` : ''}
                                   {it.cantidad} × {formato(it.precio_unitario)}
@@ -135,15 +198,42 @@ export default function Pedidos() {
                                 )}
                               </div>
                               <span className="shrink-0 text-sm font-semibold text-ink">
-                                {formato(it.subtotal)}
+                                {it.es_regalo ? 'Gratis' : formato(it.subtotal)}
                               </span>
                             </li>
                           ))}
                         </ul>
                       </div>
 
-                      {/* Cliente + pago */}
+                      {/* Recompensas + cliente + pago */}
                       <div className="space-y-4">
+                        {p.recompensas && Object.keys(p.recompensas).length > 0 && (
+                          <div className="rounded-xl border border-line bg-white p-3">
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-2">
+                              Recompensas
+                            </p>
+                            <ul className="space-y-1 text-sm">
+                              <li className="flex justify-between gap-4 text-ink-2">
+                                <span>Envío gratis</span>
+                                <span className={p.recompensas.envio_gratis ? 'font-semibold text-emerald-700' : 'text-ink-2'}>
+                                  {p.recompensas.envio_gratis ? 'Sí' : 'No'}
+                                </span>
+                              </li>
+                              <li className="flex justify-between gap-4 text-ink-2">
+                                <span>Fragancia de regalo</span>
+                                <span className={p.recompensas.fragancia_gratis ? 'font-semibold text-emerald-700' : 'text-ink-2'}>
+                                  {p.recompensas.fragancia_gratis ? 'Sí' : 'No'}
+                                </span>
+                              </li>
+                              <li className="flex justify-between gap-4 text-ink-2">
+                                <span>Descuento 5%</span>
+                                <span className={p.recompensas.descuento_5 ? 'font-semibold text-emerald-700' : 'text-ink-2'}>
+                                  {p.recompensas.descuento_5 ? 'Sí' : 'No'}
+                                </span>
+                              </li>
+                            </ul>
+                          </div>
+                        )}
                         <div className="rounded-xl border border-line bg-white p-3">
                           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-2">
                             Cliente
@@ -180,6 +270,24 @@ export default function Pedidos() {
                             Pago
                           </p>
                           <dl className="space-y-1 text-sm">
+                            {p.subtotal != null && (
+                              <div className="flex justify-between gap-4 text-ink-2">
+                                <dt>Subtotal</dt>
+                                <dd className="text-right font-medium text-ink">{formato(p.subtotal)}</dd>
+                              </div>
+                            )}
+                            {p.descuento > 0 && (
+                              <div className="flex justify-between gap-4 text-ink-2">
+                                <dt>Descuento (5%)</dt>
+                                <dd className="text-right font-medium text-emerald-700">−{formato(p.descuento)}</dd>
+                              </div>
+                            )}
+                            {p.factura_numero && (
+                              <div className="flex justify-between gap-4 text-ink-2">
+                                <dt>Factura</dt>
+                                <dd className="text-right font-medium text-ink">{p.factura_numero}</dd>
+                              </div>
+                            )}
                             <div className="flex justify-between gap-4 text-ink-2">
                               <dt>Total</dt>
                               <dd className="text-right font-bold text-ink">{formato(p.total)}</dd>

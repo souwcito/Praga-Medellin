@@ -170,3 +170,23 @@ export const TikTokIcon = ({ className = 'h-5 w-5', ...p }) => (
     <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
   </svg>
 )
+
+// Regalo (fragancia exclusiva).
+export const GiftIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="8" width="18" height="4" rx="1" />
+    <path d="M12 8v13" />
+    <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
+    <path d="M7.5 8a2.5 2.5 0 0 1 0-5C9.5 3 12 6 12 8" />
+    <path d="M16.5 8a2.5 2.5 0 0 0 0-5C14.5 3 12 6 12 8" />
+  </Icon>
+)
+
+// Porcentaje (descuento).
+export const PercentIcon = (p) => (
+  <Icon {...p}>
+    <line x1="19" y1="5" x2="5" y2="19" />
+    <circle cx="6.5" cy="6.5" r="2.5" />
+    <circle cx="17.5" cy="17.5" r="2.5" />
+  </Icon>
+)

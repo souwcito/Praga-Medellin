@@ -1,39 +1,56 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import banner1 from '../assets/imagen-banner-1.webp'
-import banner2 from '../assets/imagen-banner-2.webp'
 import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from './icons'
 
 // Portada editorial PRAGA: hero en pantalla completa con imagen de marca.
-// El primer slide es la campaña real de descuentos (hasta 50% en prendas
-// seleccionadas) y redirige a /promociones; los demás son editoriales.
+// El primer slide invita a descubrir el catálogo completo (imagen 2) y redirige
+// a /catalogo (que ahora abre la vista de categorías); el segundo es la campaña
+// de descuentos y el tercero es editorial.
 const SLIDES = [
+  {
+    tag: 'Todo Praga Medellín',
+    titulo: 'Descubre el catálogo completo',
+    subtitulo:
+      'Camisetas, buzos, tenis, gorras, perfumes y más. Explora todas las categorías y encuentra tu estilo.',
+    cta: { label: 'Catálogo completo', to: '/catalogo' },
+    cta2: { label: 'Ver ofertas exclusivas', to: '/promociones' },
+    imagen: {
+      desktop: '/banners/imagen1-banner-praga-2560x1440.png',
+      mobile: '/banners/imagen1-banner-praga-1080x1350.jpg',
+    },
+  },
   {
     tag: 'Oferta especial',
     titulo: 'Hasta 50% de descuento',
-    subtitulo: 'En prendas seleccionadas. Aprovecha las promociones de la temporada.',
-    cta: { label: 'Ver promociones', to: '/promociones' },
-    imagen: banner1,
+    subtitulo: 'En prendas seleccionadas. Aprovecha las ofertas exclusivas de la temporada.',
+    cta: { label: 'Ver ofertas exclusivas', to: '/promociones' },
+    cta2: { label: 'Ver catálogo', to: '/catalogo' },
+    imagen: {
+      desktop: '/banners/imagen2-banner-praga-2560x1440.png',
+      mobile: '/banners/imagen2-banner-praga-1080x1350.jpg',
+    },
   },
   {
-    tag: 'Nueva colección',
-    titulo: 'Premium 1.1',
-    subtitulo: 'La línea más contundente de la temporada. Ediciones limitadas con estampado 1.1.',
-    cta: { label: 'Ver colección', to: '/catalogo/hombre/3' },
-    imagen: banner2,
-  },
-  {
-    tag: 'Calzado',
-    titulo: 'Tenis & Chanclas',
-    subtitulo: 'Numeración real por talla (US-EURO). Stock por talla exacta.',
-    cta: { label: 'Ver calzado', to: '/catalogo/hombre/12' },
-    fondo: 'linear-gradient(120deg,#101010 0%,#26262c 60%,#1f1f24 100%)',
+    tag: 'Calidad Praga',
+    titulo: 'Encuentra las mejores calidades en Praga',
+    subtitulo: 'Moda y accesorios de la mejor calidad en nuestras 4 sedes de Medellín.',
+    cta: { label: 'Ver catálogo', to: '/catalogo' },
+    imagen: {
+      desktop: '/banners/imagen3-banner-praga-2560x1440.png',
+      mobile: '/banners/imagen3-banner-praga-1080x1350.jpg',
+    },
   },
 ]
+
+const CTA_PRIMARIO =
+  'group inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold tracking-wide text-ink shadow-lg shadow-black/25 ring-1 ring-inset ring-black/5 transition-all duration-300 hover:-translate-y-0.5 hover:bg-surface-2 hover:shadow-xl active:translate-y-0 active:scale-95'
+const CTA_SECUNDARIO =
+  'inline-flex items-center justify-center gap-2 rounded-full border border-white/40 bg-white/10 px-7 py-3.5 text-sm font-medium text-white backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-white/70 hover:bg-white/20 active:translate-y-0 active:scale-95'
 
 export default function BannerSlider() {
   const [activo, setActivo] = useState(0)
   const [pausado, setPausado] = useState(false)
+  const touchStartX = useRef(null)
 
   useEffect(() => {
     if (pausado) return
@@ -50,14 +67,30 @@ export default function BannerSlider() {
     setActivo((i) => (i + 1) % SLIDES.length)
   }
 
+  // Deslizar con el dedo en pantallas táctiles (umbral 50px).
+  function alTocar(e) {
+    touchStartX.current = e.touches[0].clientX
+  }
+  function alSoltar(e) {
+    if (touchStartX.current === null) return
+    const delta = e.changedTouches[0].clientX - touchStartX.current
+    if (Math.abs(delta) > 50) {
+      if (delta < 0) siguiente()
+      else anterior()
+    }
+    touchStartX.current = null
+  }
+
   return (
     <>
-      <link rel="preload" as="image" href={banner1} fetchPriority="high" />
+      <link rel="preload" as="image" href="/banners/imagen1-banner-praga-2560x1440.png" fetchPriority="high" />
       <section
         className="relative overflow-hidden bg-dark"
         onMouseEnter={() => setPausado(true)}
         onMouseLeave={() => setPausado(false)}
-        aria-label="Promociones y colecciones"
+        onTouchStart={alTocar}
+        onTouchEnd={alSoltar}
+        aria-label="Ofertas exclusivas y colecciones"
       >
         <div className="relative h-[68vh] min-h-[500px] max-h-[740px]">
           {SLIDES.map((slide, i) => {
@@ -72,48 +105,48 @@ export default function BannerSlider() {
                 aria-hidden={!activa}
               >
                 {slide.imagen && (
-                  <img
-                    src={slide.imagen}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover object-center"
-                    loading={activa ? 'eager' : 'lazy'}
-                    fetchPriority={activa ? 'high' : 'low'}
-                    decoding="async"
-                  />
+                  <picture>
+                    <source media="(max-width: 640px)" srcSet={slide.imagen.mobile} />
+                    <img
+                      src={slide.imagen.desktop}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover object-center"
+                      loading={activa ? 'eager' : 'lazy'}
+                      fetchPriority={activa ? 'high' : 'low'}
+                      decoding="async"
+                    />
+                  </picture>
                 )}
-                {/* Overlay para legibilidad */}
-                <div className="absolute inset-0 bg-gradient-to-b from-ink/40 via-transparent to-ink/70" aria-hidden="true" />
+                {/* Overlays de legibilidad: base + refuerzo lateral en escritorio */}
+                <div className="absolute inset-0 bg-gradient-to-b from-ink/55 via-ink/15 to-ink/85" aria-hidden="true" />
+                <div className="absolute inset-0 hidden bg-gradient-to-r from-ink/70 via-ink/30 to-transparent sm:block" aria-hidden="true" />
 
                 <div className="relative z-10 mx-auto flex h-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
-                  <div className="max-w-2xl pb-16 pt-14">
+                  <div className="mx-auto max-w-2xl pb-16 pt-14 text-center sm:mx-0 sm:text-left">
                     <span className="inline-flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-white">
-                      <span className="h-px w-10 bg-metal" />
+                      <span className="hidden h-px w-10 bg-metal sm:block" />
                       {slide.tag}
                     </span>
                     <h2
-                      className={`mt-5 font-display text-[2.6rem] font-bold uppercase leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl ${
+                      className={`mt-5 font-display text-[2.6rem] font-bold uppercase leading-[0.95] tracking-tight text-white [text-shadow:0_2px_16px_rgba(0,0,0,0.55)] sm:text-6xl lg:text-7xl ${
                         activa ? 'animate-fade-up' : ''
                       }`}
                     >
                       {slide.titulo}
                     </h2>
-                    <p className="mt-5 max-w-md text-sm leading-relaxed text-white/85 sm:text-base">
+                    <p className="mx-auto mt-5 max-w-md text-sm font-medium leading-relaxed text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.5)] sm:mx-0 sm:text-base">
                       {slide.subtitulo}
                     </p>
-                    <div className="mt-8 flex flex-wrap items-center gap-3">
-                      <Link
-                        to={slide.cta.to}
-                        className="group inline-flex items-center gap-2 rounded-lg bg-white px-7 py-3.5 text-sm font-semibold tracking-wide text-ink transition-all duration-300 hover:bg-surface-2 hover:shadow-xl active:scale-[0.98]"
-                      >
+                    <div className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+                      <Link to={slide.cta.to} className={CTA_PRIMARIO}>
                         {slide.cta.label}
                         <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                       </Link>
-                      <Link
-                        to="/catalogo"
-                        className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-7 py-3.5 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/10"
-                      >
-                        Explorar catálogo
-                      </Link>
+                      {slide.cta2 && (
+                        <Link to={slide.cta2.to} className={CTA_SECUNDARIO}>
+                          {slide.cta2.label}
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>

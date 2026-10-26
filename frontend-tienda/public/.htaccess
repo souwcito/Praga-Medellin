@@ -7,6 +7,15 @@
 #   /images/*        -> imágenes de productos (public_html/api-app/public/images)
 # =============================================================================
 
+# ---------- www -> dominio principal ----------
+# Un solo origen evita CORS, enlaces compartidos con www y contenido duplicado.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_URI} !^/\.well-known/
+  RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+  RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+</IfModule>
+
 # ---------- HTTPS forzado ----------
 <IfModule mod_rewrite.c>
   RewriteEngine On
@@ -23,6 +32,29 @@
   # /images/* -> archivos estáticos subidos por el panel
   RewriteCond %{REQUEST_URI} ^/images(/|$)
   RewriteRule ^images/(.*)$ api-app/public/images/$1 [L]
+</IfModule>
+
+# ---------- Cache-busting de navegación HTML ----------
+# Fuerza una URL nueva (?v=BUILD) en cada deploy para que celulares y
+# navegadores con caché vieja no sigan mostrando el index.html anterior.
+# No toca API, imágenes, panel, assets ni archivos estáticos.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_URI} !^/api(/|$)
+  RewriteCond %{REQUEST_URI} !^/api-app(/|$)
+  RewriteCond %{REQUEST_URI} !^/images(/|$)
+  RewriteCond %{REQUEST_URI} !^/panel(/|$)
+  RewriteCond %{REQUEST_URI} !^/assets(/|$)
+  RewriteCond %{REQUEST_URI} !^/\.well-known(/|$)
+  RewriteCond %{REQUEST_URI} !\.(css|js|mjs|json|xml|txt|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|webmanifest)$ [NC]
+  RewriteCond %{QUERY_STRING} !(^|&)v=
+  RewriteRule ^(.*)$ /$1?v=__BUILD_VERSION__ [R=302,L,QSA,E=NO_CACHE_VERSION:1]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0" env=NO_CACHE_VERSION
+  Header always set X-LiteSpeed-Cache-Control "no-cache" env=NO_CACHE_VERSION
+  Header always set X-Hcdn-Cache-Control "no-cache" env=NO_CACHE_VERSION
 </IfModule>
 
 # ---------- SPA fallback (tienda) — excluye api, images y panel ----------
@@ -58,10 +90,10 @@
   SetEnvIf Request_URI "^/panel/" NO_CACHE=1
 </IfModule>
 <IfModule mod_headers.c>
-  Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0" env=NO_CACHE
-  Header set X-LiteSpeed-Cache-Control "no-cache" env=NO_CACHE
-  Header set X-Hcdn-Cache-Control "no-cache" env=NO_CACHE
-  Header unset Expires env=NO_CACHE
+  Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0" env=NO_CACHE
+  Header always set X-LiteSpeed-Cache-Control "no-cache" env=NO_CACHE
+  Header always set X-Hcdn-Cache-Control "no-cache" env=NO_CACHE
+  Header always unset Expires env=NO_CACHE
 </IfModule>
 
 # ---------- Cabeceras de caché ----------
@@ -70,13 +102,16 @@
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
   <FilesMatch "\.html$">
-    # El HTML es prerenderizado (estático): la CDN puede cachearlo corto y el
-    # navegador revalida con el navegador (ETag). Los assets cambian de hash en
-    # cada deploy, así el HTML no queda obsoleto.
-    Header set Cache-Control "public, max-age=0, s-maxage=600, stale-while-revalidate=86400"
+    # El HTML NO se cachea: así todos los usuarios reciben el index.html del
+    # último deploy y cargan los assets nuevos (que tienen hash propio).
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set X-LiteSpeed-Cache-Control "no-cache"
+    Header set X-Hcdn-Cache-Control "no-cache"
   </FilesMatch>
   <FilesMatch "\.json$">
-    Header set Cache-Control "no-cache"
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set X-LiteSpeed-Cache-Control "no-cache"
+    Header set X-Hcdn-Cache-Control "no-cache"
   </FilesMatch>
 </IfModule>
 

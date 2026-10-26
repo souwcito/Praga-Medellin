@@ -27,11 +27,14 @@ export default function CategoryTiles() {
         for (const [catalogo, nombre] of DESTACADAS) {
           const cat = cats.find((c) => c.catalogo === catalogo && c.nombre === nombre)
           if (!cat) continue
-          let portada = null
-          try {
-            const lista = await catalogApi.getProductos({ catalogo, categoria_id: cat.id, limit: 1 })
-            portada = lista[0]?.imagen_url || null
-          } catch {}
+          // Portada elegida en el panel; si no hay, primer producto con imagen.
+          let portada = cat.portada_imagen_url || null
+          if (!portada) {
+            try {
+              const lista = await catalogApi.getProductos({ catalogo, categoria_id: cat.id, limit: 1 })
+              portada = lista[0]?.imagen_url || null
+            } catch {}
+          }
           datos.push({ ...cat, catalogo, portada })
         }
         // Fallback: si ningún nombre coincidió, toma categorías reales de hombre.

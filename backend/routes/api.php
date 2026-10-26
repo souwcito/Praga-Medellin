@@ -17,6 +17,11 @@ use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\DevolucionController;
 use App\Http\Controllers\ApartadoController;
 use App\Http\Controllers\DuenoController;
+use App\Http\Controllers\MarcaController;
+use App\Http\Controllers\ColorController;
+use App\Http\Controllers\EstiloController;
+use App\Http\Controllers\ConfiguracionEtiquetaController;
+use App\Http\Controllers\GuiaTallasController;
 
 /*
 |--------------------------------------------------------------------------
@@ -37,6 +42,8 @@ Route::get('/categorias', [CategoriaController::class, 'index']);
 Route::get('/subcategorias', [SubcategoriaController::class, 'index']);
 Route::get('/productos', [ProductoController::class, 'index']);
 Route::get('/productos/{id}', [ProductoController::class, 'show']);
+// Guía de tallas pública (también la consume el chatbot de WhatsApp).
+Route::get('/guia-tallas', [GuiaTallasController::class, 'index']);
 Route::post('/pedidos', [PedidoController::class, 'store'])->middleware('throttle:20,1');
 
 // Checkout web con Wompi (público): config para el widget, confirmación síncrona
@@ -53,6 +60,11 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
     // gestión de inventario y productos solo para admin/dueno.
     Route::get('/inventario', [InventarioController::class, 'index']);
 
+    // Catálogo de códigos (marcas, estilos, colores) para armar el SKU. Lectura.
+    Route::get('/marcas', [MarcaController::class, 'index']);
+    Route::get('/colores', [ColorController::class, 'index']);
+    Route::get('/estilos', [EstiloController::class, 'index']);
+
     // Gestión (admin/dueno): crear/editar/borrar productos (precios), matriz
     // completa de inventario, ajustes de stock, devoluciones e imágenes.
     Route::middleware('role:admin,dueno')->group(function () {
@@ -60,6 +72,15 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
         Route::post('/productos', [ProductoController::class, 'store']);
         Route::put('/productos/{id}', [ProductoController::class, 'update']);
         Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
+        Route::get('/productos/{id}/stock', [ProductoController::class, 'stock']);
+        Route::get('/stickers/categoria', [ProductoController::class, 'stockCategoria']);
+
+        // Configuración compartida del diseño de etiquetas.
+        Route::get('/configuracion/etiquetas', [ConfiguracionEtiquetaController::class, 'show']);
+        Route::put('/configuracion/etiquetas', [ConfiguracionEtiquetaController::class, 'update']);
+
+        // Portada de categoría (imagen que se muestra en la tienda pública)
+        Route::put('/categorias/{id}/portada', [CategoriaController::class, 'setPortada']);
 
         // Inventario (gestión)
         Route::get('/inventario/completo', [InventarioController::class, 'completo']);
@@ -72,10 +93,25 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
 
         // Imágenes (se suben al editar un producto)
         Route::post('/imagenes', [ImagenController::class, 'store']);
+
+        // Catálogo de códigos (marcas, estilos, colores): escritura
+        Route::post('/marcas', [MarcaController::class, 'store']);
+        Route::put('/marcas/{id}', [MarcaController::class, 'update']);
+        Route::delete('/marcas/{id}', [MarcaController::class, 'destroy']);
+        Route::post('/colores', [ColorController::class, 'store']);
+        Route::put('/colores/{id}', [ColorController::class, 'update']);
+        Route::delete('/colores/{id}', [ColorController::class, 'destroy']);
+        Route::post('/estilos', [EstiloController::class, 'store']);
+        Route::put('/estilos/{id}', [EstiloController::class, 'update']);
+        Route::delete('/estilos/{id}', [EstiloController::class, 'destroy']);
     });
 
     // Ventas (POS + historial)
     Route::post('/ventas', [VentaController::class, 'store']);
+    Route::put('/ventas/{id}', [VentaController::class, 'update']);
+    Route::put('/ventas/{id}/abono', [VentaController::class, 'updateAbono']);
+    Route::post('/ventas/{id}/revertir', [VentaController::class, 'revertir']);
+    Route::get('/ventas/calendario', [VentaController::class, 'calendario']);
     Route::get('/ventas', [VentaController::class, 'index']);
     Route::get('/ventas/buscar', [VentaController::class, 'buscarPorFactura']);
 
@@ -87,11 +123,13 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
     Route::get('/clientes', [ClienteController::class, 'index']);
     Route::post('/clientes', [ClienteController::class, 'store']);
     Route::get('/pedidos', [PedidoController::class, 'index']);
+    Route::post('/pedidos/{id}/tomar', [PedidoController::class, 'tomar']);
 
     // Plan Separe (apartados + abonos) — accesible a cajeros y admin
     Route::get('/apartados', [ApartadoController::class, 'index']);
     Route::post('/apartados', [ApartadoController::class, 'store']);
     Route::get('/apartados/{id}', [ApartadoController::class, 'show']);
+    Route::put('/apartados/{id}', [ApartadoController::class, 'update']);
     Route::post('/apartados/{id}/abonos', [ApartadoController::class, 'abonar']);
     Route::post('/apartados/{id}/cancelar', [ApartadoController::class, 'cancelar']);
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CartContext } from './cartContext'
+import { etiquetaTalla } from '../utils/tallas'
 
 // Carrito global con persistencia en localStorage (dura toda la sesión).
 const STORAGE_KEY = 'praga_carrito'
@@ -43,7 +44,13 @@ export function CartProvider({ children }) {
           key: `${producto.id}-${variante.talla || 'unica'}`,
           producto_id: producto.id,
           nombre: producto.nombre,
+          // La talla original identifica la variante exacta en el backend.
+          // talla_label es solo lo que ve el cliente (USA en tenis).
           talla: variante.talla,
+          talla_label: etiquetaTalla(variante.talla, producto),
+          categoria: producto.categoria,
+          subcategoria: producto.subcategoria,
+          catalogo: producto.catalogo,
           precio: producto.precio,
           imagen_url: producto.imagen_url,
           stock: variante.stock,

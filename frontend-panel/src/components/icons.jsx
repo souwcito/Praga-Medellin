@@ -87,6 +87,17 @@ export const SearchIcon = (p) => (
   </Icon>
 )
 
+// Marco de escaneo con barras: identifica la pantalla de escáner.
+export const ScanIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+    <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+    <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+    <path d="M7 8v8M10 8v8M14 8v8M17 8v8" />
+  </Icon>
+)
+
 export const PlusIcon = (p) => (
   <Icon {...p}>
     <path d="M5 12h14" />
@@ -207,5 +218,26 @@ export const TagIcon = (p) => (
   <Icon {...p}>
     <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
     <circle cx="7.5" cy="7.5" r="0.5" fill="currentColor" />
+  </Icon>
+)
+
+// Rayo para la venta relámpago (producto que no está en inventario).
+export const BoltIcon = (p) => (
+  <Icon {...p}>
+    <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
+  </Icon>
+)
+
+export const CalendarIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </Icon>
+)
+
+// Estrella (portada de categoría). Rellena cuando el producto es la portada.
+export const StarIcon = ({ filled = false, ...p }) => (
+  <Icon {...p} fill={filled ? 'currentColor' : 'none'}>
+    <path d="M12 2.5l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.3l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.94z" />
   </Icon>
 )

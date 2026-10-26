@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { inventarioApi } from '../services/api'
-import { useCategorias, useInventarioCompleto } from '../hooks/useData'
+import { useCategorias, useInventarioCompleto, useSubcategorias } from '../hooks/useData'
+import { ordenarTallas } from '../utils/catalogo'
+import { coincideCodigoEtiqueta, coincideCodigoExacto } from '../utils/codigoEtiqueta'
 import Modal from '../components/Modal'
 import {
   AlertIcon,
@@ -31,15 +33,42 @@ function ordenTalla(a, b) {
   return a.localeCompare(b, undefined, { numeric: true })
 }
 
+// Normaliza la talla para mostrarla y filtrarla. Las variantes sin talla
+// (talla null) se agrupan como "Unitalla".
+function tallaDe(variante) {
+  const talla = variante?.talla
+  const texto = talla === null || talla === undefined ? '' : String(talla).trim()
+  return texto === '' ? 'Unitalla' : texto
+}
+
+// Calidades del catálogo (las mismas del formulario de productos).
+const ORDEN_CALIDADES = ['Original', 'Turca', '1.1', 'Sin definir']
+
+// La calidad se deduce de la subcategoría ("Buzos Turcos", "Camisetas
+// Originales", "Buzos Premium 1.1"). Si el producto no tiene subcategoría,
+// se usa el nombre del producto (p. ej. "Jean DSQUARED2 1.1 Premium").
+function calidadDe(grupo, subcategorias) {
+  const sub = subcategorias.find((s) => s.id === grupo.subcategoria_id)
+  const texto = String(sub?.nombre || grupo.nombre || '').toLowerCase()
+  if (texto.includes('1.1') || texto.includes('premium')) return '1.1'
+  if (texto.includes('turc')) return 'Turca'
+  if (texto.includes('original')) return 'Original'
+  return 'Sin definir'
+}
+
 export default function Inventario() {
   const queryClient = useQueryClient()
   const { data: categorias = [] } = useCategorias()
+  const { data: subcategorias = [] } = useSubcategorias()
   const { data: variantes = [], isLoading: loading, isError, error: errorRaw } = useInventarioCompleto()
   const error = errorRaw?.message || (isError ? 'Error cargando el inventario' : null)
 
   const [busqueda, setBusqueda] = useState('')
   const [catalogoId, setCatalogoId] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
+  const [tallaId, setTallaId] = useState('')
+  const [calidadId, setCalidadId] = useState('')
+  const [sedeId, setSedeId] = useState('')
   const [soloBajo, setSoloBajo] = useState(false)
   const [expandido, setExpandido] = useState(null)
   const [categoriaAbierta, setCategoriaAbierta] = useState(null)
@@ -76,39 +105,107 @@ export default function Inventario() {
       }
       g.variantes.push(v)
     })
-    return [...map.values()]
-  }, [variantes])
+    return [...map.values()].map((g) => ({
+      ...g,
+      calidad: calidadDe(g, subcategorias),
+    }))
+  }, [variantes, subcategorias])
 
   const sedes = useMemo(
     () => variantes[0]?.stock.map((s) => ({ sede_id: s.sede_id, sede: s.sede })) || [],
     [variantes],
   )
 
-  const stockDe = (g, sedeId) =>
-    g.variantes.reduce(
-      (sum, v) => sum + (v.stock.find((s) => s.sede_id === sedeId)?.cantidad || 0),
+  const sedeActiva =
+    sedeId && sedes.some((s) => s.sede_id === Number(sedeId)) ? sedeId : ''
+  const sedesVisibles = sedeActiva
+    ? sedes.filter((s) => s.sede_id === Number(sedeActiva))
+    : sedes
+
+  // Calidades que existen para el catálogo/categoría seleccionados.
+  const calidadesDisponibles = useMemo(() => {
+    const set = new Set()
+    grupos.forEach((g) => {
+      if (catalogoId && g.catalogo !== catalogoId) return
+      if (categoriaId && g.categoria_id !== Number(categoriaId)) return
+      set.add(g.calidad)
+    })
+    return ORDEN_CALIDADES.filter((c) => set.has(c))
+  }, [grupos, catalogoId, categoriaId])
+
+  const calidadActiva = calidadesDisponibles.includes(calidadId) ? calidadId : ''
+
+  // Tallas que realmente existen para el catálogo/categoría/calidad
+  // seleccionados. Se calculan con las variantes del inventario.
+  const tallasDisponibles = useMemo(() => {
+    const set = new Set()
+    grupos.forEach((g) => {
+      if (catalogoId && g.catalogo !== catalogoId) return
+      if (categoriaId && g.categoria_id !== Number(categoriaId)) return
+      if (calidadActiva && g.calidad !== calidadActiva) return
+      g.variantes.forEach((v) => set.add(tallaDe(v)))
+    })
+    return ordenarTallas([...set])
+  }, [grupos, catalogoId, categoriaId, calidadActiva])
+
+  // Si la talla guardada ya no existe para el filtro actual, se ignora.
+  const tallaActiva = tallasDisponibles.includes(tallaId) ? tallaId : ''
+
+  // Variantes que se tienen en cuenta para totales y detalle. Con una talla
+  // seleccionada, todo se calcula solo sobre esa talla.
+  const variantesVisibles = (g) =>
+    tallaActiva ? g.variantes.filter((v) => tallaDe(v) === tallaActiva) : g.variantes
+
+  const stockDe = (g, sedeIdFiltro) =>
+    variantesVisibles(g).reduce(
+      (sum, v) =>
+        sum + (v.stock.find((s) => s.sede_id === sedeIdFiltro)?.cantidad || 0),
       0,
     )
-  const totalDe = (g) => g.variantes.reduce((sum, v) => sum + v.stock.reduce((a, b) => a + b.cantidad, 0), 0)
+  const totalDe = (g) =>
+    variantesVisibles(g).reduce(
+      (sum, v) => sum + v.stock.reduce((a, b) => a + b.cantidad, 0),
+      0,
+    )
+  const totalVistaDe = (g) =>
+    sedeActiva ? stockDe(g, Number(sedeActiva)) : totalDe(g)
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
+
+    // Un código completo muestra solo el producto exacto, aunque los filtros
+    // de sede/talla/stock lo oculten.
+    if (q) {
+      const exactos = grupos.filter((g) =>
+        g.variantes.some((v) => coincideCodigoExacto(v, q)),
+      )
+      if (exactos.length) return exactos
+    }
+
     return grupos.filter((g) => {
+      const coincideCodigo =
+        Boolean(q) && g.variantes.some((v) => coincideCodigoEtiqueta(v, q))
+      if (coincideCodigo) return true
+
       if (catalogoId && g.catalogo !== catalogoId) return false
       if (categoriaId && g.categoria_id !== Number(categoriaId)) return false
-      const total = totalDe(g)
+      if (calidadActiva && g.calidad !== calidadActiva) return false
+      if (tallaActiva && !g.variantes.some((v) => tallaDe(v) === tallaActiva)) return false
+      if (sedeActiva && stockDe(g, Number(sedeActiva)) <= 0) return false
+      const total = totalVistaDe(g)
       if (soloBajo && total > 5) return false
-      if (
-        q &&
-        !g.nombre.toLowerCase().includes(q) &&
-        !g.sku.toLowerCase().includes(q) &&
-        !g.variantes.some((v) => v.codigo_barras.includes(q))
-      ) {
-        return false
+      if (q) {
+        const visibles = variantesVisibles(g)
+        const coincide =
+          String(g.nombre || '').toLowerCase().includes(q) ||
+          String(g.sku || '').toLowerCase().includes(q) ||
+          visibles.some((v) => coincideCodigoEtiqueta(v, q))
+        if (!coincide) return false
       }
       return true
     })
-  }, [grupos, busqueda, catalogoId, categoriaId, soloBajo])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupos, busqueda, catalogoId, categoriaId, calidadActiva, tallaActiva, sedeActiva, soloBajo])
 
   const categoriasFiltro = categorias.filter((c) => !catalogoId || c.catalogo === catalogoId)
 
@@ -128,9 +225,10 @@ export default function Inventario() {
         }
         map.set(g.categoria_id, r)
       }
-      g.variantes.forEach((v) => {
-        const talla = v.talla || 'Única'
+      variantesVisibles(g).forEach((v) => {
+        const talla = tallaDe(v)
         v.stock.forEach((s) => {
+          if (sedeActiva && s.sede_id !== Number(sedeActiva)) return
           const cantidad = s.cantidad || 0
           if (cantidad === 0) return
           r.total += cantidad
@@ -141,12 +239,16 @@ export default function Inventario() {
       })
     })
     return [...map.values()].sort((a, b) => a.nombre.localeCompare(b.nombre))
-  }, [filtrados, categorias])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtrados, categorias, tallaActiva, sedeActiva])
 
   const totalGeneral = resumen.reduce((sum, r) => sum + r.total, 0)
   const categoriaSel = categoriaId ? categorias.find((c) => c.id === Number(categoriaId)) : null
   const totalCategoriaSel = resumen.find((r) => r.categoria_id === Number(categoriaId))?.total ?? 0
-  const colsResumen = `minmax(9rem,1fr) repeat(${sedes.length},4rem) 5rem`
+  const sedeSel = sedeActiva ? sedes.find((s) => s.sede_id === Number(sedeActiva)) : null
+  const colsTabla = `minmax(13rem,1fr) 4.5rem 9rem 5.5rem 4rem repeat(${sedesVisibles.length},5rem) 4.5rem 2rem`
+  const colsDetalle = `7rem 7.5rem repeat(${sedesVisibles.length},5rem) 4.5rem`
+  const colsResumen = `minmax(9rem,1fr) repeat(${sedesVisibles.length},4rem) 5rem`
 
   // Lista virtualizada: con cientos de productos solo se montan las filas visibles
   const virtualizer = useVirtualizer({
@@ -252,6 +354,8 @@ export default function Inventario() {
           onChange={(e) => {
             setCatalogoId(e.target.value)
             setCategoriaId('')
+            setTallaId('')
+            setCalidadId('')
           }}
           className={`${selectCls} w-48`}
         >
@@ -263,13 +367,68 @@ export default function Inventario() {
 
         <select
           value={categoriaId}
-          onChange={(e) => setCategoriaId(e.target.value)}
+          onChange={(e) => {
+            setCategoriaId(e.target.value)
+            setTallaId('')
+            setCalidadId('')
+          }}
           className={`${selectCls} w-52`}
         >
           <option value="">Todas las categorías</option>
           {categoriasFiltro.map((c) => (
             <option key={c.id} value={c.id}>
               {c.nombre}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={calidadActiva}
+          onChange={(e) => {
+            setCalidadId(e.target.value)
+            setTallaId('')
+          }}
+          className={`${selectCls} w-44`}
+          disabled={calidadesDisponibles.length === 0}
+          title="Calidades existentes para la categoría seleccionada"
+        >
+          <option value="">
+            {calidadesDisponibles.length > 0 ? 'Todas las calidades' : 'Sin calidades'}
+          </option>
+          {calidadesDisponibles.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={tallaActiva}
+          onChange={(e) => setTallaId(e.target.value)}
+          className={`${selectCls} w-40`}
+          disabled={tallasDisponibles.length === 0}
+          title="Tallas existentes para la categoría/calidad seleccionada"
+        >
+          <option value="">
+            {tallasDisponibles.length > 0 ? 'Todas las tallas' : 'Sin tallas'}
+          </option>
+          {tallasDisponibles.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={sedeActiva}
+          onChange={(e) => setSedeId(e.target.value)}
+          className={`${selectCls} w-52`}
+          title="Ver el stock de una sola sede"
+        >
+          <option value="">Todas las sedes</option>
+          {sedes.map((s) => (
+            <option key={s.sede_id} value={s.sede_id}>
+              {s.sede}
             </option>
           ))}
         </select>
@@ -293,12 +452,16 @@ export default function Inventario() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[minmax(13rem,1fr)_4.5rem_9rem_4rem_repeat(4,5rem)_4.5rem_2rem] items-center gap-2 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
+          <div
+            style={{ gridTemplateColumns: colsTabla }}
+            className="grid items-center gap-2 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2"
+          >
             <span>Producto</span>
             <span>Catálogo</span>
             <span>Categoría</span>
+            <span>Calidad</span>
             <span className="text-center">Tallas</span>
-            {sedes.map((s) => (
+            {sedesVisibles.map((s) => (
               <span key={s.sede_id} className="truncate text-center" title={s.sede}>
                 {s.sede.split(' - ').pop()}
               </span>
@@ -311,7 +474,7 @@ export default function Inventario() {
             <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
               {virtualizer.getVirtualItems().map((row) => {
                 const g = filtrados[row.index]
-                const total = totalDe(g)
+                const total = totalVistaDe(g)
                 const abierto = expandido === g.producto_id
                 return (
                   <div
@@ -325,7 +488,8 @@ export default function Inventario() {
                     <button
                       type="button"
                       onClick={() => setExpandido(abierto ? null : g.producto_id)}
-                      className="grid w-full grid-cols-[minmax(13rem,1fr)_4.5rem_9rem_4rem_repeat(4,5rem)_4.5rem_2rem] items-center gap-2 border-b border-line px-5 py-3 text-left text-sm transition-colors hover:bg-surface-2/40"
+                      style={{ gridTemplateColumns: colsTabla }}
+                      className="grid w-full items-center gap-2 border-b border-line px-5 py-3 text-left text-sm transition-colors hover:bg-surface-2/40"
                     >
                       <span className="flex min-w-0 items-center gap-3">
                         <img src={g.imagen_url} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover" />
@@ -338,8 +502,20 @@ export default function Inventario() {
                       <span className="truncate text-ink-2">
                         {categorias.find((c) => c.id === g.categoria_id)?.nombre || '—'}
                       </span>
-                      <span className="text-center text-ink-2">{g.variantes.length}</span>
-                      {sedes.map((s) => (
+                      <span className="truncate text-xs font-medium text-ink-2" title={g.calidad}>
+                        {g.calidad}
+                      </span>
+                      <span
+                        className="truncate text-center text-ink-2"
+                        title={
+                          tallaActiva
+                            ? `Talla ${tallaActiva}`
+                            : `Tallas: ${g.variantes.map(tallaDe).join(', ')}`
+                        }
+                      >
+                        {tallaActiva || g.variantes.length}
+                      </span>
+                      {sedesVisibles.map((s) => (
                         <span
                           key={s.sede_id}
                           className={`text-center font-semibold ${
@@ -360,38 +536,48 @@ export default function Inventario() {
                     {/* Detalle por variante */}
                     {abierto && (
                       <div className="animate-fade-in border-b border-line bg-surface-2/40 px-5 py-3">
-                        <div className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                        <div
+                          style={{ gridTemplateColumns: colsDetalle }}
+                          className="grid items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2"
+                        >
                           <span>Talla</span>
                           <span>Código</span>
-                          {sedes.map((s) => (
+                          {sedesVisibles.map((s) => (
                             <span key={s.sede_id} className="truncate text-center">{s.sede.split(' - ').pop()}</span>
                           ))}
                           <span className="text-right">Total</span>
                         </div>
                         <ul className="mt-2 space-y-1">
-                          {g.variantes.map((v) => {
-                            const vTotal = v.stock.reduce((a, b) => a + b.cantidad, 0)
+                          {variantesVisibles(g).map((v) => {
+                            const vTotal = sedeActiva
+                              ? v.stock.find((x) => x.sede_id === Number(sedeActiva))?.cantidad || 0
+                              : v.stock.reduce((a, b) => a + b.cantidad, 0)
                             return (
                               <li
                                 key={v.variante_id}
-                                className="grid grid-cols-[7rem_7.5rem_repeat(4,5rem)_4.5rem] items-center gap-2 rounded-lg px-1 py-1 text-sm transition-colors hover:bg-white"
+                                style={{ gridTemplateColumns: colsDetalle }}
+                                className="grid items-center gap-2 rounded-lg px-1 py-1 text-sm transition-colors hover:bg-white"
                               >
-                                <span className="font-semibold text-ink">{v.talla || 'Única'}</span>
+                                <span className="font-semibold text-ink">{v.talla || 'Unitalla'}</span>
                                 <span className="truncate text-xs text-ink-2">{v.codigo_barras}</span>
-                                {v.stock.map((s) => (
-                                  <span key={s.sede_id} className="flex justify-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => abrirModal(v, s)}
-                                      title={`Ajustar stock en ${s.sede}`}
-                                      className={`rounded-lg px-1.5 py-0.5 font-semibold transition-colors hover:bg-white ${
-                                        s.cantidad === 0 ? 'text-ink-2/40' : 'text-ink'
-                                      }`}
-                                    >
-                                      {s.cantidad}
-                                    </button>
-                                  </span>
-                                ))}
+                                {sedesVisibles.map((s) => {
+                                  const reg = v.stock.find((x) => x.sede_id === s.sede_id)
+                                  const cantidad = reg?.cantidad || 0
+                                  return (
+                                    <span key={s.sede_id} className="flex justify-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => reg && abrirModal(v, reg)}
+                                        title={`Ajustar stock en ${s.sede}`}
+                                        className={`rounded-lg px-1.5 py-0.5 font-semibold transition-colors hover:bg-white ${
+                                          cantidad === 0 ? 'text-ink-2/40' : 'text-ink'
+                                        }`}
+                                      >
+                                        {cantidad}
+                                      </button>
+                                    </span>
+                                  )
+                                })}
                                 <span className={`text-right font-semibold ${vTotal === 0 ? 'text-ink-2/40' : 'text-ink'}`}>
                                   {vTotal}
                                 </span>
@@ -422,11 +608,15 @@ export default function Inventario() {
                   <>
                     Hay <span className="text-lg font-bold text-metal">{totalCategoriaSel}</span>{' '}
                     {categoriaSel.nombre}
+                    {tallaActiva ? ` · Talla ${tallaActiva}` : ''}
+                    {sedeSel ? ` · ${sedeSel.sede}` : ''}
                   </>
                 ) : (
                   <>
                     Total en vista:{' '}
                     <span className="text-lg font-bold text-metal">{totalGeneral}</span> unidades
+                    {tallaActiva ? ` · Talla ${tallaActiva}` : ''}
+                    {sedeSel ? ` · ${sedeSel.sede}` : ''}
                   </>
                 )}
               </p>
@@ -439,7 +629,7 @@ export default function Inventario() {
                 className="grid items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2"
               >
                 <span>Categoría</span>
-                {sedes.map((s) => (
+                {sedesVisibles.map((s) => (
                   <span key={s.sede_id} className="truncate text-center" title={s.sede}>
                     {s.sede.split(' - ').pop()}
                   </span>
@@ -463,7 +653,7 @@ export default function Inventario() {
                           />
                           <span className="truncate font-medium text-ink">{r.nombre}</span>
                         </span>
-                        {sedes.map((s) => (
+                        {sedesVisibles.map((s) => (
                           <span
                             key={s.sede_id}
                             className={`text-center ${r.porSede[s.sede_id] ? 'text-ink' : 'text-ink-2/40'}`}
@@ -480,7 +670,7 @@ export default function Inventario() {
                           className="animate-fade-in grid items-start gap-2 px-0.5 pb-2 pt-1"
                         >
                           <span />
-                          {sedes.map((s) => {
+                          {sedesVisibles.map((s) => {
                             const tallas = Object.entries(r.porSedeTallas[s.sede_id] || {}).sort((a, b) =>
                               ordenTalla(a[0], b[0]),
                             )

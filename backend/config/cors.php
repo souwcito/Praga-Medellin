@@ -21,14 +21,21 @@ return [
 
     'allowed_origins' => [
         'https://pragamedellin.com',
+        'https://www.pragamedellin.com',
         'http://pragamedellin.com',
+        'http://www.pragamedellin.com',
         'http://127.0.0.1:5173',
         'http://localhost:5173',
         'http://127.0.0.1:8000',
         'http://localhost:8000',
     ],
 
-    'allowed_origins_patterns' => [],
+    // El prerender levanta un servidor local en un puerto libre (8000, 5173 o
+    // uno efímero). Permitir cualquier puerto de localhost evita que las páginas
+    // SEO se generen con "Network Error" cuando esos puertos están ocupados.
+    'allowed_origins_patterns' => [
+        '#^http://(localhost|127\.0\.0\.1)(:\d+)?$#',
+    ],
 
     'allowed_headers' => ['*'],
 

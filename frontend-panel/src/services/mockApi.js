@@ -26,6 +26,57 @@ import {
 
 const delay = (ms = 350) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const CONFIG_ETIQUETAS_DEFAULT = {
+  page_width_mm: 98,
+  label_width_mm: 30,
+  label_height_mm: 20,
+  columns: 3,
+  gap_h_mm: 2,
+  gap_v_mm: 0,
+  margin_top_mm: 0,
+  margin_right_mm: 2,
+  margin_bottom_mm: 0,
+  margin_left_mm: 2,
+  orientation: 'landscape',
+  barcode_height_mm: 7,
+  barcode_max_width_mm: 28,
+  font_size_pt: 9,
+  brand_text: 'PRAGA',
+  show_name: true,
+  show_price: true,
+  show_size: true,
+  show_reference: true,
+  show_sede: true,
+  show_group: false,
+}
+let configEtiquetasMock = null
+
+async function getConfiguracionEtiquetas() {
+  await delay()
+  if (!configEtiquetasMock) {
+    try {
+      configEtiquetasMock = {
+        ...CONFIG_ETIQUETAS_DEFAULT,
+        ...(JSON.parse(localStorage.getItem('praga_mock_config_etiquetas') || 'null') || {}),
+      }
+    } catch {
+      configEtiquetasMock = { ...CONFIG_ETIQUETAS_DEFAULT }
+    }
+  }
+  return { ...configEtiquetasMock }
+}
+
+async function updateConfiguracionEtiquetas(payload) {
+  await delay()
+  configEtiquetasMock = { ...CONFIG_ETIQUETAS_DEFAULT, ...payload }
+  try {
+    localStorage.setItem('praga_mock_config_etiquetas', JSON.stringify(configEtiquetasMock))
+  } catch {
+    /* ignore */
+  }
+  return { ...configEtiquetasMock }
+}
+
 const ADMIN = { email: 'admin@praga.co', password: 'admin123', nombre: 'Administrador' }
 
 let facturaCounter = 1000 + facturas.length
@@ -85,6 +136,31 @@ async function getEmpleados() {
 async function getCategorias() {
   await delay()
   return categorias
+}
+
+// Define (o limpia con producto_id = null) el producto que se usa como portada
+// de una categoría en la tienda pública (mock).
+async function setPortada(categoriaId, { producto_id } = {}) {
+  await delay()
+  const cat = categorias.find((c) => c.id === Number(categoriaId))
+  if (!cat) throw new Error('Categoría no encontrada')
+
+  const productoId = producto_id == null ? null : Number(producto_id)
+  if (productoId !== null) {
+    const p = productos.find((x) => x.id === productoId)
+    if (!p) throw new Error('Producto no encontrado')
+    if (Number(p.categoria_id) !== cat.id) {
+      throw new Error('El producto no pertenece a esta categoría')
+    }
+    if (!p.imagen_url) throw new Error('El producto no tiene imagen para usar como portada')
+    cat.portada_producto_id = productoId
+    cat.portada_imagen_url = p.imagen_url
+  } else {
+    cat.portada_producto_id = null
+    cat.portada_imagen_url = null
+  }
+
+  return { ...cat, tallas_opcionales: Boolean(cat.tallas_opcionales) }
 }
 
 async function getSubcategorias() {
@@ -155,6 +231,72 @@ async function getProductos({ categoria_id, subcategoria_id } = {}) {
       stock_total: vars.reduce((sum, v) => sum + stockTotal(v.id), 0),
     }
   })
+}
+
+// Stock por talla y sede para la impresión de stickers de un producto.
+async function getProductoStock(id) {
+  await delay()
+  const producto = productos.find((p) => p.id === Number(id))
+  if (!producto) throw new Error('Producto no encontrado')
+
+  const vars = variantes.filter((v) => v.producto_id === producto.id)
+
+  return {
+    producto: {
+      id: producto.id,
+      nombre: producto.nombre,
+      precio: Number(producto.precio),
+      sku: producto.sku,
+    },
+    sedes: sedes.map((s) => ({ id: s.id, nombre: s.nombre })),
+    variantes: vars.map((v) => ({
+      id: v.id,
+      talla: v.talla,
+      codigo_barras: v.codigo_barras,
+      stock: sedes.map((s) => {
+        const reg = inventario.find((i) => i.variante_id === v.id && i.sede_id === s.id)
+        return { sede_id: s.id, sede: s.nombre, cantidad: reg ? reg.cantidad : 0 }
+      }),
+    })),
+  }
+}
+
+// Todos los productos de una categoría, en orden de creación, con stock por
+// sede. Se usa para imprimir los stickers de una categoría completa.
+async function getStickersCategoria({ categoria_id, subcategoria_id } = {}) {
+  await delay()
+  const categoria = categorias.find((c) => c.id === Number(categoria_id))
+  if (!categoria) throw new Error('Categoría no encontrada')
+
+  let lista = productos
+    .filter((p) => p.categoria_id === categoria.id)
+    .sort((a, b) => a.id - b.id)
+  if (subcategoria_id) {
+    lista = lista.filter((p) => p.subcategoria_id === Number(subcategoria_id))
+  }
+
+  return {
+    categoria: { id: categoria.id, nombre: categoria.nombre },
+    sedes: sedes.map((s) => ({ id: s.id, nombre: s.nombre })),
+    productos: lista.map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      precio: Number(p.precio),
+      sku: p.sku,
+      imagen_url: p.imagen_url,
+      variantes: variantes
+        .filter((v) => v.producto_id === p.id)
+        .map((v) => ({
+          id: v.id,
+          talla: v.talla,
+          codigo_barras: v.codigo_barras,
+          stock: sedes.map((s) => {
+            const reg = inventario.find((i) => i.variante_id === v.id && i.sede_id === s.id)
+            return { sede_id: s.id, sede: s.nombre, cantidad: reg ? reg.cantidad : 0 }
+          }),
+        })),
+    })),
+  }
 }
 
 // Elimina las variantes (y su inventario) de un producto.
@@ -376,6 +518,7 @@ async function getInventarioCompleto() {
       codigo_barras: v.codigo_barras,
       categoria_id: p.categoria_id,
       subcategoria_id: p.subcategoria_id,
+      catalogo: categorias.find((c) => c.id === p.categoria_id)?.catalogo ?? null,
       imagen_url: p.imagen_url,
       stock,
     }
@@ -424,24 +567,44 @@ async function createVenta(body) {
   }
 
   const detalle = items.map((item) => {
+    const precioUnitario = Number(item.precio_unitario)
+    const precioFinal = item.precio_final ? Number(item.precio_final) : precioUnitario
+    const cantidad = Number(item.cantidad)
+    const esRelampago = !item.variante_id
+
+    if (esRelampago) {
+      const nombre = String(item.nombre || '').trim()
+      if (!nombre) throw new Error('La venta relámpago necesita un nombre')
+      return {
+        variante_id: null,
+        nombre,
+        nota: String(item.nota || '').trim() || null,
+        cantidad,
+        precio_unitario: precioUnitario,
+        precio_final: precioFinal,
+        descuento: (precioUnitario - precioFinal) * cantidad,
+        subtotal: precioFinal * cantidad,
+      }
+    }
+
     const reg = inventario.find(
       (i) => i.sede_id === Number(sede_venta_id) && i.variante_id === item.variante_id,
     )
-    if (!reg || reg.cantidad < item.cantidad) {
+    if (!reg || reg.cantidad < cantidad) {
       throw new Error('Stock insuficiente en la sede para la variante solicitada')
     }
-    reg.cantidad -= item.cantidad
-    const precioUnitario = Number(item.precio_unitario)
-    const precioFinal = item.precio_final ? Number(item.precio_final) : precioUnitario
-    if (precioFinal > precioUnitario) throw new Error('El precio final no puede ser mayor al unitario')
+    reg.cantidad -= cantidad
+
     return {
       variante_id: item.variante_id,
+      nombre: null,
+      nota: null,
       sede_stock_id: Number(sede_venta_id),
-      cantidad: item.cantidad,
+      cantidad,
       precio_unitario: precioUnitario,
       precio_final: precioFinal,
-      descuento: (precioUnitario - precioFinal) * item.cantidad,
-      subtotal: precioFinal * item.cantidad,
+      descuento: (precioUnitario - precioFinal) * cantidad,
+      subtotal: precioFinal * cantidad,
     }
   })
 
@@ -474,12 +637,14 @@ async function createVenta(body) {
     venta,
     factura,
     items: detalle.map((d) => {
-      const v = variantes.find((x) => x.id === d.variante_id)
-      const p = productos.find((pr) => pr.id === v.producto_id)
+      const v = d.variante_id ? variantes.find((x) => x.id === d.variante_id) : null
+      const p = v ? productos.find((pr) => pr.id === v.producto_id) : null
       return {
         variante_id: d.variante_id,
-        nombre: p ? p.nombre : `Producto ${d.variante_id}`,
+        nombre: d.variante_id ? (p ? p.nombre : `Producto ${d.variante_id}`) : d.nombre,
         talla: v ? v.talla : null,
+        es_relampago: !d.variante_id,
+        nota: d.variante_id ? null : d.nota,
         cantidad: d.cantidad,
         precio_unitario: d.precio_unitario,
         precio_final: d.precio_final,
@@ -491,6 +656,57 @@ async function createVenta(body) {
     sede: sede ? sede.nombre : null,
     vendedor: vendedor ? vendedor.nombre : null,
     total,
+  }
+}
+
+// Revierte una venta completa: devuelve stock y elimina venta/factura/detalles.
+async function revertirVenta(id) {
+  await delay()
+
+  const ventaId = Number(id)
+  const index = ventas.findIndex((v) => v.id === ventaId)
+  if (index === -1) throw new Error('Venta no encontrada')
+
+  const venta = ventas[index]
+  if (venta.tipo === 'plan_separe') {
+    throw new Error('No se puede revertir un abono de Plan Separe desde Ventas.')
+  }
+  if (devoluciones.some((d) => d.venta_id === ventaId)) {
+    throw new Error('La venta tiene devoluciones o cambios registrados.')
+  }
+
+  const detalles = detalleVentas.filter((d) => d.venta_id === ventaId)
+  if (detalles.length === 0) throw new Error('La venta no tiene productos para devolver.')
+
+  let unidadesDevueltas = 0
+  detalles.forEach((d) => {
+    if (d.variante_id == null) return
+    const sedeId = Number(d.sede_stock_id ?? venta.sede_venta_id)
+    let reg = inventario.find((i) => i.sede_id === sedeId && i.variante_id === d.variante_id)
+    if (!reg) {
+      reg = { variante_id: d.variante_id, sede_id: sedeId, cantidad: 0 }
+      inventario.push(reg)
+    }
+    reg.cantidad += d.cantidad
+    unidadesDevueltas += d.cantidad
+  })
+
+  const factura = facturas.find((f) => f.venta_id === ventaId)
+  for (let i = detalleVentas.length - 1; i >= 0; i -= 1) {
+    if (detalleVentas[i].venta_id === ventaId) detalleVentas.splice(i, 1)
+  }
+  for (let i = facturas.length - 1; i >= 0; i -= 1) {
+    if (facturas[i].venta_id === ventaId) facturas.splice(i, 1)
+  }
+  ventas.splice(index, 1)
+
+  return {
+    ok: true,
+    venta_id: ventaId,
+    factura: factura ? factura.numero_interno : null,
+    total: venta.total,
+    unidades_devueltas: unidadesDevueltas,
+    sede_id: venta.sede_venta_id,
   }
 }
 
@@ -655,12 +871,14 @@ async function getVentas(params = {}) {
     const detallesVenta = detalleVentas.filter((d) => d.venta_id === v.id)
     const descuentoTotal = detallesVenta.reduce((s, d) => s + (d.descuento || 0), 0)
     const items = detallesVenta.map((d) => {
-      const vr = variantes.find((x) => x.id === d.variante_id)
-      const pr = productos.find((p) => p.id === (vr ? vr.producto_id : null))
+      const vr = d.variante_id ? variantes.find((x) => x.id === d.variante_id) : null
+      const pr = vr ? productos.find((p) => p.id === vr.producto_id) : null
       return {
         variante_id: d.variante_id,
-        nombre: pr ? pr.nombre : `Producto ${d.variante_id}`,
+        nombre: d.variante_id ? (pr ? pr.nombre : `Producto ${d.variante_id}`) : d.nombre,
         talla: vr ? vr.talla : null,
+        es_relampago: !d.variante_id,
+        nota: d.variante_id ? null : d.nota,
         cantidad: d.cantidad,
         precio_unitario: d.precio_unitario,
         subtotal: d.subtotal,
@@ -932,7 +1150,7 @@ async function getApartados(params = {}) {
   const current_page = Math.min(Math.max(1, Number(page)), last_page)
   const start = (current_page - 1) * per_page
   return {
-    data: lista.slice(start, start + per_page).map((a) => _formatearApartado(a)),
+    data: lista.slice(start, start + per_page).map((a) => _formatearApartado(a, true)),
     meta: { total, per_page, current_page, last_page },
   }
 }
@@ -941,6 +1159,76 @@ async function getApartadoDetalle(id) {
   await delay(150)
   const ap = apartados.find((x) => x.id === Number(id))
   if (!ap) throw new Error('Plan separe no encontrado')
+  return _formatearApartado(ap, true)
+}
+
+async function actualizarApartado(id, body = {}) {
+  await delay(250)
+  const ap = apartados.find((x) => x.id === Number(id))
+  if (!ap) throw new Error('Plan separe no encontrado')
+  if (ap.estado !== 'activo') throw new Error('Solo se puede modificar un plan activo')
+  const items = Array.isArray(body.items) ? body.items : []
+  if (!items.length) throw new Error('El plan debe tener al menos un producto')
+
+  const actuales = new Map()
+  apartadoItems
+    .filter((i) => i.apartado_id === ap.id)
+    .forEach((i) => {
+      actuales.set(i.variante_id, {
+        cantidad: (actuales.get(i.variante_id)?.cantidad || 0) + Number(i.cantidad || 0),
+        precio: Number(i.precio_unitario || 0),
+      })
+    })
+
+  const nuevas = new Map()
+  items.forEach((i) => {
+    const id = Number(i.variante_id)
+    nuevas.set(id, (nuevas.get(id) || 0) + Number(i.cantidad || 0))
+  })
+
+  let total = 0
+  const filas = []
+  nuevas.forEach((cantidad, varianteId) => {
+    const { p } = _infoItem(varianteId)
+    const precio = actuales.get(varianteId)?.precio ?? Number(p?.precio || 0)
+    total += precio * cantidad
+    filas.push({ varianteId, cantidad, precio })
+  })
+
+  if (total < Number(ap.abonado || 0)) {
+    throw new Error('El nuevo total no puede ser menor a lo ya abonado')
+  }
+
+  const afectadas = new Set([...actuales.keys(), ...nuevas.keys()])
+  afectadas.forEach((varianteId) => {
+    const delta = (nuevas.get(varianteId) || 0) - (actuales.get(varianteId)?.cantidad || 0)
+    if (!delta) return
+    const reg = inventario.find(
+      (inv) => inv.variante_id === varianteId && inv.sede_id === ap.sede_id,
+    )
+    if (!reg) throw new Error('No existe inventario para uno de los productos en esta sede')
+    if (delta > 0 && reg.cantidad < delta) throw new Error('Stock insuficiente en esta sede')
+    reg.cantidad -= delta
+  })
+
+  for (let i = apartadoItems.length - 1; i >= 0; i--) {
+    if (apartadoItems[i].apartado_id === ap.id) apartadoItems.splice(i, 1)
+  }
+  filas.forEach((f) => {
+    apartadoItems.push({
+      apartado_id: ap.id,
+      variante_id: f.varianteId,
+      cantidad: f.cantidad,
+      precio_unitario: f.precio,
+    })
+  })
+
+  ap.total = total
+  if (ap.total <= Number(ap.abonado || 0)) {
+    ap.estado = 'completado'
+    ap.abonado = ap.total
+  }
+
   return _formatearApartado(ap, true)
 }
 
@@ -1004,17 +1292,19 @@ async function buscarVentaPorFactura({ factura } = {}) {
   const items = detalleVentas
     .filter((d) => d.venta_id === venta.id)
     .map((d) => {
-      const v = variantes.find((x) => x.id === d.variante_id)
-      const p = productos.find((pr) => pr.id === v.producto_id)
-return {
-    variante_id: d.variante_id,
-    nombre: p ? p.nombre : `Producto ${d.variante_id}`,
-    talla: v ? v.talla : null,
-    cantidad: d.cantidad,
-    precio_unitario: d.precio_unitario,
-    subtotal: d.cantidad * d.precio_unitario,
-    imagen_url: p ? p.imagen_url : null,
-  }
+      const v = d.variante_id ? variantes.find((x) => x.id === d.variante_id) : null
+      const p = v ? productos.find((pr) => pr.id === v.producto_id) : null
+      return {
+        variante_id: d.variante_id,
+        nombre: d.variante_id ? (p ? p.nombre : `Producto ${d.variante_id}`) : d.nombre,
+        talla: v ? v.talla : null,
+        es_relampago: !d.variante_id,
+        nota: d.variante_id ? null : d.nota,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.cantidad * d.precio_unitario,
+        imagen_url: p ? p.imagen_url : null,
+      }
     })
 
   return {
@@ -1324,14 +1614,20 @@ export default {
   getEmpleados,
   getCategorias,
   getSubcategorias,
+  setPortada,
   getInventario,
   getProductos,
+  getProductoStock,
+  getStickersCategoria,
+  getConfiguracionEtiquetas,
+  updateConfiguracionEtiquetas,
   createProducto,
   updateProducto,
   deleteProducto,
   getInventarioCompleto,
   ajustarInventario,
   createVenta,
+  revertirVenta,
   getDashboard,
   getComisiones,
   getVentas,
@@ -1345,6 +1641,7 @@ export default {
   getApartados,
   crearApartado,
   getApartadoDetalle,
+  actualizarApartado,
   abonarApartado,
   cancelarApartado,
   getDuenoResumen,

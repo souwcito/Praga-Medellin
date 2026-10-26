@@ -2,24 +2,32 @@
 // - Consulta la API de producción (VITE_API_URL) para listar productos, categorías
 //   y subcategorías (URLs limpias /catalogo/:catalogo/:categoria/:subcategoria).
 // - Fail-soft: si la API no responde, genera el sitemap solo con las URLs estáticas.
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
 
+// El runtime usa /api (mismo origen), pero los scripts de build corren en Node y
+// necesitan una URL absoluta. Si VITE_API_URL es relativa o está vacía, usamos
+// la API pública de producción.
+const PROD_API = 'https://pragamedellin.com/api'
+
 // Lee VITE_API_URL de process.env o del archivo .env.production
 function apiUrl() {
-  if (process.env.VITE_API_URL) return process.env.VITE_API_URL
-  try {
-    const env = readFileSync(resolve(ROOT, '.env.production'), 'utf8')
-    const match = env.match(/^VITE_API_URL=(.*)$/m)
-    if (match) return match[1].trim().replace(/['"]/g, '')
-  } catch {
-    /* no hay .env.production */
+  let valor = process.env.VITE_API_URL || ''
+  if (!valor) {
+    try {
+      const env = readFileSync(resolve(ROOT, '.env.production'), 'utf8')
+      const match = env.match(/^VITE_API_URL=(.*)$/m)
+      if (match) valor = match[1]
+    } catch {
+      /* no hay .env.production */
+    }
   }
-  return ''
+  const limpia = String(valor).trim().replace(/['"]/g, '')
+  return /^https?:\/\//i.test(limpia) ? limpia : PROD_API
 }
 
 const BASE = 'https://pragamedellin.com'
@@ -64,6 +72,7 @@ function generarSitemap({ productos, categorias, subcategorias }) {
     { loc: `${BASE}/catalogo/mujer`, lastmod: hoy, changefreq: 'daily', priority: '0.9' },
     { loc: `${BASE}/promociones`, lastmod: hoy, changefreq: 'daily', priority: '0.8' },
     { loc: `${BASE}/fragancia-exclusiva`, lastmod: hoy, changefreq: 'daily', priority: '0.8' },
+    { loc: `${BASE}/guia-tallas`, lastmod: hoy, changefreq: 'monthly', priority: '0.7' },
   ]
 
   // Categorías → /catalogo/:catalogo/:categoria
@@ -111,6 +120,26 @@ const [productos, categorias, subcategorias] = await Promise.all([
 writeFileSync(resolve(ROOT, 'dist/sitemap.xml'), generarSitemap({ productos, categorias, subcategorias }))
 writeFileSync(resolve(ROOT, 'dist/robots.txt'), robots)
 
+// Marca única de esta compilación. La usa el navegador para detectar un nuevo
+// deploy y recargar a los usuarios que tienen la pestaña abierta.
+const version = {
+  version: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  built_at: new Date().toISOString(),
+}
+
+// Reemplaza el placeholder de .htaccess para forzar URLs nuevas en móviles.
+const htaccessPath = resolve(ROOT, 'dist/.htaccess')
+if (existsSync(htaccessPath)) {
+  const htaccess = readFileSync(htaccessPath, 'utf8').replaceAll(
+    '__BUILD_VERSION__',
+    version.version,
+  )
+  writeFileSync(htaccessPath, htaccess)
+}
+
+writeFileSync(resolve(ROOT, 'dist/version.json'), JSON.stringify(version, null, 2))
+
 console.log(
   `[sitemap] ${3 + categorias.length + subcategorias.length + productos.length} URLs (${productos.length} productos, ${categorias.length} categorías, ${subcategorias.length} subcategorías)`,
 )
+console.log(`[version] ${version.version}`)

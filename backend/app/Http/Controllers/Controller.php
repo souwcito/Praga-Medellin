@@ -35,5 +35,8 @@ abstract class Controller
     protected function bumpCache(): void
     {
         Cache::increment('cache_version');
+        // La lista de categorías incluye la portada (imagen de un producto): si
+        // cambia un producto (o su imagen) hay que refrescarla también.
+        Cache::forget('categorias');
     }
 }

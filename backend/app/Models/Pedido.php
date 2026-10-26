@@ -10,6 +10,10 @@ class Pedido extends Model
         'numero',
         'cliente_id',
         'total',
+        'subtotal',
+        'descuento',
+        'recompensas',
+        'factura_numero',
         'referencia',
         'wompi_transaction_id',
         'metodo_pago',
@@ -17,10 +21,14 @@ class Pedido extends Model
         'payment_status',
         'estado',
         'items',
+        'tomado_por',
+        'tomado_at',
     ];
 
     protected $casts = [
         'items' => 'array',
+        'recompensas' => 'array',
+        'tomado_at' => 'datetime',
     ];
 
     public function cliente()

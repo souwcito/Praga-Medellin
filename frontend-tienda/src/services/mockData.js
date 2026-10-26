@@ -3,7 +3,7 @@
 // estos datos solo se usan con VITE_USE_MOCK=true.
 
 const TALLAS_ROPA = ['S', 'M', 'L', 'XL', '2XL']
-const TALLAS_TENIS = ['7-40', '8-41', '9-42', '10-43', '11-44']
+const TALLAS_TENIS = ['7', '8', '9', '10', '11']
 const TALLAS_CHANCLAS = ['6-39', '7-40', '8-41', '9-42', '10-43', '11-44']
 
 export const categorias = [
@@ -21,6 +21,7 @@ export const categorias = [
   { id: 12, nombre: 'Tenis', catalogo: 'hombre' },
   { id: 29, nombre: 'Relojes', catalogo: 'hombre' },
   { id: 30, nombre: 'Correas', tallas_opcionales: true, catalogo: 'hombre' },
+  { id: 32, nombre: 'Tipo polo', catalogo: 'hombre' },
 
   // Catálogo Mujer
   { id: 13, nombre: 'Blusas', tallas: ['XS/S', 'S/M', 'M/L'], catalogo: 'mujer' },
@@ -68,6 +69,9 @@ export const subcategorias = [
 
   // Correas (Hombre)
   { id: 29, categoria_id: 30, nombre: 'Correas Premium 1.1', tallas: [] },
+
+  // Tipo polo (Hombre)
+  { id: 30, categoria_id: 32, nombre: 'Tipo polo Premium 1.1', tallas: TALLAS_ROPA },
 
   // Relojes (Hombre y Mujer)
   { id: 25, categoria_id: 29, nombre: 'Relojes Originales', tallas: [] },

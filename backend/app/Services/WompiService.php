@@ -33,7 +33,41 @@ class WompiService
             ->acceptJson()
             ->get($this->baseUrl() . '/transactions/' . $transactionId);
 
-        return $response->json();
+        $data = $response->json();
+
+        // Respaldo: el endpoint individual de Wompi a veces responde 500
+        // ("Error desconocido") aunque la transacción exista. En ese caso la
+        // buscamos en el listado por rango de fechas (derivado del propio ID).
+        if (!$response->successful() || !is_array($data) || empty($data['data'])) {
+            $data = $this->transaccionPorLista($transactionId) ?? $data;
+        }
+
+        return $data;
+    }
+
+    // Busca una transacción por ID usando el listado (/transactions), que sí es
+    // confiable. El ID tiene la forma <prefijo>-<timestamp_unix>-<aleatorio>.
+    private function transaccionPorLista(string $transactionId): ?array
+    {
+        $partes = explode('-', $transactionId);
+        $ts = (isset($partes[1]) && is_numeric($partes[1])) ? (int) $partes[1] : time();
+
+        $response = Http::withToken((string) config('wompi.private_key'))
+            ->acceptJson()
+            ->get($this->baseUrl() . '/transactions', [
+                'from_date' => gmdate('Y-m-d\TH:i:s.000\Z', $ts - 2 * 86400),
+                'until_date' => gmdate('Y-m-d\TH:i:s.000\Z', $ts + 2 * 86400),
+                'page' => 1,
+                'page_size' => 100,
+            ]);
+
+        foreach ((array) ($response->json('data') ?? []) as $tx) {
+            if (($tx['id'] ?? null) === $transactionId) {
+                return ['data' => ['transaction' => $tx]];
+            }
+        }
+
+        return null;
     }
 
     // Valida que una transacción esté aprobada según la API de Wompi.
@@ -61,14 +95,29 @@ class WompiService
         ];
     }
 
-    // Verifica el hash de los webhooks de Wompi:
-    // sha256(payload_crudo . events_key) debe coincidir con la cabecera X-Event-Hash.
-    public function webhookValido(string $payload, ?string $hash): bool
+    // Verifica la firma de los webhooks de Wompi.
+    // Wompi calcula: sha256( concat(valores de signature.properties) . timestamp . events_key )
+    // y la envía en el header `X-Event-Checksum` (también en `signature.checksum`).
+    public function webhookValido(array $data, ?string $checksum): bool
     {
-        if (!$hash) {
+        if (!$checksum) {
             return false;
         }
-        $esperado = hash('sha256', $payload . config('wompi.events_key'));
-        return hash_equals($esperado, $hash);
+
+        $properties = $data['signature']['properties'] ?? [];
+
+        $cadena = '';
+        foreach ($properties as $prop) {
+            $valor = data_get($data['data'] ?? [], $prop);
+            if ($valor !== null && !is_array($valor) && !is_object($valor)) {
+                $cadena .= (string) $valor;
+            }
+        }
+        $cadena .= (string) ($data['timestamp'] ?? '');
+        $cadena .= (string) config('wompi.events_key');
+
+        $esperado = hash('sha256', $cadena);
+
+        return hash_equals(strtolower($esperado), strtolower($checksum));
     }
 }

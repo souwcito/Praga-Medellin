@@ -5,18 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Venta;
 use App\Models\Empleado;
 use App\Models\Sede;
+use App\Services\FechaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class ComisionController extends Controller
 {
-    private function inicioPeriodo(string $periodo): \Carbon\Carbon
-    {
-        $d = now()->startOfDay();
-        $dias = $periodo === 'dia' ? 0 : ($periodo === 'semana' ? 6 : 29);
-        return $d->subDays($dias);
-    }
-
     // Ventas por vendedor (informativo, sin cálculo de comisión)
     public function index(Request $request)
     {
@@ -25,7 +19,7 @@ class ComisionController extends Controller
         $lista = Cache::remember($clave, 20, function () use ($request) {
             $query = Venta::with('factura');
         if ($request->filled('periodo')) {
-            $query->where('created_at', '>=', $this->inicioPeriodo($request->periodo));
+            $query->where('created_at', '>=', FechaService::inicioPeriodo($request->periodo));
         }
         $ventas = $query->get();
 

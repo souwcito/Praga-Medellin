@@ -6,8 +6,6 @@ use App\Models\Apartado;
 use App\Models\ApartadoItem;
 use App\Models\Abono;
 use App\Models\Cliente;
-use App\Models\DetalleVenta;
-use App\Models\Factura;
 use App\Models\Inventario;
 use App\Models\Pago;
 use App\Models\Variante;
@@ -40,7 +38,7 @@ class ApartadoController extends Controller
             $q = $request->q;
             $query->whereHas('cliente', function ($w) use ($q) {
                 $w->where('nombre', 'like', "%{$q}%")
-                    ->orWhere('documento', 'like', "%{$q}%");
+                    ->orWhere('telefono', 'like', "%{$q}%");
             });
         }
 
@@ -48,7 +46,7 @@ class ApartadoController extends Controller
         $paginated = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $paginated->map(fn ($ap) => $this->formatear($ap))->values(),
+            'data' => $paginated->map(fn ($ap) => $this->formatear($ap, true))->values(),
             'meta' => [
                 'total' => $paginated->total(),
                 'per_page' => $paginated->perPage(),
@@ -175,22 +173,26 @@ class ApartadoController extends Controller
                 ]);
             }
 
-            Abono::create([
+            $abono = Abono::create([
                 'apartado_id' => $ap->id,
                 'monto' => $abonoMonto,
                 'metodo_pago' => $request->abono_inicial['metodo_pago'],
                 'empleado_id' => $request->empleado_id,
             ]);
 
+            // El abono cuenta como ingreso: queda registrado como venta 'plan_separe'.
+            $this->registrarVentaAbono($ap, $abono);
+
             $ap->abonado = $abonoMonto;
             if ($abonoMonto >= $total) {
-                $this->generarVenta($ap);
+                $this->marcarCompletado($ap);
             } else {
                 $ap->save();
             }
 
             Cache::forget(InventarioController::claveSede($sedeId));
-            $this->bumpCache();
+
+            // La caché pública del catálogo se refresca sola (60 s).
 
             DB::commit();
 
@@ -201,6 +203,138 @@ class ApartadoController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Error al crear el plan separe: ' . $e->getMessage()], 400);
+        }
+    }
+
+    // Modifica los productos/cantidades de un plan activo. Ajusta el stock por
+    // la diferencia (devuelve lo que se quita y descuenta lo que se agrega),
+    // recalcula el total conservando el precio original de cada producto y
+    // respeta los abonos ya registrados.
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.variante_id' => 'required|integer',
+            'items.*.cantidad' => 'required|integer|min:1',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $ap = Apartado::with(['items'])->find($id);
+            if (!$ap) {
+                DB::rollBack();
+                return response()->json(['error' => 'Plan separe no encontrado'], 404);
+            }
+            if ($ap->estado !== 'activo') {
+                throw new \Exception('Solo se puede modificar un plan activo.');
+            }
+
+            $sedeId = (int) $ap->sede_id;
+
+            // Agrupa las cantidades nuevas y las actuales por variante.
+            $nuevas = [];
+            foreach ($request->items as $it) {
+                $varianteId = (int) $it['variante_id'];
+                $nuevas[$varianteId] = ($nuevas[$varianteId] ?? 0) + (int) $it['cantidad'];
+            }
+
+            $actuales = [];
+            $preciosActuales = [];
+            foreach ($ap->items as $item) {
+                $varianteId = (int) $item->variante_id;
+                $actuales[$varianteId] = ($actuales[$varianteId] ?? 0) + (int) $item->cantidad;
+                $preciosActuales[$varianteId] = (int) $item->precio_unitario;
+            }
+
+            // Prepara los ítems y calcula el nuevo total.
+            $itemsRow = [];
+            $total = 0;
+            foreach ($nuevas as $varianteId => $cantidad) {
+                $variante = Variante::with('producto')->find($varianteId);
+                if (!$variante || !$variante->producto) {
+                    throw new \Exception('Producto inválido.');
+                }
+                $precio = $preciosActuales[$varianteId] ?? (int) $variante->producto->precio;
+                $subtotal = $precio * $cantidad;
+                $total += $subtotal;
+                $itemsRow[] = [
+                    'variante' => $variante,
+                    'cantidad' => $cantidad,
+                    'precio_unitario' => $precio,
+                    'subtotal' => $subtotal,
+                ];
+            }
+
+            if ($total < (int) $ap->abonado) {
+                throw new \Exception(
+                    'El nuevo total no puede ser menor a lo ya abonado (' .
+                    number_format((int) $ap->abonado, 0, ',', '.') . ').'
+                );
+            }
+
+            // Ajusta el stock por la diferencia entre lo anterior y lo nuevo.
+            $variantesAfectadas = array_unique(array_merge(array_keys($actuales), array_keys($nuevas)));
+            foreach ($variantesAfectadas as $varianteId) {
+                $delta = ($nuevas[$varianteId] ?? 0) - ($actuales[$varianteId] ?? 0);
+                if ($delta === 0) {
+                    continue;
+                }
+
+                $inv = Inventario::where('sede_id', $sedeId)
+                    ->where('variante_id', $varianteId)
+                    ->first();
+                if (!$inv) {
+                    throw new \Exception('No existe inventario para uno de los productos en esta sede.');
+                }
+
+                if ($delta > 0 && $inv->stock < $delta) {
+                    $variante = Variante::with('producto')->find($varianteId);
+                    $talla = $variante && $variante->talla ? " (Talla {$variante->talla})" : '';
+                    $nombre = $variante && $variante->producto
+                        ? $variante->producto->nombre
+                        : 'el producto';
+                    throw new \Exception("Stock insuficiente para {$nombre}{$talla} en esta sede.");
+                }
+
+                // delta positivo descuenta; delta negativo devuelve al stock.
+                $inv->stock -= $delta;
+                $inv->save();
+            }
+
+            // Reemplaza los ítems del plan.
+            $ap->items()->delete();
+            foreach ($itemsRow as $r) {
+                ApartadoItem::create([
+                    'apartado_id' => $ap->id,
+                    'variante_id' => $r['variante']->id,
+                    'cantidad' => $r['cantidad'],
+                    'precio_unitario' => $r['precio_unitario'],
+                    'subtotal' => $r['subtotal'],
+                ]);
+            }
+
+            $ap->total = $total;
+            // Si el nuevo total quedó cubierto por los abonos, el plan termina.
+            if ($total <= (int) $ap->abonado) {
+                $ap->estado = 'completado';
+                $ap->abonado = $total;
+            }
+            $ap->save();
+
+            Cache::forget(InventarioController::claveSede($sedeId));
+
+            DB::commit();
+
+            return response()->json(
+                $this->formatear(
+                    $ap->fresh(['cliente', 'sede', 'empleado', 'venta', 'items.variante.producto', 'abonos.empleado']),
+                    true
+                )
+            );
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Error al modificar el plan separe: ' . $e->getMessage()], 400);
         }
     }
 
@@ -229,16 +363,19 @@ class ApartadoController extends Controller
                 throw new \Exception('El abono supera el saldo pendiente.');
             }
 
-            Abono::create([
+            $abono = Abono::create([
                 'apartado_id' => $ap->id,
                 'monto' => $monto,
                 'metodo_pago' => $request->metodo_pago,
                 'empleado_id' => $request->empleado_id,
             ]);
 
+            // El abono cuenta como ingreso: queda registrado como venta 'plan_separe'.
+            $this->registrarVentaAbono($ap, $abono);
+
             $ap->abonado += $monto;
             if ($ap->abonado >= $ap->total) {
-                $this->generarVenta($ap); // ya descuenta cache y bump
+                $this->marcarCompletado($ap); // ya descuenta cache y bump
             } else {
                 $ap->save();
             }
@@ -283,7 +420,8 @@ class ApartadoController extends Controller
             $ap->save();
 
             Cache::forget(InventarioController::claveSede((int) $ap->sede_id));
-            $this->bumpCache();
+
+            // La caché pública del catálogo se refresca sola (60 s).
 
             DB::commit();
 
@@ -296,50 +434,38 @@ class ApartadoController extends Controller
         }
     }
 
-    // Convierte un plan 100% pagado en una Venta (factura) con los abonos como pagos.
-    private function generarVenta(Apartado $ap): void
+    // Registra el ingreso de un abono como una venta de tipo 'plan_separe'.
+    // Cada abono genera su propia venta (con su pago), así cuenta en los ingresos
+    // y aparece en el historial de ventas con el número del plan (SEP-XXXX).
+    private function registrarVentaAbono(Apartado $ap, Abono $abono): void
     {
-        if ($ap->venta_id) {
-            return;
-        }
-
-        $numeroFactura = 'FAC-' . ConsecutivoService::siguiente('factura');
         $venta = Venta::create([
-            'empleado_id' => $ap->empleado_id,
+            'empleado_id' => $abono->empleado_id,
             'sede_venta_id' => $ap->sede_id,
-            'tipo' => 'presencial',
-            'numero_interno' => $numeroFactura,
-            'total' => (int) $ap->total,
+            'apartado_id' => $ap->id,
+            'tipo' => 'plan_separe',
+            'numero_interno' => $ap->numero_interno . '-' . $abono->id,
+            'total' => (int) $abono->monto,
         ]);
 
-        foreach ($ap->items as $item) {
-            DetalleVenta::create([
-                'venta_id' => $venta->id,
-                'variante_id' => $item->variante_id,
-                'cantidad' => $item->cantidad,
-                'precio_unitario' => $item->precio_unitario,
-                'descuento' => 0,
-                'subtotal' => $item->subtotal,
-            ]);
-        }
+        Pago::create([
+            'venta_id' => $venta->id,
+            'metodo_pago' => $abono->metodo_pago,
+            'monto' => (int) $abono->monto,
+        ]);
+    }
 
-        foreach ($ap->abonos as $abono) {
-            Pago::create([
-                'venta_id' => $venta->id,
-                'metodo_pago' => $abono->metodo_pago,
-                'monto' => $abono->monto,
-            ]);
-        }
-
-        Factura::create(['venta_id' => $venta->id, 'numero_interno' => $numeroFactura]);
-
-        $ap->venta_id = $venta->id;
+    // Marca el plan como completado (100% abonado). No crea una venta adicional:
+    // cada abono ya quedó registrado como ingreso (venta 'plan_separe').
+    private function marcarCompletado(Apartado $ap): void
+    {
         $ap->estado = 'completado';
         $ap->abonado = (int) $ap->total;
         $ap->save();
 
         Cache::forget(InventarioController::claveSede((int) $ap->sede_id));
-        $this->bumpCache();
+
+        // La caché pública del catálogo se refresca sola (60 s).
     }
 
     private function formatear(Apartado $ap, bool $conDetalle = false): array
@@ -393,7 +519,7 @@ class ApartadoController extends Controller
             'saldo' => max(0, $total - $abonado),
             'porcentaje' => min(100, $porcentaje),
             'venta_id' => $ap->venta_id,
-            'factura' => $ap->venta ? $ap->venta->numero_interno : null,
+            'factura' => $ap->numero_interno,
         ];
 
         if ($conDetalle) {

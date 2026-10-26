@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class DetalleVenta extends Model
 {
-    protected $fillable = ['venta_id', 'variante_id', 'cantidad', 'precio_unitario', 'descuento', 'subtotal'];
+    protected $fillable = ['venta_id', 'variante_id', 'sede_origen_id', 'nombre', 'nota', 'cantidad', 'precio_unitario', 'descuento', 'subtotal'];
 
     public function venta()
     {
@@ -16,5 +16,11 @@ class DetalleVenta extends Model
     public function variante()
     {
         return $this->belongsTo(Variante::class);
+    }
+
+    // Sede de la que salió esta unidad (relevante en ventas online).
+    public function sedeOrigen()
+    {
+        return $this->belongsTo(Sede::class, 'sede_origen_id');
     }
 }

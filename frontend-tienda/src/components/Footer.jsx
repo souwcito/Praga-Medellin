@@ -96,10 +96,12 @@ export default function Footer() {
                   ventas@pragamedellin.com
                 </a>
               </li>
-              <li className="text-white/50">Horario: lunes a sábado, 9:00 a.m. – 8:00 p.m.</li>
+              <li className="text-white/50">
+                Horario: lunes a sábado, 11:00 a.m. – 8:00 p.m. · domingos, 11:00 a.m. – 6:00 p.m.
+              </li>
               <li>
                 <Link to="/promociones" className="font-medium text-red-400 transition-colors hover:text-red-300">
-                  Promociones actuales
+                  Ofertas exclusivas
                 </Link>
               </li>
               <li>
@@ -108,6 +110,14 @@ export default function Footer() {
                   className="font-medium text-white/80 transition-colors hover:text-white"
                 >
                   Fragancia Exclusiva de Praga
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/guia-tallas"
+                  className="font-medium text-white/80 transition-colors hover:text-white"
+                >
+                  Guía de tallas de tenis y chanclas
                 </Link>
               </li>
             </ul>

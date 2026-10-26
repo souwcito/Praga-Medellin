@@ -7,3 +7,7 @@ frontend-panel/node_modules/
 frontend-panel/dist/
 frontend-panel/.env
 .DS_Store
+
+# Respaldo local de la base de datos: contiene datos de clientes y hashes de
+# contraseñas. No debe subirse al repositorio.
+u671432879_bd.sql

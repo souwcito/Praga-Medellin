@@ -9,7 +9,6 @@ import CategoryTiles from '../components/CategoryTiles'
 import TrustStrip from '../components/TrustStrip'
 import ProductCard from '../components/ProductCard'
 import usePolling from '../hooks/usePolling'
-import imagenEditorial from '../assets/imagen-banner-2.webp'
 import { ArrowRightIcon } from '../components/icons'
 
 export default function Home() {
@@ -24,7 +23,7 @@ export default function Home() {
         setDestacados(p.filter((x) => (x.stock_total ?? 0) > 0).slice(0, 8))
         setError(null)
       })
-      .catch((err) => setError(err?.message || 'Error cargando la tienda'))
+      .catch((err) => setError(err?.message || 'No pudimos cargar los destacados. Intenta de nuevo.'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -36,7 +35,7 @@ export default function Home() {
       .catch(() => {})
   }
 
-  usePolling(refrescar, 30000, !loading)
+  usePolling(refrescar, 15000, !loading)
 
   return (
     <>
@@ -120,7 +119,7 @@ export default function Home() {
           </div>
           <div className="order-1 lg:order-2">
             <img
-              src={imagenEditorial}
+              src="/banners/imagen1-banner-praga-2560x1440.png"
               alt="Colección Praga Medellín"
               loading="lazy"
               className="aspect-[4/3] w-full rounded-xl object-cover"

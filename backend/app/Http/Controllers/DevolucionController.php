@@ -10,7 +10,9 @@ use App\Models\Sede;
 use App\Models\Empleado;
 use App\Models\Variante;
 use App\Models\Venta;
+use App\Models\Pedido;
 use App\Services\ConsecutivoService;
+use App\Services\FechaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -51,7 +53,7 @@ class DevolucionController extends Controller
             // la misma sede donde se recibe la devolución.
             $sedeCambioId = (int) ($request->sede_cambio_id ?? $request->sede_id);
 
-            $venta = Venta::find($request->venta_id);
+            $venta = Venta::with('sedeVenta')->find($request->venta_id);
             if (!$venta) {
                 throw new \Exception('La venta de origen no existe.');
             }
@@ -60,17 +62,29 @@ class DevolucionController extends Controller
             $devueltosDetalle = [];
             foreach ($request->devueltos as $item) {
                 $cantidad = (int) $item['cantidad'];
+                $varianteId = (int) $item['variante_id'];
+
                 $vendido = (int) DetalleVenta::where('venta_id', $venta->id)
-                    ->where('variante_id', $item['variante_id'])
+                    ->where('variante_id', $varianteId)
                     ->sum('cantidad');
-                if ($cantidad > $vendido) {
+
+                // No permitir devolver más de lo que queda pendiente (descontando
+                // devoluciones anteriores de la misma factura).
+                $yaDevuelto = (int) DetalleDevolucion::where('variante_id', $varianteId)
+                    ->where('tipo', 'devuelto')
+                    ->whereHas('devolucion', fn ($q) => $q->where('venta_id', $venta->id))
+                    ->sum('cantidad');
+
+                if ($cantidad > $vendido - $yaDevuelto) {
                     throw new \Exception('La cantidad devuelta supera lo vendido en la factura.');
                 }
+
                 $totalDevuelto += $cantidad * (int) $item['precio_unitario'];
                 $devueltosDetalle[] = [
-                    'variante_id' => (int) $item['variante_id'],
+                    'variante_id' => $varianteId,
                     'cantidad' => $cantidad,
                     'precio_unitario' => (int) $item['precio_unitario'],
+                    'origenes' => $this->origenesDevolucion($venta, $varianteId),
                 ];
             }
 
@@ -129,7 +143,13 @@ class DevolucionController extends Controller
                 'motivo' => $request->motivo ?? null,
             ]);
 
-            // Artículos devueltos: vuelven al inventario (entrada)
+            // Artículos devueltos: vuelven al inventario (entrada). En ventas
+            // online se devuelven a la sede de origen; la sede "Online" nunca
+            // recibe stock.
+            $sedeOnlineId = (int) (Sede::where('nombre', 'Online')->value('id') ?? 0);
+            $sedeRecibidaId = (int) $request->sede_id;
+            $sedesAfectadas = [];
+
             foreach ($devueltosDetalle as $item) {
                 DetalleDevolucion::create([
                     'devolucion_id' => $devolucion->id,
@@ -139,18 +159,45 @@ class DevolucionController extends Controller
                     'tipo' => 'devuelto',
                 ]);
 
-                $reg = Inventario::where('sede_id', $request->sede_id)
-                    ->where('variante_id', $item['variante_id'])
-                    ->first();
-                if (!$reg) {
-                    $reg = Inventario::create([
-                        'variante_id' => $item['variante_id'],
-                        'sede_id' => $request->sede_id,
-                        'stock' => 0,
-                    ]);
+                $restante = (int) $item['cantidad'];
+
+                foreach (($item['origenes'] ?? []) as $origen) {
+                    if ($restante <= 0) {
+                        break;
+                    }
+
+                    $sedeOrigenId = (int) ($origen['sede_id'] ?? 0);
+                    if (!$sedeOrigenId || $sedeOrigenId === $sedeOnlineId) {
+                        continue;
+                    }
+
+                    $cantidadOrigen = min($restante, (int) $origen['cantidad']);
+                    if ($cantidadOrigen <= 0) {
+                        continue;
+                    }
+
+                    $reg = Inventario::firstOrCreate(
+                        ['sede_id' => $sedeOrigenId, 'variante_id' => $item['variante_id']],
+                        ['stock' => 0],
+                    );
+                    $reg->stock = (int) $reg->stock + $cantidadOrigen;
+                    $reg->save();
+
+                    $sedesAfectadas[] = $sedeOrigenId;
+                    $restante -= $cantidadOrigen;
                 }
-                $reg->stock += $item['cantidad'];
-                $reg->save();
+
+                // Si la venta antigua no tenía origen o faltaba información, se
+                // usa la sede física seleccionada para recibir la devolución.
+                if ($restante > 0 && $sedeRecibidaId && $sedeRecibidaId !== $sedeOnlineId) {
+                    $reg = Inventario::firstOrCreate(
+                        ['sede_id' => $sedeRecibidaId, 'variante_id' => $item['variante_id']],
+                        ['stock' => 0],
+                    );
+                    $reg->stock = (int) $reg->stock + $restante;
+                    $reg->save();
+                    $sedesAfectadas[] = $sedeRecibidaId;
+                }
             }
 
             // Artículos de cambio: salen del inventario (salida)
@@ -170,17 +217,21 @@ class DevolucionController extends Controller
                 $reg->save();
             }
 
-            // Invalida la caché del stock de ambas sedes (devueltos suman en la
-            // sede de la devolución; cambios restan de la sede del cambio).
-            Cache::forget(InventarioController::claveSede((int) $request->sede_id));
-            if ($sedeCambioId !== (int) $request->sede_id) {
-                Cache::forget(InventarioController::claveSede($sedeCambioId));
+            // Invalida la caché del stock de todas las sedes afectadas: las de
+            // origen de los productos devueltos, la sede que recibe y la de cambio.
+            $sedesCache = array_unique(array_filter(array_merge(
+                $sedesAfectadas,
+                [(int) $request->sede_id, $sedeCambioId],
+            )));
+            foreach ($sedesCache as $sedeId) {
+                Cache::forget(InventarioController::claveSede((int) $sedeId));
             }
 
             DB::commit();
-            $this->bumpCache();
 
-            return response()->json($this->formatear($devolucion, $venta), 201);
+            // La caché pública del catálogo se refresca sola (60 s).
+
+            return response()->json($this->formatear($devolucion, true), 201);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Error al registrar la devolución: ' . $e->getMessage()], 400);
@@ -193,7 +244,7 @@ class DevolucionController extends Controller
         $query = Devolucion::with(['empleado', 'sede', 'sedeCambio', 'venta', 'detalles.variante.producto'])->orderByDesc('id');
 
         if ($request->filled('periodo')) {
-            $query->where('created_at', '>=', $this->inicioPeriodo($request->periodo));
+            $query->where('created_at', '>=', FechaService::inicioPeriodo($request->periodo));
         }
         if ($request->filled('sede_id')) {
             $query->where('sede_id', $request->sede_id);
@@ -248,11 +299,76 @@ class DevolucionController extends Controller
         return response()->json($this->formatear($devolucion, true));
     }
 
-    private function inicioPeriodo(string $periodo): \Carbon\Carbon
+    // Devuelve las unidades pendientes por sede de origen para una variante.
+    // - En ventas nuevas usa detalle_ventas.sede_origen_id.
+    // - En ventas online antiguas usa pedidos.items[].origenes.
+    // - En ventas POS antiguas usa la sede de la venta.
+    // - Descuenta devoluciones anteriores para no devolver dos veces la misma unidad.
+    private function origenesDevolucion(Venta $venta, int $varianteId): array
     {
-        $d = now()->startOfDay();
-        $dias = $periodo === 'dia' ? 0 : ($periodo === 'semana' ? 6 : 29);
-        return $d->subDays($dias);
+        $detalles = DetalleVenta::where('venta_id', $venta->id)
+            ->where('variante_id', $varianteId)
+            ->orderBy('id')
+            ->get(['id', 'sede_origen_id', 'cantidad']);
+
+        $esOnline = optional($venta->sedeVenta)->nombre === 'Online';
+        $buckets = [];
+
+        foreach ($detalles as $detalle) {
+            $sedeId = $detalle->sede_origen_id
+                ? (int) $detalle->sede_origen_id
+                : ($esOnline ? null : (int) $venta->sede_venta_id);
+
+            $buckets[] = [
+                'sede_id' => $sedeId,
+                'cantidad' => (int) $detalle->cantidad,
+            ];
+        }
+
+        // Ventas online creadas antes de guardar sede_origen_id: recuperar el
+        // reparto desde el pedido original.
+        if ($esOnline && collect($buckets)->every(fn ($b) => $b['sede_id'] === null)) {
+            $pedido = Pedido::where('factura_numero', $venta->numero_interno)->first();
+            $item = $pedido
+                ? collect($pedido->items ?? [])->firstWhere('variante_id', $varianteId)
+                : null;
+
+            $origenes = $item['origenes'] ?? [];
+            if (!empty($origenes)) {
+                $buckets = [];
+                foreach ($origenes as $origen) {
+                    $sedeId = (int) ($origen['sede_id'] ?? 0);
+                    $cantidad = (int) ($origen['cantidad'] ?? 0);
+                    if ($sedeId > 0 && $cantidad > 0) {
+                        $buckets[] = ['sede_id' => $sedeId, 'cantidad' => $cantidad];
+                    }
+                }
+
+                $total = (int) $detalles->sum('cantidad');
+                $cubierto = array_sum(array_column($buckets, 'cantidad'));
+                if ($cubierto < $total) {
+                    $buckets[] = ['sede_id' => null, 'cantidad' => $total - $cubierto];
+                }
+            }
+        }
+
+        // Descontar lo ya devuelto, en orden, de las sedes de origen.
+        $yaDevuelto = (int) DetalleDevolucion::where('variante_id', $varianteId)
+            ->where('tipo', 'devuelto')
+            ->whereHas('devolucion', fn ($q) => $q->where('venta_id', $venta->id))
+            ->sum('cantidad');
+
+        foreach ($buckets as &$bucket) {
+            if ($yaDevuelto <= 0) {
+                break;
+            }
+            $restar = min((int) $bucket['cantidad'], $yaDevuelto);
+            $bucket['cantidad'] -= $restar;
+            $yaDevuelto -= $restar;
+        }
+        unset($bucket);
+
+        return array_values(array_filter($buckets, fn ($b) => $b['cantidad'] > 0));
     }
 
     private function formatear(Devolucion $d, bool $conDetalle = false): array

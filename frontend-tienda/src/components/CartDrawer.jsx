@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useCart } from '../hooks/useCart'
 import { formato } from '../utils/formato'
+import { etiquetaTalla } from '../utils/tallas'
+import Recompensas from './Recompensas'
 import { ArrowRightIcon, CartIcon, MinusIcon, PlusIcon, TrashIcon, XIcon } from './icons'
 
 // Carrito desplegable lateral (slide-over): no redirige a otra página.
@@ -88,7 +90,9 @@ export default function CartDrawer() {
                       </button>
                     </div>
                     <p className="mt-0.5 text-xs text-ink-2">
-                      {item.talla ? `Talla ${item.talla} · ` : 'Talla única · '}
+                      {item.talla
+                        ? `Talla ${item.talla_label || etiquetaTalla(item.talla, item)} · `
+                        : 'Unitalla · '}
                       {formato(item.precio)}
                     </p>
                     <div className="mt-2 flex items-center justify-between">
@@ -128,7 +132,8 @@ export default function CartDrawer() {
         {/* Resumen */}
         {items.length > 0 && (
           <div className="border-t border-line p-4">
-            <div className="mb-3 flex items-baseline justify-between">
+            <Recompensas items={items} />
+            <div className="mb-3 mt-4 flex items-baseline justify-between">
               <span className="text-sm text-ink-2">Total</span>
               <span className="text-2xl font-bold text-ink">{formato(total)}</span>
             </div>
@@ -137,7 +142,7 @@ export default function CartDrawer() {
               onClick={irACheckout}
               className="group flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98]"
             >
-              Finalizar compra
+              Pagar ahora
               <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
             <button

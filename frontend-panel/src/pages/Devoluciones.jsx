@@ -4,6 +4,7 @@ import { devolucionesApi, ventasApi } from '../services/api'
 import { useSedes, useEmpleados, useInventarioSede, useVentas, useDevoluciones, useDevolucionDetalle } from '../hooks/useData'
 import PeriodFilter from '../components/PeriodFilter'
 import Modal from '../components/Modal'
+import { buscarVariantePorCodigo, coincideCodigoEtiqueta, coincideCodigoExacto } from '../utils/codigoEtiqueta'
 import {
   AlertIcon,
   CheckIcon,
@@ -45,6 +46,10 @@ const fechaLarga = (iso) =>
 // Extrae el mensaje real del backend (Laravel responde { error: '...' })
 const msgError = (err) =>
   err?.error || err?.message || 'No se pudo completar la operación'
+
+// Las ventas relámpago no tienen variante ni stock: no se devuelven al
+// inventario, así que no se ofrecen en el selector de devolución.
+const esDevolvible = (item) => !item.es_relampago && item.variante_id != null
 
 const METODOS_PAGO = [
   { value: 'efectivo', label: 'Efectivo' },
@@ -126,12 +131,15 @@ function Registrar() {
   const variantesFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     if (!q) return variantes
+
+    const exactas = variantes.filter((v) => coincideCodigoExacto(v, q))
+    if (exactas.length) return exactas
+
     return variantes.filter(
       (v) =>
         v.nombre.toLowerCase().includes(q) ||
-        v.codigo_barras.toLowerCase().includes(q) ||
-        (v.talla || '').toLowerCase().includes(q) ||
-        v.sku.toLowerCase().includes(q),
+        coincideCodigoEtiqueta(v, q) ||
+        (v.talla || '').toLowerCase().includes(q),
     )
   }, [variantes, busqueda])
 
@@ -185,13 +193,18 @@ function Registrar() {
     try {
       const res = await ventasApi.buscarPorFactura(factura)
       setVentaInfo(res)
-      // Autoselecciona la sede donde se vendió (devolución y, por defecto, cambio)
-      if (res.venta?.sede_venta_id) {
-        setSedeId(String(res.venta.sede_venta_id))
-        setSedeCambioId(String(res.venta.sede_venta_id))
+      // Las ventas online no tienen stock en la sede "Online": para cambios y
+      // recepción se usa una sede física; el stock vuelve a su sede de origen.
+      const esOnline = Boolean(res.venta?.online) || res.venta?.sede_venta === 'Online'
+      const sedeDestino = esOnline
+        ? (sedes[0]?.id ? String(sedes[0].id) : '')
+        : String(res.venta?.sede_venta_id || '')
+      if (sedeDestino) {
+        setSedeId(sedeDestino)
+        setSedeCambioId(sedeDestino)
       }
       setDevueltos(
-        res.items.map((it) => ({
+        res.items.filter(esDevolvible).map((it) => ({
           variante_id: it.variante_id,
           nombre: it.nombre,
           talla: it.talla,
@@ -224,6 +237,7 @@ function Registrar() {
 
   function usarVenta(v) {
     if (!v?.id) return
+    const esOnline = Boolean(v.online) || v.sede_venta === 'Online'
     setVentaInfo({
       venta: {
         id: v.id,
@@ -231,12 +245,13 @@ function Registrar() {
         fecha: v.fecha,
         sede_venta: v.sede_venta,
         sede_venta_id: v.sede_venta_id ?? Number(sedeId),
+        online: esOnline,
         total: v.total,
       },
       items: v.items || [],
     })
     setDevueltos(
-      (v.items || []).map((it) => ({
+      (v.items || []).filter(esDevolvible).map((it) => ({
         variante_id: it.variante_id,
         nombre: it.nombre,
         talla: it.talla,
@@ -245,9 +260,12 @@ function Registrar() {
         cantidad: it.cantidad,
       })),
     )
-    if (v.sede_venta_id) {
-      setSedeId(String(v.sede_venta_id))
-      setSedeCambioId(String(v.sede_venta_id))
+    const sedeDestino = esOnline
+      ? (sedes[0]?.id ? String(sedes[0].id) : '')
+      : String(v.sede_venta_id ?? sedeId)
+    if (sedeDestino) {
+      setSedeId(sedeDestino)
+      setSedeCambioId(sedeDestino)
     }
     setCambioCart([])
     setMetodoPago('')
@@ -277,6 +295,17 @@ function Registrar() {
       }
       return [...prev, { ...variante, cantidad: 1 }]
     })
+  }
+
+  // El lector escribe el código y envía Enter: lleva la variante exacta
+  // (producto + talla) a la lista de cambio.
+  function escanearCambio(e) {
+    if (e.key !== 'Enter') return
+    const encontrada = buscarVariantePorCodigo(variantes, e.currentTarget.value)
+    if (!encontrada) return
+    e.preventDefault()
+    agregarCambio(encontrada)
+    setBusqueda('')
   }
 
   function cambiarCantidadCambio(variante_id, cantidad) {
@@ -556,7 +585,7 @@ function Registrar() {
                       <ul className="divide-y divide-line">
                         {itemsVenta.slice(0, 2).map((it, idx) => (
                           <li
-                            key={`${it.variante_id}-${idx}`}
+                            key={`${it.detalle_id ?? it.variante_id ?? 'x'}-${idx}`}
                             className="flex items-center gap-3 px-3 py-2"
                           >
                             <ProductImage
@@ -565,11 +594,21 @@ function Registrar() {
                               className="h-9 w-9 rounded-lg"
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm text-ink">{it.nombre}</p>
+                              <p className="flex items-center gap-1.5 truncate text-sm text-ink">
+                                <span className="truncate">{it.nombre}</span>
+                                {it.es_relampago && (
+                                  <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                                    Relámpago
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-xs text-ink-2">
                                 {it.talla ? `Talla ${it.talla} · ` : ''}
                                 {it.cantidad} × {formato(it.precio_unitario)}
                               </p>
+                              {it.es_relampago && it.nota && (
+                                <p className="text-[11px] text-ink-2/70">{it.nota}</p>
+                              )}
                             </div>
                             <span className="shrink-0 text-xs font-semibold text-ink">
                               {formato(it.subtotal)}
@@ -591,7 +630,7 @@ function Registrar() {
                         <ul className="divide-y divide-line">
                           {itemsVenta.map((it, idx) => (
                             <li
-                              key={`${it.variante_id}-${idx}`}
+                              key={`${it.detalle_id ?? it.variante_id ?? 'x'}-${idx}`}
                               className="flex items-center gap-3 px-3 py-2.5"
                             >
                               <ProductImage
@@ -600,13 +639,21 @@ function Registrar() {
                                 className="h-14 w-14 rounded-lg"
                               />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-ink">
-                                  {it.nombre}
+                                <p className="flex items-center gap-1.5 truncate text-sm font-medium text-ink">
+                                  <span className="truncate">{it.nombre}</span>
+                                  {it.es_relampago && (
+                                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                                      Relámpago
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="text-xs text-ink-2">
                                   {it.talla ? `Talla ${it.talla} · ` : ''}
                                   {it.cantidad} × {formato(it.precio_unitario)}
                                 </p>
+                                {it.es_relampago && it.nota && (
+                                  <p className="text-[11px] text-ink-2/70">{it.nota}</p>
+                                )}
                               </div>
                               <span className="shrink-0 text-sm font-semibold text-ink">
                                 {formato(it.subtotal)}
@@ -676,12 +723,19 @@ function Registrar() {
             </div>
           </div>
 
+          {ventaInfo.venta.online && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Venta online: el stock de los productos devueltos vuelve automáticamente a su
+              sede de origen. La sede Online no recibe stock.
+            </div>
+          )}
+
           {(ventaInfo.items || []).length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {ventaInfo.items.map((it, idx) => (
                 <span
-                  key={`${it.variante_id}-${idx}`}
-                  title={`${it.nombre}${it.talla ? ` · ${it.talla}` : ''} × ${it.cantidad}`}
+                  key={`${it.detalle_id ?? it.variante_id ?? 'x'}-${idx}`}
+                  title={`${it.nombre}${it.talla ? ` · ${it.talla}` : ''}${it.es_relampago ? ' · Relámpago' : ''} × ${it.cantidad}`}
                   className="flex items-center gap-2 rounded-lg border border-line bg-white py-0.5 pl-0.5 pr-2 text-[11px] text-ink-2"
                 >
                   <ProductImage src={it.imagen_url} alt={it.nombre} className="h-9 w-9 rounded-md" />
@@ -791,6 +845,7 @@ function Registrar() {
                     type="text"
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
+                    onKeyDown={escanearCambio}
                     placeholder="Buscar por nombre, talla o código…"
                     className={`${inputCls} pl-9`}
                   />

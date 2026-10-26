@@ -3,14 +3,11 @@ import { Link } from 'react-router-dom'
 import { useCart } from '../hooks/useCart'
 import { pedidosApi } from '../services/api'
 import { formato } from '../utils/formato'
+import { etiquetaTalla } from '../utils/tallas'
+import { calcularRecompensas } from '../utils/recompensas'
+import { CIUDADES_COLOMBIA } from '../data/colombia'
 import Seo from '../components/Seo'
-import {
-  AlertIcon,
-  ArrowRightIcon,
-  CartIcon,
-  CheckIcon,
-  XIcon,
-} from '../components/icons'
+import { AlertIcon, ArrowRightIcon, CartIcon, CheckIcon, XIcon } from '../components/icons'
 
 const inputCls =
   'w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink-2/50 transition-colors focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
@@ -20,7 +17,8 @@ const inputCls =
 // servidor) → 2) GET config del widget (firma de integridad calculada en el
 // backend) → 3) widget de Wompi → 4) POST confirmar (valida en Wompi y notifica).
 export default function Checkout() {
-  const { items, total, count, vaciar } = useCart()
+  const { items, count, vaciar } = useCart()
+  const recompensas = calcularRecompensas(items)
 
   const [cliente, setCliente] = useState({
     nombre: '',
@@ -43,6 +41,7 @@ export default function Checkout() {
 
   const formOk =
     cliente.nombre.trim().length > 0 &&
+    cliente.ciudad.trim().length > 0 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cliente.email)
 
   async function iniciarPago() {
@@ -254,8 +253,21 @@ export default function Checkout() {
                     <input value={cliente.documento} onChange={(e) => setCampo('documento', e.target.value)} placeholder="Número de cédula" className={inputCls} />
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-ink-2">Ciudad</span>
-                    <input value={cliente.ciudad} onChange={(e) => setCampo('ciudad', e.target.value)} className={inputCls} />
+                    <span className="mb-1 block text-xs font-medium text-ink-2">Ciudad de entrega *</span>
+                    <input
+                      value={cliente.ciudad}
+                      onChange={(e) => setCampo('ciudad', e.target.value)}
+                      list="ciudades-colombia"
+                      placeholder="Busca tu ciudad…"
+                      className={inputCls}
+                    />
+                    <datalist id="ciudades-colombia">
+                      {CIUDADES_COLOMBIA.map((c) => (
+                        <option key={`${c.ciudad}-${c.departamento}`} value={c.ciudad}>
+                          {c.ciudad}, {c.departamento}
+                        </option>
+                      ))}
+                    </datalist>
                   </label>
                   <label className="block sm:col-span-2">
                     <span className="mb-1 block text-xs font-medium text-ink-2">Dirección</span>
@@ -273,7 +285,10 @@ export default function Checkout() {
                       <span className="min-w-0">
                         <span className="line-clamp-2 block text-ink">{item.nombre}</span>
                         <span className="text-xs text-ink-2">
-                          {item.talla ? `Talla ${item.talla} · ` : ''}× {item.cantidad}
+                          {item.talla
+                            ? `Talla ${item.talla_label || etiquetaTalla(item.talla, item)} · `
+                            : ''}
+                          × {item.cantidad}
                         </span>
                       </span>
                       <span className="shrink-0 font-medium text-ink">
@@ -282,10 +297,34 @@ export default function Checkout() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-4 flex items-baseline justify-between border-t border-line pt-4">
-                  <span className="text-sm font-medium text-ink-2">Total a pagar</span>
-                  <span className="text-2xl font-bold text-ink">{formato(total)}</span>
+                <div className="mt-4 space-y-1.5 border-t border-line pt-4 text-sm">
+                  <div className="flex justify-between text-ink-2">
+                    <span>Subtotal</span>
+                    <span className="font-medium text-ink">{formato(recompensas.subtotal)}</span>
+                  </div>
+                  {recompensas.fragancia_gratis && (
+                    <div className="flex justify-between text-ink-2">
+                      <span>Fragancia Exclusiva (regalo)</span>
+                      <span className="font-medium text-emerald-700">$0</span>
+                    </div>
+                  )}
+                  {recompensas.descuento > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Descuento (5%)</span>
+                      <span className="font-medium">−{formato(recompensas.descuento)}</span>
+                    </div>
+                  )}
                 </div>
+                <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
+                  <span className="text-sm font-medium text-ink-2">Total a pagar</span>
+                  <span className="text-2xl font-bold text-ink">{formato(recompensas.total)}</span>
+                </div>
+
+                <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-[11px] leading-relaxed text-ink-2">
+                  {recompensas.envio_gratis
+                    ? 'Tienes envío gratis a todo el país.'
+                    : 'El envío no está incluido en el total: en Medellín te contactamos para coordinarlo; fuera de Medellín se envía por Interrapidísimo (costo según destino).'}
+                </p>
 
                 <button
                   type="button"
@@ -307,7 +346,7 @@ export default function Checkout() {
                 </button>
                 {!formOk && (
                   <p className="mt-2 text-center text-xs text-ink-2/70">
-                    Completa tu nombre y un email válido para continuar.
+                    Completa tu nombre, tu ciudad y un email válido para continuar.
                   </p>
                 )}
                 <p className="mt-3 text-center text-[11px] text-ink-2/60">

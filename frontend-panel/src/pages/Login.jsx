@@ -13,8 +13,8 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState(DEMO.email)
+  const [password, setPassword] = useState(DEMO.password)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -103,20 +103,6 @@ export default function Login() {
             {submitting ? 'Ingresando…' : 'Ingresar al panel'}
           </button>
         </form>
-
-        <p className="animate-fade-in mt-4 text-center text-xs text-white/40 [animation-delay:160ms]">
-          Cuenta de demostración:{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setEmail(DEMO.email)
-              setPassword(DEMO.password)
-            }}
-            className="font-medium text-white/60 underline underline-offset-2 transition-colors hover:text-white"
-          >
-            admin@pragamedellin.com · admin123
-          </button>
-        </p>
       </div>
     </div>
   )

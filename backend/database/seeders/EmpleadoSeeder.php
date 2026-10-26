@@ -29,5 +29,17 @@ class EmpleadoSeeder extends Seeder
                 'updated_at' => now(),
             ]);
         }
+
+        // Empleado virtual que "factura" las ventas online, asignado a la sede Online.
+        $sedeOnline = DB::table('sedes')->where('nombre', 'Online')->value('id');
+        if ($sedeOnline) {
+            DB::table('empleados')->insert([
+                'nombre' => 'Ventas Online',
+                'rol' => 'cajero',
+                'sede_id' => $sedeOnline,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 }

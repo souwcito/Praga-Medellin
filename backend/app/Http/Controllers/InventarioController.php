@@ -84,6 +84,8 @@ class InventarioController extends Controller
                 'talla' => $v->talla,
                 'sku' => $v->producto->sku,
                 'codigo_barras' => $v->codigo_barras,
+                'precio' => (int) $v->producto->precio,
+                'precio_antes' => $v->producto->precio_antes !== null ? (int) $v->producto->precio_antes : null,
                 'categoria_id' => $v->producto->categoria_id,
                 'subcategoria_id' => $v->producto->subcategoria_id,
                 'catalogo' => optional($v->producto->categoria)->catalogo,

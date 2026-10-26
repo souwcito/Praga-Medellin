@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { apartadosApi } from '../services/api'
 import {
@@ -10,10 +10,12 @@ import {
 } from '../hooks/useData'
 import Modal from '../components/Modal'
 import ProductImage from '../components/ProductImage'
+import { buscarVariantePorCodigo, coincideCodigoEtiqueta, coincideCodigoExacto } from '../utils/codigoEtiqueta'
 import {
   AlertIcon,
   CheckIcon,
   ChevronDownIcon,
+  EditIcon,
   MinusIcon,
   PlusIcon,
   SearchIcon,
@@ -76,6 +78,549 @@ function BarraProgreso({ pct }) {
 const msgError = (err) => err?.error || err?.message || 'No se pudo completar la operación'
 
 // ---------------------------------------------------------------------------
+// Resumen detallado de un plan separe / de un abono: para quién, qué se apartó
+// y los montos. Se muestra al crear el plan y al registrar cada abono.
+// ---------------------------------------------------------------------------
+
+function ResumenPlan({ plan, titulo, onClose }) {
+  if (!plan) return null
+  const abono = [...(plan.abonos || [])].pop()
+  const metodo = abono
+    ? ABONO_METODOS.find((m) => m.value === abono.metodo_pago)?.label || abono.metodo_pago
+    : null
+  const completado = plan.estado === 'completado'
+
+  return (
+    <Modal className="animate-fade-in z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+      <div className="animate-scale-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white ${
+              completado ? 'bg-emerald-500' : 'bg-ink'
+            }`}
+          >
+            <CheckIcon className="h-6 w-6" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-display text-xl font-semibold tracking-tight text-ink">{titulo}</h3>
+            <p className="text-xs text-ink-2">
+              {plan.numero_interno} · {fechaLarga(plan.fecha)}
+            </p>
+          </div>
+        </div>
+
+        {/* Para quién */}
+        <div className="mb-4 rounded-xl border border-line bg-surface-2/40 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">Cliente</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">{plan.cliente?.nombre}</p>
+          <p className="text-xs text-ink-2">{plan.cliente?.telefono || 'Sin celular'}</p>
+        </div>
+
+        {/* Dónde y quién atendió */}
+        <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">Sede</p>
+            <p className="font-medium text-ink">{plan.sede}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">Vendedor</p>
+            <p className="font-medium text-ink">{plan.empleado?.nombre}</p>
+          </div>
+        </div>
+
+        {/* Qué se apartó */}
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+          Productos apartados ({plan.items?.length || 0})
+        </p>
+        <ul className="mb-4 space-y-2">
+          {(plan.items || []).map((it, idx) => (
+            <li
+              key={`${it.variante_id}-${idx}`}
+              className="flex items-center gap-3 rounded-lg border border-line p-2"
+            >
+              <ProductImage src={it.imagen_url} alt={it.nombre} className="h-12 w-12 rounded-lg" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-ink">{it.nombre}</p>
+                <p className="text-xs text-ink-2">
+                  {it.talla ? `Talla ${it.talla} · ` : ''}
+                  {it.cantidad} × {formato(it.precio_unitario)}
+                </p>
+              </div>
+              <span className="shrink-0 text-sm font-semibold text-ink">{formato(it.subtotal)}</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* Montos */}
+        <div className="rounded-xl border border-line bg-surface-2/40 p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-ink-2">Total del plan</span>
+            <span className="font-semibold text-ink">{formato(plan.total)}</span>
+          </div>
+          {abono && (
+            <div className="mt-1 flex items-center justify-between text-sm">
+              <span className="text-ink-2">{completado ? 'Último abono' : 'Abono registrado'}</span>
+              <span className="font-semibold text-emerald-700">
+                {formato(abono.monto)}
+                {metodo ? ` · ${metodo}` : ''}
+              </span>
+            </div>
+          )}
+          <div className="mt-1 flex items-center justify-between text-sm">
+            <span className="text-ink-2">Total abonado</span>
+            <span className="font-semibold text-ink">{formato(plan.abonado)}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between text-sm">
+            <span className="text-ink-2">Saldo pendiente</span>
+            <span className="font-semibold text-ink">{formato(plan.saldo)}</span>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-sm">
+            <span className="text-ink-2">Progreso</span>
+            <span className="font-bold text-ink">{plan.porcentaje}%</span>
+          </div>
+          <div className="mt-1.5">
+            <BarraProgreso pct={plan.porcentaje} />
+          </div>
+          {completado && (
+            <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+              ¡Plan completado! El cliente ya pagó todo.
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 w-full rounded-lg bg-ink py-2.5 text-sm font-medium text-white transition-colors hover:bg-metal-2"
+        >
+          {completado ? 'Cerrar' : 'Entendido'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Modal: modificar un plan separe activo (productos y cantidades)
+// ---------------------------------------------------------------------------
+
+function EditarPlanModal({ planId, sedeId, onClose, onGuardado }) {
+  const queryClient = useQueryClient()
+  const { data: variantes = [], isLoading: cargandoInventario } = useInventarioSede(
+    String(sedeId || ''),
+  )
+
+  const [plan, setPlan] = useState(null)
+  const [items, setItems] = useState([])
+  const [busqueda, setBusqueda] = useState('')
+  const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let activo = true
+    setCargando(true)
+    setError(null)
+
+    apartadosApi
+      .detalle(planId)
+      .then((data) => {
+        if (!activo) return
+        setPlan(data)
+        // Agrupa por variante por si el plan tiene filas repetidas.
+        const mapa = new Map()
+        ;(data.items || []).forEach((it) => {
+          const varianteId = Number(it.variante_id)
+          const existente = mapa.get(varianteId)
+          if (existente) {
+            existente.cantidad += Number(it.cantidad || 0)
+          } else {
+            mapa.set(varianteId, {
+              variante_id: varianteId,
+              nombre: it.nombre,
+              talla: it.talla,
+              imagen_url: it.imagen_url,
+              precio: Number(it.precio_unitario || 0),
+              cantidad: Number(it.cantidad || 1),
+            })
+          }
+        })
+        setItems([...mapa.values()])
+      })
+      .catch((err) => {
+        if (activo) setError(msgError(err))
+      })
+      .finally(() => {
+        if (activo) setCargando(false)
+      })
+
+    return () => {
+      activo = false
+    }
+  }, [planId])
+
+  // Cantidad original del plan por variante (lo que ya está reservado).
+  const originales = useMemo(() => {
+    const mapa = new Map()
+    ;(plan?.items || []).forEach((it) => {
+      const id = Number(it.variante_id)
+      mapa.set(id, (mapa.get(id) || 0) + Number(it.cantidad || 0))
+    })
+    return mapa
+  }, [plan])
+
+  // Máximo que se puede pedir: lo ya reservado + el stock libre de la sede.
+  const maximoDe = (varianteId) => {
+    const inventario = variantes.find(
+      (v) => Number(v.variante_id) === Number(varianteId),
+    )
+    return Number(inventario?.stock || 0) + Number(originales.get(Number(varianteId)) || 0)
+  }
+
+  const variantesFiltradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return variantes.slice(0, 30)
+
+    const exactas = variantes.filter((v) => coincideCodigoExacto(v, q))
+    if (exactas.length) return exactas
+
+    return variantes.filter(
+      (v) =>
+        v.nombre.toLowerCase().includes(q) ||
+        coincideCodigoEtiqueta(v, q) ||
+        (v.talla || '').toLowerCase().includes(q),
+    )
+  }, [variantes, busqueda])
+
+  const total = useMemo(
+    () => items.reduce((suma, item) => suma + item.precio * item.cantidad, 0),
+    [items],
+  )
+  const abonado = Number(plan?.abonado || 0)
+  const saldo = total - abonado
+  const puedeGuardar = items.length > 0 && saldo >= 0 && !guardando
+
+  function agregar(variante) {
+    setItems((prev) => {
+      const existente = prev.find(
+        (item) => Number(item.variante_id) === Number(variante.variante_id),
+      )
+      if (existente) {
+        if (existente.cantidad >= maximoDe(variante.variante_id)) return prev
+        return prev.map((item) =>
+          Number(item.variante_id) === Number(variante.variante_id)
+            ? { ...item, cantidad: item.cantidad + 1 }
+            : item,
+        )
+      }
+      return [
+        ...prev,
+        {
+          variante_id: variante.variante_id,
+          nombre: variante.nombre,
+          talla: variante.talla,
+          imagen_url: variante.imagen_url,
+          precio: Number(variante.precio || 0),
+          cantidad: 1,
+        },
+      ]
+    })
+  }
+
+  function cambiarCantidad(varianteId, cantidad) {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (Number(item.variante_id) !== Number(varianteId)) return item
+        const max = maximoDe(varianteId)
+        return {
+          ...item,
+          cantidad: Math.max(1, Math.min(max, Number(cantidad) || 1)),
+        }
+      }),
+    )
+  }
+
+  function quitar(varianteId) {
+    setItems((prev) =>
+      prev.filter((item) => Number(item.variante_id) !== Number(varianteId)),
+    )
+  }
+
+  function escanear(e) {
+    if (e.key !== 'Enter') return
+    const encontrada = buscarVariantePorCodigo(variantes, e.currentTarget.value)
+    if (!encontrada) return
+    e.preventDefault()
+    agregar(encontrada)
+    setBusqueda('')
+  }
+
+  async function guardar() {
+    if (!puedeGuardar) return
+    setGuardando(true)
+    setError(null)
+    try {
+      const result = await apartadosApi.actualizar(planId, {
+        items: items.map((item) => ({
+          variante_id: item.variante_id,
+          cantidad: item.cantidad,
+        })),
+      })
+      queryClient.invalidateQueries({ queryKey: ['apartados'] })
+      queryClient.invalidateQueries({ queryKey: ['inventario', String(sedeId)] })
+      queryClient.invalidateQueries({ queryKey: ['inventario-completo'] })
+      onGuardado?.(result)
+    } catch (err) {
+      setError(msgError(err))
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <Modal className="animate-fade-in z-50 flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+      <div className="animate-scale-in flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
+          <div>
+            <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
+              Modificar plan separe
+            </h3>
+            <p className="mt-0.5 text-xs text-ink-2">
+              {plan
+                ? `${plan.numero_interno} · ${plan.cliente?.nombre || 'Cliente'} · ${plan.sede}`
+                : 'Cargando plan…'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <XIcon className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {cargando ? (
+            <div className="grid h-40 place-items-center text-sm text-ink-2/70">
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-2/30 border-t-ink-2" />
+                Cargando plan…
+              </span>
+            </div>
+          ) : !plan ? (
+            <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <AlertIcon className="h-4 w-4 shrink-0" />
+              {error || 'No se pudo cargar el plan.'}
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {error && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="flex-1">{error}</span>
+                </div>
+              )}
+
+              <section>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-2">
+                  Productos del plan
+                </p>
+                {items.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-ink-2/70">
+                    El plan no tiene productos. Agrega al menos uno.
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {items.map((item) => {
+                      const max = maximoDe(item.variante_id)
+                      return (
+                        <li
+                          key={item.variante_id}
+                          className="flex items-center gap-3 rounded-xl border border-line p-2.5"
+                        >
+                          <ProductImage
+                            src={item.imagen_url}
+                            alt={item.nombre}
+                            className="h-11 w-11 rounded-lg"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-ink">
+                              {item.nombre}
+                            </p>
+                            <p className="text-xs text-ink-2">
+                              {item.talla ? `Talla ${item.talla} · ` : ''}
+                              {formato(item.precio)} · disponible {max}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <div className="flex items-center rounded-lg border border-line">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  cambiarCantidad(item.variante_id, item.cantidad - 1)
+                                }
+                                className="flex h-7 w-7 items-center justify-center text-ink-2 hover:text-ink active:scale-90"
+                              >
+                                <MinusIcon className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="w-7 text-center text-sm font-semibold text-ink">
+                                {item.cantidad}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  cambiarCantidad(item.variante_id, item.cantidad + 1)
+                                }
+                                disabled={item.cantidad >= max}
+                                className="flex h-7 w-7 items-center justify-center text-ink-2 hover:text-ink active:scale-90 disabled:opacity-30"
+                              >
+                                <PlusIcon className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => quitar(item.variante_id)}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-2/40 transition-colors hover:bg-red-50 hover:text-red-700"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </section>
+
+              <section>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-2">
+                  Agregar producto
+                </p>
+                <div className="relative mb-3">
+                  <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-2/60" />
+                  <input
+                    type="text"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    onKeyDown={escanear}
+                    placeholder="Buscar por nombre, talla o código…"
+                    className={`${inputCls} pl-9`}
+                  />
+                </div>
+
+                {cargandoInventario ? (
+                  <p className="text-xs text-ink-2/70">Cargando inventario de la sede…</p>
+                ) : variantesFiltradas.length === 0 ? (
+                  <p className="text-xs text-ink-2/70">
+                    No hay productos con stock disponible en esta sede.
+                  </p>
+                ) : (
+                  <div className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto pr-1 md:grid-cols-3">
+                    {variantesFiltradas.map((variante) => (
+                      <button
+                        key={variante.variante_id}
+                        type="button"
+                        onClick={() => agregar(variante)}
+                        className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-metal"
+                      >
+                        <div className="relative aspect-square overflow-hidden bg-surface-2">
+                          <ProductImage
+                            src={variante.imagen_url}
+                            alt={variante.nombre}
+                            className="h-full w-full"
+                          />
+                          {variante.talla && (
+                            <span className="absolute left-1.5 top-1.5 rounded-full bg-ink/85 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                              {variante.talla}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col p-2">
+                          <p className="line-clamp-2 text-xs font-medium text-ink">
+                            {variante.nombre}
+                          </p>
+                          <p className="mt-1 text-xs font-bold text-ink">
+                            {formato(variante.precio)}
+                          </p>
+                          <p className="text-[10px] text-ink-2/70">
+                            stock {variante.stock}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-line bg-surface-2/40 p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-ink-2">Nuevo total del plan</span>
+                  <span className="text-xl font-bold text-ink">{formato(total)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="text-ink-2">Abonado</span>
+                  <span className="font-semibold text-emerald-700">{formato(abonado)}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-sm">
+                  <span className="text-ink-2">Saldo pendiente</span>
+                  <span className="font-semibold text-ink">{formato(Math.max(0, saldo))}</span>
+                </div>
+                {saldo < 0 && (
+                  <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    El nuevo total no puede ser menor a lo ya abonado (
+                    {formato(abonado)}). Agrega productos o aumenta cantidades.
+                  </p>
+                )}
+                {saldo === 0 && items.length > 0 && (
+                  <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    Con este total el plan queda completamente pagado y se marca como completado.
+                  </p>
+                )}
+              </section>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4">
+          <p className="text-xs text-ink-2">
+            {items.length} {items.length === 1 ? 'producto' : 'productos'} en el plan
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={guardando}
+              className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink-2 transition-colors hover:border-ink hover:text-ink disabled:opacity-40"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={guardar}
+              disabled={!puedeGuardar || cargando}
+              className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-metal-2 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {guardando ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  Guardando…
+                </>
+              ) : (
+                <>
+                  <CheckIcon className="h-4 w-4" />
+                  Guardar cambios
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Vista: Registrar un Plan Separe
 // ---------------------------------------------------------------------------
 
@@ -95,16 +640,20 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
 
   const [creando, setCreando] = useState(false)
   const [error, setError] = useState(null)
+  const [resumen, setResumen] = useState(null)
 
   const variantesFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     if (!q) return variantes
+
+    const exactas = variantes.filter((v) => coincideCodigoExacto(v, q))
+    if (exactas.length) return exactas
+
     return variantes.filter(
       (v) =>
         v.nombre.toLowerCase().includes(q) ||
-        v.codigo_barras.toLowerCase().includes(q) ||
-        (v.talla || '').toLowerCase().includes(q) ||
-        v.sku.toLowerCase().includes(q),
+        coincideCodigoEtiqueta(v, q) ||
+        (v.talla || '').toLowerCase().includes(q),
     )
   }, [variantes, busqueda])
 
@@ -118,6 +667,7 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
     Boolean(sedeId && vendedorId) &&
     items.length > 0 &&
     Boolean(clienteResuelto?.nombre) &&
+    (!nuevoCliente || Boolean(nuevoCliente.telefono?.trim())) &&
     Number(montoAbono) >= 1 &&
     Number(montoAbono) <= total
 
@@ -130,6 +680,17 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
       }
       return [...prev, { ...v, cantidad: 1 }]
     })
+  }
+
+  // El lector de códigos escribe el código y envía Enter: agrega directo la
+  // variante exacta (producto + talla) al plan.
+  function escanear(e) {
+    if (e.key !== 'Enter') return
+    const encontrada = buscarVariantePorCodigo(variantes, e.currentTarget.value)
+    if (!encontrada) return
+    e.preventDefault()
+    agregar(encontrada)
+    setBusqueda('')
   }
 
   function cambiarCantidad(variante_id, cantidad) {
@@ -153,9 +714,9 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
     setCreando(true)
     setError(null)
     try {
-      await apartadosApi.create({
+      const result = await apartadosApi.create({
         cliente_id: clienteSel?.id || undefined,
-        cliente: clienteSel ? undefined : { nombre: nuevoCliente.nombre, documento: nuevoCliente.documento, telefono: nuevoCliente.telefono },
+        cliente: clienteSel ? undefined : { nombre: nuevoCliente.nombre, telefono: nuevoCliente.telefono },
         sede_id: Number(sedeId),
         empleado_id: Number(vendedorId),
         items: items.map((i) => ({ variante_id: i.variante_id, cantidad: i.cantidad })),
@@ -163,12 +724,18 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
       })
       queryClient.invalidateQueries({ queryKey: ['apartados'] })
       queryClient.invalidateQueries({ queryKey: ['inventario', sedeId] })
-      onCreado()
+      // Muestra el resumen detallado; al cerrarlo pasa al listado.
+      setResumen(result)
     } catch (err) {
       setError(msgError(err))
     } finally {
       setCreando(false)
     }
+  }
+
+  function cerrarResumen() {
+    setResumen(null)
+    onCreado()
   }
 
   return (
@@ -198,6 +765,7 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
                 type="text"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
+                onKeyDown={escanear}
                 placeholder="Buscar por nombre, talla o código…"
                 className={`${inputCls} pl-9`}
               />
@@ -299,7 +867,7 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
               2 · ¿Quién lo separa?
             </h2>
             <p className="mb-4 text-xs text-ink-2/70">
-              Busca por cédula o nombre, o registra un cliente nuevo.
+              Busca por nombre, o registra un cliente nuevo (nombre y celular).
             </p>
 
             <div className="relative mb-3">
@@ -312,7 +880,7 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
                   setClienteSel(null)
                   setNuevoCliente(null)
                 }}
-                placeholder="Buscar por cédula o nombre…"
+                placeholder="Buscar por nombre…"
                 className={`${inputCls} pl-9`}
               />
             </div>
@@ -328,10 +896,7 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium text-ink">{c.nombre}</span>
-                        <span className="block text-xs text-ink-2">
-                          {c.documento ? `CC ${c.documento}` : 'Sin cédula'}
-                          {c.telefono ? ` · ${c.telefono}` : ''}
-                        </span>
+                        <span className="block text-xs text-ink-2">{c.telefono || 'Sin celular'}</span>
                       </span>
                       <CheckIcon className="h-4 w-4 shrink-0 text-ink-2/40" />
                     </button>
@@ -343,9 +908,7 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
             {!clienteSel && !nuevoCliente && busquedaCliente.trim() && clientes.length === 0 && (
               <button
                 type="button"
-                onClick={() =>
-                  setNuevoCliente({ nombre: busquedaCliente.trim(), documento: '', telefono: '' })
-                }
+                onClick={() => setNuevoCliente({ nombre: busquedaCliente.trim(), telefono: '' })}
                 className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-metal px-3 py-2 text-sm text-ink transition-colors hover:bg-surface-2/60"
               >
                 <PlusIcon className="h-4 w-4" /> Registrar «{busquedaCliente.trim()}» como cliente nuevo
@@ -360,9 +923,7 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
                       {clienteSel ? clienteSel.nombre : nuevoCliente.nombre}
                     </p>
                     <p className="text-xs text-ink-2">
-                      {clienteSel
-                        ? `${clienteSel.documento ? `CC ${clienteSel.documento}` : 'Sin cédula'}${clienteSel.telefono ? ` · ${clienteSel.telefono}` : ''}`
-                        : 'Cliente nuevo'}
+                      {clienteSel ? (clienteSel.telefono || 'Sin celular') : 'Cliente nuevo'}
                     </p>
                   </div>
                   <button
@@ -387,18 +948,11 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
                       className={inputCls}
                     />
                     <input
-                      type="text"
-                      value={nuevoCliente.documento || ''}
-                      onChange={(e) => setNuevoCliente({ ...nuevoCliente, documento: e.target.value })}
-                      placeholder="Cédula"
-                      className={inputCls}
-                    />
-                    <input
-                      type="text"
+                      type="tel"
                       value={nuevoCliente.telefono || ''}
                       onChange={(e) => setNuevoCliente({ ...nuevoCliente, telefono: e.target.value })}
-                      placeholder="Teléfono (opcional)"
-                      className={`${inputCls} sm:col-span-2`}
+                      placeholder="Número de celular *"
+                      className={inputCls}
                     />
                   </div>
                 )}
@@ -474,12 +1028,14 @@ function Registrar({ sedeId, vendedorId, onCreado }) {
             </button>
             {!puedeCrear && (
               <p className="mt-2 text-center text-xs text-ink-2/70">
-                Completa: sede y vendedor · productos · cliente · abono inicial (1 – {formato(total)}).
+                Completa: sede y vendedor · productos · cliente (nombre y celular) · abono inicial (1 – {formato(total)}).
               </p>
             )}
           </section>
         </div>
       </div>
+
+      {resumen && <ResumenPlan plan={resumen} titulo="Plan separe creado" onClose={cerrarResumen} />}
     </div>
   )
 }
@@ -508,6 +1064,9 @@ function Listado({ vendedorId, onAbonado }) {
   const [abonoError, setAbonoError] = useState(null)
 
   const [detalle, setDetalle] = useState(null)
+  const [resumenAbono, setResumenAbono] = useState(null)
+  const [editar, setEditar] = useState(null)
+  const [avisoEdicion, setAvisoEdicion] = useState(null)
 
   const [cancelarId, setCancelarId] = useState(null)
   const [cancelando, setCancelando] = useState(false)
@@ -525,13 +1084,14 @@ function Listado({ vendedorId, onAbonado }) {
     setAbonando(true)
     setAbonoError(null)
     try {
-      await apartadosApi.abonar(abonoModal.id, {
+      const result = await apartadosApi.abonar(abonoModal.id, {
         monto: Number(monto),
         metodo_pago: metodo,
         empleado_id: Number(vendedorId),
       })
       queryClient.invalidateQueries({ queryKey: ['apartados'] })
       setAbonoModal(null)
+      setResumenAbono(result)
       onAbonado?.()
     } catch (err) {
       setAbonoError(msgError(err))
@@ -577,7 +1137,7 @@ function Listado({ vendedorId, onAbonado }) {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="Buscar por cliente o cédula…"
+            placeholder="Buscar por cliente o celular…"
             className={`${inputCls} pl-9`}
           />
         </div>
@@ -599,6 +1159,12 @@ function Listado({ vendedorId, onAbonado }) {
       {error && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertIcon className="h-5 w-5 shrink-0" /> {error}
+        </div>
+      )}
+
+      {avisoEdicion && (
+        <div className="animate-fade-in mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <CheckIcon className="h-5 w-5 shrink-0" /> {avisoEdicion}
         </div>
       )}
 
@@ -625,8 +1191,8 @@ function Listado({ vendedorId, onAbonado }) {
                       <div>
                         <p className="text-sm font-semibold text-ink">
                           {ap.cliente.nombre}
-                          {ap.cliente.documento ? (
-                            <span className="font-normal text-ink-2"> · CC {ap.cliente.documento}</span>
+                          {ap.cliente.telefono ? (
+                            <span className="font-normal text-ink-2"> · {ap.cliente.telefono}</span>
                           ) : null}
                         </p>
                         <p className="text-xs text-ink-2">
@@ -697,6 +1263,13 @@ function Listado({ vendedorId, onAbonado }) {
                             </button>
                             <button
                               type="button"
+                              onClick={() => setEditar({ id: ap.id, sedeId: ap.sede_id })}
+                              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-xs font-medium text-ink transition-colors hover:bg-surface-2"
+                            >
+                              <EditIcon className="h-3.5 w-3.5" /> Editar
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => {
                                 setCancelarId(ap.id)
                                 setCancelError(null)
@@ -746,6 +1319,20 @@ function Listado({ vendedorId, onAbonado }) {
             </div>
           )}
         </>
+      )}
+
+      {/* Modal de edición del plan */}
+      {editar && (
+        <EditarPlanModal
+          planId={editar.id}
+          sedeId={editar.sedeId}
+          onClose={() => setEditar(null)}
+          onGuardado={() => {
+            setEditar(null)
+            setAvisoEdicion('Plan actualizado: productos, cantidades y stock ajustados.')
+            window.setTimeout(() => setAvisoEdicion(null), 5000)
+          }}
+        />
       )}
 
       {/* Modal de abono */}
@@ -831,7 +1418,7 @@ function Listado({ vendedorId, onAbonado }) {
                 </h3>
                 <p className="text-xs text-ink-2">
                   {detalle.cliente.nombre}
-                  {detalle.cliente.documento ? ` · CC ${detalle.cliente.documento}` : ''} · {fechaLarga(detalle.fecha)}
+                  {detalle.cliente.telefono ? ` · ${detalle.cliente.telefono}` : ''} · {fechaLarga(detalle.fecha)}
                 </p>
               </div>
               <button
@@ -945,6 +1532,10 @@ function Listado({ vendedorId, onAbonado }) {
             </div>
           </div>
         </Modal>
+      )}
+
+      {resumenAbono && (
+        <ResumenPlan plan={resumenAbono} titulo="Abono registrado" onClose={() => setResumenAbono(null)} />
       )}
     </div>
   )

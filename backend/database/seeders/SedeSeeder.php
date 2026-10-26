@@ -34,6 +34,13 @@ class SedeSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                // Sede virtual: atribución de las ventas online (no es física).
+                'nombre' => 'Online',
+                'direccion' => 'Ventas por el sitio web',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
     }
 }

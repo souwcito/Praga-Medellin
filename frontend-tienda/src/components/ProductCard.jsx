@@ -1,41 +1,71 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formato } from '../utils/formato'
+import { esChanclas, etiquetaTalla, ordenarPorTalla, ordenarTallas } from '../utils/tallas'
 import { useCart } from '../hooks/useCart'
 import { useFavorites } from '../hooks/useFavorites'
-import { CartIcon, CheckIcon, HeartIcon, MinusIcon, PlusIcon, XIcon, ZapIcon } from './icons'
+import { CartIcon, CheckIcon, HeartIcon, MinusIcon, PlusIcon, XIcon } from './icons'
 
-// Tarjeta de producto del catálogo/portada.
-// Incluye dos acciones: "Agregar al carrito" y "Comprar ahora". Si el producto
-// tiene tallas, ambas abren un selector rápido; si es talla única, actúan al instante.
+// Tarjeta de producto del catálogo/portada. Única acción: "Agregar al carrito".
+// Si el producto tiene tallas, abre un selector rápido; si es talla única, agrega al instante.
 export default function ProductCard({ producto }) {
-  const navigate = useNavigate()
   const { agregar, abrirCarrito } = useCart()
   const { esFavorito, toggle } = useFavorites()
 
   const [modalAbierto, setModalAbierto] = useState(false)
-  const [modo, setModo] = useState('agregar') // 'agregar' | 'comprar'
   const [talla, setTalla] = useState(null)
   const [cantidad, setCantidad] = useState(1)
 
   const favorito = esFavorito(producto.id)
 
-  const disponibles = producto.variantes.filter((v) => v.stock > 0)
+  // Variantes ordenadas con el criterio canónico de tallas.
+  const variantes = ordenarPorTalla(producto.variantes)
+  const disponibles = variantes.filter((v) => v.stock > 0)
   const agotado = disponibles.length === 0
-  const tallas = disponibles.map((v) => v.talla).filter(Boolean)
-  const esTallaUnica = disponibles.length === 1 && disponibles[0].talla === null
-  const varianteUnica = esTallaUnica ? disponibles[0] : null
+  const conTalla = variantes.filter((v) => v.talla)
+  const sinTalla = variantes.find((v) => !v.talla) || null
+  const esTallaUnica = conTalla.length === 0
+  const varianteUnica = esTallaUnica ? sinTalla : null
 
-  function abrir(modoNuevo) {
+  // En chanclas, una variante puede tener varios rangos ("6-7/8-9"). Se
+  // muestran como tallas separadas, apuntando a la misma variante.
+  const opcionesTalla = useMemo(() => {
+    const mapa = new Map()
+    variantes.forEach((v) => {
+      const etiqueta = etiquetaTalla(v.talla, producto) || 'Unitalla'
+      const partes =
+        esChanclas(producto) && etiqueta.includes('/')
+          ? etiqueta.split('/').map((p) => p.trim())
+          : [etiqueta]
+      partes.forEach((label) => {
+        if (!label) return
+        const actual = mapa.get(label)
+        if (!actual || (actual.variante.stock <= 0 && v.stock > 0)) {
+          mapa.set(label, { label, variante: v })
+        }
+      })
+    })
+    return ordenarTallas([...mapa.keys()]).map((label) => mapa.get(label))
+  }, [producto, variantes])
+
+  const opcionesDisponibles = opcionesTalla.filter((o) => o.variante.stock > 0)
+
+  function abrir() {
     if (esTallaUnica) {
       // Talla única: acción inmediata, sin modal
       agregar(producto, varianteUnica, 1)
-      if (modoNuevo === 'comprar') navigate('/checkout')
-      else abrirCarrito()
+      abrirCarrito()
       return
     }
-    setModo(modoNuevo)
     setTalla(null)
+    setCantidad(1)
+    setModalAbierto(true)
+  }
+
+  // Abre el selector rápido con la talla tocada ya marcada.
+  function abrirConTalla(t) {
+    if (!t) return
+    setTalla(t)
     setCantidad(1)
     setModalAbierto(true)
   }
@@ -45,8 +75,7 @@ export default function ProductCard({ producto }) {
     if (!variante) return
     agregar(producto, variante, cantidad)
     setModalAbierto(false)
-    if (modo === 'comprar') navigate('/checkout')
-    else abrirCarrito()
+    abrirCarrito()
   }
 
   return (
@@ -126,24 +155,49 @@ export default function ProductCard({ producto }) {
           {producto.nombre}
         </Link>
 
-        <div className="mt-2 flex items-end justify-between gap-2">
-          <div>
-            {producto.es_oferta && (
-              <span className="mr-1.5 text-xs text-ink-2 line-through">
-                {formato(producto.precio_antes)}
+        <div className="mt-2">
+          {producto.es_oferta && (
+            <span className="mr-1.5 text-xs text-ink-2 line-through">
+              {formato(producto.precio_antes)}
+            </span>
+          )}
+          <span className="text-lg font-bold text-ink">{formato(producto.precio)}</span>
+        </div>
+
+        {/* Cuadros de talla: todas las tallas; las agotadas se ven atenuadas. */}
+        {(conTalla.length > 0 || sinTalla) && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {conTalla.length > 0 ? (
+              opcionesTalla.map(({ label, variante: v }) => {
+                const agotada = v.stock <= 0
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={agotada}
+                    onClick={() => abrirConTalla(v.talla)}
+                    title={
+                      agotada
+                        ? `Talla ${label} agotada`
+                        : `Elegir talla ${label}`
+                    }
+                    className={`min-w-7 rounded-md border px-2 py-1 text-[11px] font-semibold transition-all duration-200 ${
+                      agotada
+                        ? 'cursor-not-allowed border-line bg-surface-2 text-ink-2/40 line-through'
+                        : 'border-line text-ink hover:border-ink hover:bg-ink hover:text-white active:scale-95'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })
+            ) : (
+              <span className="rounded-md border border-line bg-surface-2/60 px-2 py-1 text-[11px] font-semibold text-ink-2">
+                Unitalla
               </span>
             )}
-            <span className="text-lg font-bold text-ink">{formato(producto.precio)}</span>
           </div>
-          {tallas.length > 0 ? (
-            <span className="truncate text-xs text-ink-2">
-              {tallas.slice(0, 3).join(' · ')}
-              {tallas.length > 3 ? ' …' : ''}
-            </span>
-          ) : (
-            <span className="text-xs text-ink-2">Talla única</span>
-          )}
-        </div>
+        )}
 
         {/* Acciones */}
         <div className="mt-4 space-y-2">
@@ -156,24 +210,14 @@ export default function ProductCard({ producto }) {
               Agotado
             </button>
           ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => abrir('comprar')}
-                className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-ink text-xs font-semibold text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98]"
-              >
-                <ZapIcon className="h-4 w-4" />
-                Comprar ahora
-              </button>
-              <button
-                type="button"
-                onClick={() => abrir('agregar')}
-                className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-line text-xs font-semibold text-ink-2 transition-all duration-200 hover:border-ink-2/40 hover:bg-surface-2 hover:text-ink active:scale-[0.98]"
-              >
-                <CartIcon className="h-4 w-4" />
-                Agregar al carrito
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={abrir}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-ink text-xs font-semibold text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98]"
+            >
+              <CartIcon className="h-4 w-4" />
+              Agregar al carrito
+            </button>
           )}
         </div>
       </div>
@@ -207,9 +251,9 @@ export default function ProductCard({ producto }) {
 
             <p className="mb-2 text-sm font-semibold text-ink">Elige tu talla</p>
             <div className="mb-4 flex flex-wrap gap-2">
-              {disponibles.map((v) => (
+              {opcionesDisponibles.map(({ label, variante: v }) => (
                 <button
-                  key={v.talla}
+                  key={label}
                   type="button"
                   onClick={() => setTalla(v.talla)}
                   className={`min-w-12 rounded-lg border px-3 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
@@ -218,7 +262,7 @@ export default function ProductCard({ producto }) {
                       : 'border-line text-ink hover:border-ink-2/50'
                   }`}
                 >
-                  {v.talla}
+                  {label}
                 </button>
               ))}
             </div>
@@ -253,7 +297,7 @@ export default function ProductCard({ producto }) {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-metal-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <CheckIcon className="h-5 w-5" />
-              {modo === 'comprar' ? 'Comprar ahora' : 'Agregar al carrito'}
+              Agregar al carrito
             </button>
           </div>
         </div>

@@ -26,6 +26,7 @@ class CategoriaSeeder extends Seeder
             ['hombre', 'Sudaderas', null],
             ['hombre', 'Tenis', null],
             ['hombre', 'Relojes', null],
+            ['hombre', 'Tipo polo', null],
 
             // ---------- CATÁLOGO MUJER ----------
             ['mujer', 'Blusas', json_encode(['XS/S', 'S/M', 'M/L'])],
@@ -33,6 +34,7 @@ class CategoriaSeeder extends Seeder
             ['mujer', 'Blusones', json_encode(['S', 'M', 'L'])],
             ['mujer', 'Bodys', json_encode(['S/M', 'M/L', 'Talla única'])],
             ['mujer', 'Bolsos', null],
+            ['mujer', 'Billeteras', null],
             ['mujer', 'Chanclas', json_encode(['5', '6', '7', '8'])],
             ['mujer', 'Conjuntos', json_encode(['S', 'M', 'L'])],
             ['mujer', 'Sets', json_encode(['XS', 'S', 'M', 'Talla única'])],

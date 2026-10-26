@@ -126,11 +126,41 @@ Si la API responde 500: revisa `api-app/storage/logs/laravel.log`.
 ## 6. Publicar cambios futuros (cada actualización)
 
 1. `cd frontend-tienda && npm run build` → subir `dist/` a la raíz de `public_html`
-   (sobrescribir; incluye sitemap, robots y HTML prerenderizado).
+   (sobrescribir; incluye sitemap, robots, HTML prerenderizado y `.htaccess`).
+   - Para una publicación rápida usa **`npm run build:fast`**: compila Vite, genera
+     sitemap y prerenderiza solo las páginas base (incluida `/guia-tallas`). Tarda
+     unos segundos y no prerenderiza los ~800 productos.
+   - Para SEO completo usa **`npm run build:seo`** (o `npm run build`): además
+     prerenderiza categorías y todos los productos. Tarda más porque consulta la API.
 2. `cd frontend-panel && npm run build` → subir `dist/` a `public_html/panel/`.
-3. Backend: subir solo los archivos PHP modificados.
-4. Cambios en BD (migraciones nuevas): generarlas y actualizar el dump, o ejecutar
-   las queries nuevas en phpMyAdmin.
+3. Backend: subir solo los archivos PHP modificados. Si cambió `config/cors.php`,
+   ejecutar en el servidor `php artisan config:clear` (o borrar
+   `api-app/bootstrap/cache/config.php`).
+4. Probar siempre:
+   - `https://www.pragamedellin.com/catalogo` debe redirigir (301) a
+     `https://pragamedellin.com/catalogo`.
+   - El preflight de la API desde `www` debe devolver
+     `Access-Control-Allow-Origin: https://www.pragamedellin.com`.
+   - Catálogo, categoría, promociones, producto y `/panel` deben cargar sin
+     “Network Error” ni “Error cargando…”.
+5. Cambios en BD (migraciones nuevas): generarlas y actualizar el dump, o
+   ejecutar las queries nuevas en phpMyAdmin.
+
+> **Importante:** el frontend usa la API en el mismo origen (`/api`) en tiempo
+> de ejecución para que funcione en `pragamedellin.com`, en `www` y en navegadores
+> internos como el de Instagram. `VITE_API_URL` queda solo para los scripts de
+> build (`sitemap`/`prerender`) y para el desarrollo local. No vuelvas a fijar el
+> dominio dentro de `api.js`; si necesitas cambiar la API, hazlo en el `.env`.
+
+## 7. Checklist para que no fallen los catálogos
+
+- [ ] `public_html/.htaccess` redirige `www` al dominio principal.
+- [ ] `backend/config/cors.php` permite `https://www.pragamedellin.com` y
+      `http://localhost`/`http://127.0.0.1` en cualquier puerto.
+- [ ] El build de tienda y panel usa `/api` (mismo origen).
+- [ ] Después de tocar el backend: `php artisan config:clear`.
+- [ ] Si la API responde 500, revisar `api-app/storage/logs/laravel.log`.
+
 
 ---
 

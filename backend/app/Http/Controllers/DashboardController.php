@@ -8,25 +8,19 @@ use App\Models\Variante;
 use App\Models\Producto;
 use App\Models\Empleado;
 use App\Models\Sede;
+use App\Services\FechaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
-    private function inicioPeriodo(string $periodo): \Carbon\Carbon
-    {
-        $d = now()->startOfDay();
-        $dias = $periodo === 'dia' ? 0 : ($periodo === 'semana' ? 6 : 29);
-        return $d->subDays($dias);
-    }
-
     public function resumen(Request $request)
     {
         $periodo = $request->periodo ?? 'mes';
         $clave = 'dashboard_' . $periodo . '_' . $this->cacheVersion();
 
         $resumen = Cache::remember($clave, 20, function () use ($periodo) {
-            $inicio = $this->inicioPeriodo($periodo);
+            $inicio = FechaService::inicioPeriodo($periodo);
 
         $ventas = Venta::where('created_at', '>=', $inicio)->get();
 
@@ -53,6 +47,11 @@ class DashboardController extends Controller
 
         $conteo = [];
         foreach ($detalles as $d) {
+            // Las ventas relámpago no son referencias del catálogo: suman al
+            // ingreso, pero no entran en "productos más vendidos".
+            if ($d->variante_id === null) {
+                continue;
+            }
             $productoId = $variantes[$d->variante_id] ?? $d->variante_id;
             $conteo[$productoId] = ($conteo[$productoId] ?? 0) + $d->cantidad;
         }
@@ -88,8 +87,10 @@ class DashboardController extends Controller
         $numDias = $periodo === 'dia' ? 1 : ($periodo === 'semana' ? 7 : 15);
         $ventasPorDia = [];
         for ($i = $numDias - 1; $i >= 0; $i--) {
-            $dia = now()->startOfDay()->subDays($i);
-            $diaTotal = (int) $ventas->filter(fn ($v) => $v->created_at->toDateString() === $dia->toDateString())->sum('total');
+            $dia = FechaService::diaLocal($i);
+            $diaTotal = (int) $ventas->filter(
+                fn ($v) => $v->created_at->setTimezone(FechaService::ZONA)->toDateString() === $dia->toDateString()
+            )->sum('total');
             $ventasPorDia[] = [
                 'fecha' => $dia->translatedFormat('d M'),
                 'total' => $diaTotal,

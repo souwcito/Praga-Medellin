@@ -11,6 +11,7 @@ const Catalogo = lazy(() => import('./pages/Catalogo'))
 const Promociones = lazy(() => import('./pages/Promociones'))
 const FraganciaExclusiva = lazy(() => import('./pages/FraganciaExclusiva'))
 const Producto = lazy(() => import('./pages/Producto'))
+const GuiaTallas = lazy(() => import('./pages/GuiaTallas'))
 const Carrito = lazy(() => import('./pages/Carrito'))
 const Checkout = lazy(() => import('./pages/Checkout'))
 
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/promociones" element={<Promociones />} />
                 <Route path="/fragancia-exclusiva" element={<FraganciaExclusiva />} />
                 <Route path="/producto/:id" element={<Producto />} />
+                <Route path="/guia-tallas" element={<GuiaTallas />} />
                 <Route path="/carrito" element={<Carrito />} />
                 <Route path="/checkout" element={<Checkout />} />
               </Route>

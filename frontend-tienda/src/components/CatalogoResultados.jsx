@@ -1,51 +1,105 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { catalogApi } from '../services/api'
 import ProductCard from './ProductCard'
 import usePolling from '../hooks/usePolling'
+import { coincideTalla } from '../utils/tallas'
 import { ChevronDownIcon, PlusIcon } from './icons'
 
 const LIMITE = 40
-const REFRESCO_MS = 30000
+const REFRESCO_MS = 15000
+
+// Caché en sessionStorage por combinación de parámetros: al volver al catálogo
+// (atrás/adelante) se conservan los productos ya cargados, así la página tiene
+// la misma altura y se puede restaurar la posición del scroll.
+function cacheKey(parametros) {
+  return `praga_catalogo_${JSON.stringify(parametros)}`
+}
+
+function leerCache(key) {
+  try {
+    const raw = sessionStorage.getItem(key)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function guardarCache(key, valor) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(valor))
+  } catch {
+    /* ignore */
+  }
+}
 
 // Resultados del catálogo/promociones: carga paginada (40) + "Cargar más" y
 // auto-refresco cada 30s para reflejar productos nuevos, ofertas y stock sin
 // recargar la página (merge por id, sin saltos).
 // parametros: { catalogo?, categoria_id?, subcategoria_id?, q?, en_oferta? }
 export default function CatalogoResultados({ parametros, onProductos, emptyMessage }) {
-  const [productos, setProductos] = useState([])
-  const [loading, setLoading] = useState(true)
+  const key = useMemo(() => cacheKey(parametros), [parametros])
+  const inicial = useMemo(() => leerCache(key), [key])
+
+  const [productos, setProductos] = useState(inicial?.productos || [])
+  const [loading, setLoading] = useState(!inicial)
   const [cargandoMas, setCargandoMas] = useState(false)
-  const [hayMas, setHayMas] = useState(true)
+  const [hayMas, setHayMas] = useState(inicial?.hayMas ?? true)
   const [error, setError] = useState(null)
+  const [intento, setIntento] = useState(0)
 
   useEffect(() => {
+    // Si ya hay caché para estos parámetros, se usa sin volver a pedir.
+    const cache = leerCache(key)
+    if (cache && intento === 0) {
+      setProductos(cache.productos)
+      setHayMas(cache.hayMas)
+      setLoading(false)
+      onProductos?.(cache.productos)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
     catalogApi
       .getProductos({ ...parametros, limit: LIMITE, offset: 0 })
       .then((p) => {
         setProductos(p)
         // Si la primera página trae menos del límite, no hay más por cargar.
-        setHayMas(p.length >= LIMITE)
+        const mas = p.length >= LIMITE
+        setHayMas(mas)
         onProductos?.(p)
+        guardarCache(key, { productos: p, hayMas: mas })
         setError(null)
       })
-      .catch((err) => setError(err?.message || 'Error cargando productos'))
+      .catch((err) => {
+        setError(err?.message || 'No pudimos cargar los productos. Intenta de nuevo.')
+      })
       .finally(() => setLoading(false))
-  }, [parametros, onProductos])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, intento])
 
   function cargarMas() {
     setCargandoMas(true)
+    setError(null)
     catalogApi
       .getProductos({ ...parametros, limit: LIMITE, offset: productos.length })
       .then((p) => {
         // Evita duplicados si el backend repite productos (por si ignora el offset).
         const ids = new Set(productos.map((x) => x.id))
         const nuevos = p.filter((x) => !ids.has(x.id))
-        setProductos((prev) => [...prev, ...nuevos])
         // Hay más solo si la respuesta trajo otra página completa Y aportó ítems nuevos.
-        setHayMas(p.length >= LIMITE && nuevos.length > 0)
+        const mas = p.length >= LIMITE && nuevos.length > 0
+        setProductos((prev) => {
+          const siguiente = [...prev, ...nuevos]
+          guardarCache(key, { productos: siguiente, hayMas: mas })
+          return siguiente
+        })
+        setHayMas(mas)
         setError(null)
       })
-      .catch((err) => setError(err?.message || 'Error cargando más productos'))
+      .catch((err) => {
+        setError(err?.message || 'No pudimos cargar más productos. Intenta de nuevo.')
+      })
       .finally(() => setCargandoMas(false))
   }
 
@@ -55,11 +109,14 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
     catalogApi
       .getProductos({ ...parametros, limit: LIMITE, offset: 0 })
       .then((nuevos) => {
+        setError(null)
         onProductos?.(nuevos)
         setProductos((prev) => {
           const ids = new Set(nuevos.map((p) => p.id))
           const resto = prev.filter((p) => !ids.has(p.id))
-          return [...nuevos, ...resto]
+          const siguiente = [...nuevos, ...resto]
+          guardarCache(key, { productos: siguiente, hayMas })
+          return siguiente
         })
       })
       .catch(() => {})
@@ -67,11 +124,18 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
 
   usePolling(refrescar, REFRESCO_MS, !loading)
 
-  if (error) {
+  if (error && productos.length === 0) {
     return (
-      <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {error}
-      </p>
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="flex-1">{error}</p>
+        <button
+          type="button"
+          onClick={() => setIntento((n) => n + 1)}
+          className="rounded-full border border-red-300 bg-white px-4 py-1.5 font-semibold transition-colors hover:border-red-500 hover:text-red-800"
+        >
+          Reintentar
+        </button>
+      </div>
     )
   }
 
@@ -96,10 +160,36 @@ export default function CatalogoResultados({ parametros, onProductos, emptyMessa
   }
 
   // Oculta de la web los productos sin stock (p. ej. los apartados por Plan Separe).
-  const visibles = productos.filter((p) => (p.stock_total ?? 0) > 0)
+  // Si hay una talla seleccionada, exige además que ESA talla tenga stock: un
+  // producto con M agotada no debe aparecer al filtrar por M aunque tenga L.
+  const tallaFiltro = parametros?.talla
+  const visibles = productos.filter((p) => {
+    if ((p.stock_total ?? 0) <= 0) return false
+
+    if (tallaFiltro) {
+      const variante = (p.variantes || []).find((v) =>
+        coincideTalla(v.talla, tallaFiltro, p),
+      )
+      if ((variante?.stock ?? 0) <= 0) return false
+    }
+
+    return true
+  })
 
   return (
     <>
+      {error && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p className="flex-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => cargarMas()}
+            className="rounded-full border border-red-300 bg-white px-4 py-1.5 font-semibold transition-colors hover:border-red-500 hover:text-red-800"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
       <p className="mb-4 text-sm text-ink-2">
         {visibles.length} producto{visibles.length === 1 ? '' : 's'} disponibles
       </p>

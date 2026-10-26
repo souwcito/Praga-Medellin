@@ -1,9 +1,20 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { productosApi } from '../services/api'
-import { useCategorias, useSedes, useSubcategorias, useProductos } from '../hooks/useData'
+import { codigosApi, productosApi } from '../services/api'
+import {
+  useCategorias,
+  useColores,
+  useEstilos,
+  useMarcas,
+  useSedes,
+  useSubcategorias,
+  useProductos,
+} from '../hooks/useData'
 import { categoriaTieneSubcategorias, tallasPara } from '../utils/catalogo'
+import { codigoEtiquetaProducto, coincideCodigoEtiqueta, coincideCodigoExacto } from '../utils/codigoEtiqueta'
+import { normalizarTallaPorNombre } from '../utils/tallas'
+import { siguienteCodigo } from '../utils/codigos'
 import { urlImagen } from '../utils/imagenes'
 import MultiImageUpload from '../components/MultiImageUpload'
 import Modal from '../components/Modal'
@@ -12,10 +23,16 @@ import {
   CheckIcon,
   EditIcon,
   PlusIcon,
+  PrinterIcon,
   SearchIcon,
+  StarIcon,
   TrashIcon,
   XIcon,
 } from '../components/icons'
+
+const StickerProductoModal = lazy(() => import('../components/StickerProductoModal'))
+const StickerCategoriaModal = lazy(() => import('../components/StickerCategoriaModal'))
+const ConfiguracionEtiquetasModal = lazy(() => import('../components/ConfiguracionEtiquetasModal'))
 
 const formato = (n) =>
   new Intl.NumberFormat('es-CO', {
@@ -42,6 +59,113 @@ const CAMPOS_INICIALES = {
   imagenes: [],
 }
 
+// Categoría → código de prenda (PRENDA del SKU). Las categorías que NO están
+// aquí se manejan con SKU manual (Relojes, Mochos, Pantalonetas, Correas, etc.
+// y el Jeans de hombre).
+const PRENDA_POR_CATEGORIA = {
+  // Hombre
+  Gorras: 'GOR',
+  Bolsos: 'BOL',
+  Tenis: 'ZAP',
+  Chanclas: 'CHA',
+  Camisetas: 'CAM',
+  Buzos: 'BUZ',
+  Conjuntos: 'CON',
+  Sudaderas: 'SUD',
+  Perfumes: 'PER',
+  // Mujer
+  Blusas: 'BLU',
+  Blusones: 'BLS',
+  'Blusones cortos': 'BLC',
+  Bodys: 'BOD',
+  Sets: 'SET',
+  'Faldas y shorts': 'FAL',
+  Chaquetas: 'CHQ',
+  Vestidos: 'VES',
+  Camisas: 'CAM',
+  Billeteras: 'BIL',
+}
+
+// Overrides por catálogo|nombre: categorías que se comportan distinto entre
+// hombre y mujer. El Jeans de mujer usa SKU automático (JEA); el de hombre
+// sigue con SKU manual.
+const PRENDA_POR_CATALOGO_CATEGORIA = {
+  'mujer|Jeans': 'JEA',
+}
+
+// Categorías donde el producto se puede marcar como "Unitalla" (una sola
+// presentación, sin tallas). Hoy: Blusas y Bodys (catálogo mujer).
+const CATEGORIAS_UNITALLA = ['Blusas', 'Bodys']
+
+const CALIDADES = [
+  { value: '1', label: '1 · Original' },
+  { value: '2', label: '2 · Turca' },
+  { value: '3', label: '3 · 1.1' },
+]
+
+// Modal para agregar una marca / color / estilo al vuelo desde el formulario.
+function AltaCodigo({ titulo, codigo, nombre, setCodigo, setNombre, onGuardar, onClose, guardando, error, conPrenda, prenda, setPrenda }) {
+  return (
+    <Modal className="animate-fade-in z-[60] flex items-center justify-center bg-dark/70 p-4">
+      <div className="animate-scale-in w-full max-w-sm rounded-2xl bg-white p-6">
+        <h3 className="mb-4 font-display text-lg font-semibold tracking-tight text-ink">
+          Agregar {titulo}
+        </h3>
+        {error && (
+          <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
+        <div className="space-y-3">
+          {conPrenda && (
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-2">Prenda</span>
+              <input type="text" value={prenda} onChange={(e) => setPrenda(e.target.value)} className={inputCls} />
+            </label>
+          )}
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-2">Código</span>
+            <input
+              type="text"
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value)}
+              placeholder="Ej. 06"
+              autoFocus
+              className={inputCls}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-2">Nombre</span>
+            <input
+              type="text"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Ej. Clemont"
+              className={inputCls}
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={guardando}
+            className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-ink-2 hover:bg-surface-2"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onGuardar}
+            disabled={guardando}
+            className="flex-1 rounded-lg bg-ink py-2.5 text-sm font-medium text-white hover:bg-metal-2 disabled:opacity-40"
+          >
+            {guardando ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function Seccion({ titulo, descripcion, children }) {
   return (
     <section className="rounded-2xl border border-line p-4">
@@ -55,6 +179,16 @@ function Seccion({ titulo, descripcion, children }) {
 function sugerirBarra(idx) {
   const base = (Date.now() + idx * 1000) % 100000000
   return '770' + String(base).padStart(10, '0')
+}
+
+// Código de barras sugerido a partir del SKU y la talla: SKU-TALLA (p. ej.
+// CAM0624353-M, CAM0624353-30) o SKU si es talla única (incluye gorras y
+// tallas como Única/Unitalla). Así el código guardado coincide exactamente
+// con el que se imprime en el sticker y con el que se escanea en el POS.
+function barraPara(sku, talla, idx = 0) {
+  const s = String(sku || '').trim()
+  if (s) return codigoEtiquetaProducto({ sku: s, talla })
+  return sugerirBarra(idx)
 }
 
 export default function Productos() {
@@ -77,7 +211,10 @@ export default function Productos() {
     [catalogo, filtroCategoria, filtroSubcategoria],
   )
   const { data: productos = [], isLoading: loading, isError, error: errorRaw } = useProductos(params)
-  const error = errorRaw?.message || (isError ? 'Error cargando productos' : null)
+  const error =
+    errorRaw?.message ||
+    errorRaw?.error ||
+    (isError ? 'No pudimos cargar los productos. Intenta de nuevo.' : null)
 
   const [busqueda, setBusqueda] = useState('')
   const [aviso, setAviso] = useState(null)
@@ -106,14 +243,33 @@ export default function Productos() {
   }
 
   const [modalDelete, setModalDelete] = useState(null)
+  const [stickerProducto, setStickerProducto] = useState(null)
+  const [imprimirCategoria, setImprimirCategoria] = useState(false)
+  const [configEtiquetas, setConfigEtiquetas] = useState(false)
   const [eliminando, setEliminando] = useState(false)
+  const [portadaGuardando, setPortadaGuardando] = useState(null)
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     if (!q) return productos
+
+    // Si el texto es un código completo (V99, un código numérico o un
+    // SKU-TALLA), se muestra solo la coincidencia exacta. Las coincidencias
+    // parciales quedan para búsquedas por nombre o código incompleto.
+    const exactos = productos.filter(
+      (p) =>
+        (p.sku || '').trim().toLowerCase() === q ||
+        (p.variantes || []).some((v) =>
+          coincideCodigoExacto({ ...v, sku: p.sku }, q),
+        ),
+    )
+    if (exactos.length) return exactos
+
     return productos.filter(
       (p) =>
-        p.nombre.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q),
+        p.nombre.toLowerCase().includes(q) ||
+        (p.sku || '').toLowerCase().includes(q) ||
+        (p.variantes || []).some((v) => coincideCodigoEtiqueta(v, q)),
     )
   }, [productos, busqueda])
 
@@ -135,8 +291,111 @@ export default function Productos() {
       ? tallasPara(campos.categoria_id, campos.subcategoria_id, categorias, subcategorias)
       : null
   const categoriaFormActual = categorias.find((c) => c.id === Number(campos.categoria_id))
-  const esOpcionalTallas = Boolean(categoriaFormActual?.tallas_opcionales)
+  const subcategoriaFormActual = subcategorias.find(
+    (s) => s.id === Number(campos.subcategoria_id),
+  )
+  // Tenis y chanclas se guardan/muestran solo en USA. Si la talla viene en el
+  // formato viejo (7-40) o con EUR (7-8/43-44), se normaliza antes de guardar.
+  const contextoTallaForm = `${categoriaFormActual?.nombre || ''} ${
+    subcategoriaFormActual?.nombre || ''
+  }`
+  const normalizarTallaForm = (talla) => normalizarTallaPorNombre(talla, contextoTallaForm)
+  const normalizarTallaPara = (talla, catId, subId) => {
+    const cat = categorias.find((c) => c.id === Number(catId))
+    const sub = subcategorias.find((s) => s.id === Number(subId))
+    return normalizarTallaPorNombre(talla, `${cat?.nombre || ''} ${sub?.nombre || ''}`)
+  }
+  const normalizarTallaOpcional = (talla) => {
+    if (talla === null || talla === undefined || String(talla).trim() === '') return null
+    return normalizarTallaForm(talla)
+  }
+  const normalizarTallaOpcionalPara = (talla, catId, subId) => {
+    if (talla === null || talla === undefined || String(talla).trim() === '') return null
+    return normalizarTallaPara(talla, catId, subId)
+  }
+  const prendaActual =
+    PRENDA_POR_CATALOGO_CATEGORIA[`${catalogoForm}|${categoriaFormActual?.nombre}`] ||
+    PRENDA_POR_CATEGORIA[categoriaFormActual?.nombre] ||
+    null
+  const esOpcionalTallas =
+    Boolean(categoriaFormActual?.tallas_opcionales) ||
+    CATEGORIAS_UNITALLA.includes(categoriaFormActual?.nombre)
   const usaTallas = variantesForm.some((v) => v.talla)
+
+  // Catálogo de códigos para armar el SKU automático.
+  const { data: marcas = [] } = useMarcas(catalogoForm)
+  const { data: colores = [] } = useColores(catalogoForm)
+  const { data: estilosPrenda = [] } = useEstilos(prendaActual, catalogoForm)
+  const [codigo, setCodigo] = useState({ marcaId: '', estiloId: '', calidad: '', colorId: '' })
+  const [alta, setAlta] = useState(null) // { tipo, codigo, nombre, prenda }
+  const [altaGuardando, setAltaGuardando] = useState(false)
+  const [altaError, setAltaError] = useState(null)
+
+  // SKU = PRENDA + MARCA + ESTILO + CALIDAD + COLOR (todo pegado).
+  const skuAuto = useMemo(() => {
+    if (!prendaActual) return ''
+    const m = marcas.find((x) => String(x.id) === String(codigo.marcaId))
+    const e = estilosPrenda.find((x) => String(x.id) === String(codigo.estiloId))
+    const c = colores.find((x) => String(x.id) === String(codigo.colorId))
+    if (!m || !e || !codigo.calidad || !c) return ''
+    return `${prendaActual}${m.codigo}${e.codigo}${codigo.calidad}${c.codigo}`
+  }, [prendaActual, marcas, estilosPrenda, colores, codigo])
+
+  // Al armar el SKU se pone en el campo y se generan los códigos de barras.
+  useEffect(() => {
+    if (!skuAuto) return
+    setCampos((c) => ({ ...c, sku: skuAuto }))
+    setVariantesForm((prev) =>
+      prev.map((v, idx) => ({ ...v, codigo_barras: barraPara(skuAuto, v.talla, idx) })),
+    )
+  }, [skuAuto])
+
+  // Nombre sugerido a partir del estilo + color (solo si el nombre está vacío).
+  const estiloSel = estilosPrenda.find((x) => String(x.id) === String(codigo.estiloId))
+  const colorSel = colores.find((x) => String(x.id) === String(codigo.colorId))
+  useEffect(() => {
+    if (!estiloSel) return
+    setCampos((prev) =>
+      prev.nombre
+        ? prev
+        : { ...prev, nombre: colorSel ? `${estiloSel.nombre} · ${colorSel.nombre}` : estiloSel.nombre },
+    )
+  }, [estiloSel, colorSel])
+
+  async function guardarAlta() {
+    if (!alta) return
+    if (!String(alta.codigo).trim() || !String(alta.nombre).trim()) {
+      setAltaError('Completa código y nombre.')
+      return
+    }
+    setAltaGuardando(true)
+    setAltaError(null)
+    try {
+      if (alta.tipo === 'marca') {
+        const r = await codigosApi.createMarca({ codigo: alta.codigo.trim(), nombre: alta.nombre.trim(), catalogo: catalogoForm })
+        await queryClient.invalidateQueries({ queryKey: ['marcas'] })
+        setCodigo((c) => ({ ...c, marcaId: String(r.id) }))
+      } else if (alta.tipo === 'color') {
+        const r = await codigosApi.createColor({ codigo: alta.codigo.trim(), nombre: alta.nombre.trim(), catalogo: catalogoForm })
+        await queryClient.invalidateQueries({ queryKey: ['colores'] })
+        setCodigo((c) => ({ ...c, colorId: String(r.id) }))
+      } else {
+        const r = await codigosApi.createEstilo({
+          prenda: alta.prenda,
+          codigo: alta.codigo.trim(),
+          nombre: alta.nombre.trim(),
+          catalogo: catalogoForm,
+        })
+        await queryClient.invalidateQueries({ queryKey: ['estilos'] })
+        setCodigo((c) => ({ ...c, estiloId: String(r.id) }))
+      }
+      setAlta(null)
+    } catch (err) {
+      setAltaError(err?.error || err?.message || 'No se pudo guardar')
+    } finally {
+      setAltaGuardando(false)
+    }
+  }
 
   function setUrlParam(clave, valor) {
     const next = new URLSearchParams(searchParams)
@@ -164,40 +423,50 @@ export default function Productos() {
     // Al editar: se conservan las tallas reales del producto. El stock inicial
     // queda vacío (= no modifica el stock actual) y se muestra el total como referencia.
     if (existentes && existentes.length) {
-      return existentes.map((ex, idx) => ({
-        talla: ex.talla ?? null,
-        codigo_barras: ex.codigo_barras || sugerirBarra(idx),
-        stock_inicial: '',
-        stock_total: ex.stock_total ?? 0,
-      }))
+      return existentes.map((ex, idx) => {
+        const talla = normalizarTallaOpcionalPara(ex.talla, catId, subId)
+        return {
+          id: ex.id,
+          talla,
+          codigo_barras: ex.codigo_barras || barraPara(campos.sku, talla, idx),
+          stock_inicial: '',
+          stock_total: ex.stock_total ?? 0,
+        }
+      })
     }
     const cat = categorias.find((c) => c.id === Number(catId))
     // Categorías con tallas OPCIONALES (ej. gorras): por defecto talla única
     if (cat?.tallas_opcionales) {
-      return [{ talla: null, codigo_barras: sugerirBarra(0), stock_inicial: '' }]
+      return [{ talla: null, codigo_barras: barraPara(campos.sku, null, 0), stock_inicial: '' }]
     }
     const tallas = tallasPara(catId, subId, categorias, subcategorias)
     const lista = tallas.length ? tallas : [null]
-    return lista.map((t, idx) => ({
-      talla: t,
-      codigo_barras: sugerirBarra(idx),
-      stock_inicial: '',
-    }))
+    return lista.map((t, idx) => {
+      const talla = normalizarTallaOpcionalPara(t, catId, subId)
+      return {
+        talla,
+        codigo_barras: barraPara(campos.sku, talla, idx),
+        stock_inicial: '',
+      }
+    })
   }
 
   function construirConTallas(catId, subId) {
     const tallas = tallasPara(catId, subId, categorias, subcategorias)
     const lista = tallas.length ? tallas : [null]
-    return lista.map((t, idx) => ({
-      talla: t,
-      codigo_barras: sugerirBarra(idx),
-      stock_inicial: '',
-    }))
+    return lista.map((t, idx) => {
+      const talla = normalizarTallaOpcionalPara(t, catId, subId)
+      return {
+        talla,
+        codigo_barras: barraPara(campos.sku, talla, idx),
+        stock_inicial: '',
+      }
+    })
   }
 
   function ponerTallaUnica() {
     setVariantesForm((prev) => [
-      { talla: null, codigo_barras: sugerirBarra(0), stock_inicial: prev[0]?.stock_inicial ?? '' },
+      { talla: null, codigo_barras: barraPara(campos.sku, null, 0), stock_inicial: prev[0]?.stock_inicial ?? '' },
     ])
   }
 
@@ -211,7 +480,7 @@ export default function Productos() {
   function agregarTalla() {
     setVariantesForm((prev) => [
       ...prev,
-      { talla: '', codigo_barras: sugerirBarra(prev.length), stock_inicial: '' },
+      { talla: '', codigo_barras: barraPara(campos.sku, null, prev.length), stock_inicial: '' },
     ])
   }
 
@@ -223,6 +492,7 @@ export default function Productos() {
     setCampos({ ...CAMPOS_INICIALES })
     setCatalogoForm(catalogo || 'hombre')
     setVariantesForm([])
+    setCodigo({ marcaId: '', estiloId: '', calidad: '', colorId: '' })
     setForm({})
     setSedesForm(null)
     setFormError(null)
@@ -266,6 +536,7 @@ export default function Productos() {
   function cambiarCategoria(e) {
     const valor = e.target.value
     setCampos((c) => ({ ...c, categoria_id: valor, subcategoria_id: '' }))
+    setCodigo((c) => ({ ...c, estiloId: '' }))
     const necesitaSub = subcategorias.some((s) => s.categoria_id === Number(valor))
     setVariantesForm(necesitaSub ? [] : construirVariantes(valor, null))
   }
@@ -283,6 +554,30 @@ export default function Productos() {
   function cambiarVariante(idx, clave, valor) {
     setVariantesForm((prev) =>
       prev.map((v, i) => (i === idx ? { ...v, [clave]: valor } : v)),
+    )
+  }
+
+  // Al escribir el SKU se rellenan solos los códigos de barras (SKU-talla).
+  function cambiarSku(valor) {
+    setCampos((c) => ({ ...c, sku: valor }))
+    const sku = String(valor || '').trim()
+    setVariantesForm((prev) =>
+      prev.map((v, idx) => ({ ...v, codigo_barras: barraPara(sku, v.talla, idx) })),
+    )
+  }
+
+  // Al cambiar la talla, se recalcula el código de barras de esa variante.
+  function cambiarTalla(idx, talla) {
+    setVariantesForm((prev) =>
+      prev.map((v, i) => {
+        if (i !== idx) return v
+        const normalizada = normalizarTallaOpcional(talla)
+        return {
+          ...v,
+          talla: normalizada,
+          codigo_barras: barraPara(campos.sku, normalizada, idx),
+        }
+      }),
     )
   }
 
@@ -314,6 +609,7 @@ export default function Productos() {
         imagenes: campos.imagenes,
         sedes: sedesSeleccionadas,
         variantes: variantesForm.map((v) => ({
+          id: v.id || undefined,
           talla: v.talla,
           codigo_barras: v.codigo_barras,
           stock_inicial: v.stock_inicial,
@@ -346,9 +642,38 @@ export default function Productos() {
       queryClient.invalidateQueries({ queryKey: ['productos'] })
       window.setTimeout(() => setAviso(null), 4000)
     } catch (err) {
-      setError(err?.message || 'No se pudo eliminar el producto')
+      setAviso(err?.message || 'No se pudo eliminar el producto')
+      window.setTimeout(() => setAviso(null), 4000)
     } finally {
       setEliminando(false)
+    }
+  }
+
+  // id del producto que hoy es portada de una categoría (o undefined).
+  function portadaDe(categoriaId) {
+    return categorias.find((c) => c.id === Number(categoriaId))?.portada_producto_id
+  }
+
+  // Marca/desmarca este producto como portada de su categoría. Solo uno por
+  // categoría: al marcar otro, el backend reemplaza el anterior.
+  async function alternarPortada(p) {
+    if (!p.categoria_id || !p.imagen_url || portadaGuardando) return
+    const esPortada = portadaDe(p.categoria_id) === p.id
+    setPortadaGuardando(p.id)
+    try {
+      await productosApi.setPortada(p.categoria_id, esPortada ? null : p.id)
+      queryClient.invalidateQueries({ queryKey: ['categorias'] })
+      setAviso(
+        esPortada
+          ? 'Se quitó la portada de la categoría.'
+          : `"${p.nombre_interno || p.nombre}" es ahora la portada de la categoría.`,
+      )
+      window.setTimeout(() => setAviso(null), 4000)
+    } catch (err) {
+      setAviso(err?.message || 'No se pudo actualizar la portada')
+      window.setTimeout(() => setAviso(null), 4000)
+    } finally {
+      setPortadaGuardando(null)
     }
   }
 
@@ -392,14 +717,32 @@ export default function Productos() {
             Crea, edita o elimina productos por catálogo, categoría y tallas (solo administradores).
           </p>
         </div>
-        <button
-          type="button"
-          onClick={abrirCrear}
-          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-metal-2 hover:shadow-lg hover:shadow-ink/20 active:scale-[0.98]"
-        >
-          <PlusIcon className="h-4 w-4" />
-          Nuevo producto
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setConfigEtiquetas(true)}
+            className="flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink-2 transition-colors hover:border-ink hover:text-ink active:scale-[0.98]"
+          >
+            <PrinterIcon className="h-4 w-4" />
+            Configurar etiquetas
+          </button>
+          <button
+            type="button"
+            onClick={() => setImprimirCategoria(true)}
+            className="flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink-2 transition-colors hover:border-ink hover:text-ink active:scale-[0.98]"
+          >
+            <PrinterIcon className="h-4 w-4" />
+            Imprimir categoría
+          </button>
+          <button
+            type="button"
+            onClick={abrirCrear}
+            className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-metal-2 hover:shadow-lg hover:shadow-ink/20 active:scale-[0.98]"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Nuevo producto
+          </button>
+        </div>
       </div>
 
       {aviso && (
@@ -468,7 +811,7 @@ export default function Productos() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[minmax(14rem,1fr)_6rem_6rem_8rem_6rem_4rem_7rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
+          <div className="grid grid-cols-[minmax(14rem,1fr)_6rem_6rem_8rem_6rem_4rem_9rem] items-center gap-4 border-b border-line bg-surface-2 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <span>Producto</span>
             <span>SKU</span>
             <span>Catálogo</span>
@@ -479,72 +822,106 @@ export default function Productos() {
           </div>
 
           <ul className="divide-y divide-line">
-            {filtrados.map((p) => (
-              <li
-                key={p.id}
-                className="grid grid-cols-[minmax(14rem,1fr)_6rem_6rem_8rem_6rem_4rem_7rem] items-center gap-4 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <img
-                    src={urlImagen(p.imagen_url)}
-                    alt={p.nombre}
-                    className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-ink">{p.nombre_interno || p.nombre}</p>
-                    {p.nombre_interno && p.nombre_interno !== p.nombre && (
-                      <p className="truncate text-xs text-ink-2">{p.nombre}</p>
-                    )}
+            {filtrados.map((p) => {
+              const esPortada = portadaDe(p.categoria_id) === p.id
+              const puedePortada = Boolean(p.categoria_id && p.imagen_url)
+              return (
+                <li
+                  key={p.id}
+                  className="grid grid-cols-[minmax(14rem,1fr)_6rem_6rem_8rem_6rem_4rem_9rem] items-center gap-4 px-5 py-2.5 text-sm transition-colors hover:bg-surface-2/40"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <img
+                      src={urlImagen(p.imagen_url)}
+                      alt={p.nombre}
+                      className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-ink">{p.nombre_interno || p.nombre}</p>
+                      {p.nombre_interno && p.nombre_interno !== p.nombre && (
+                        <p className="truncate text-xs text-ink-2">{p.nombre}</p>
+                      )}
+                      {p.es_oferta && (
+                        <span className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                          Oferta -{p.descuento}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="truncate text-ink-2">{p.sku || '—'}</span>
+                  <span className="truncate text-ink-2">
+                    {p.catalogo === 'mujer' ? 'Mujer' : p.catalogo === 'hombre' ? 'Hombre' : '—'}
+                  </span>
+                  <span className="truncate text-ink-2">
+                    {p.categoria || '—'}
+                    {p.subcategoria ? ` · ${p.subcategoria}` : ''}
+                  </span>
+                  <span className="text-right">
                     {p.es_oferta && (
-                      <span className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
-                        Oferta -{p.descuento}%
+                      <span className="mr-1.5 text-xs text-ink-2 line-through">
+                        {formato(p.precio_antes)}
                       </span>
                     )}
-                  </div>
-                </div>
-                <span className="truncate text-ink-2">{p.sku || '—'}</span>
-                <span className="truncate text-ink-2">
-                  {p.catalogo === 'mujer' ? 'Mujer' : p.catalogo === 'hombre' ? 'Hombre' : '—'}
-                </span>
-                <span className="truncate text-ink-2">
-                  {p.categoria || '—'}
-                  {p.subcategoria ? ` · ${p.subcategoria}` : ''}
-                </span>
-                <span className="text-right">
-                  {p.es_oferta && (
-                    <span className="mr-1.5 text-xs text-ink-2 line-through">
-                      {formato(p.precio_antes)}
-                    </span>
-                  )}
-                  <span className="font-semibold text-ink">{formato(p.precio)}</span>
-                </span>
-                <span
-                  className={`text-center font-semibold ${
-                    p.stock_total === 0 ? 'text-ink-2/40' : 'text-ink'
-                  }`}
-                >
-                  {p.stock_total}
-                </span>
-                <span className="flex items-center justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => abrirEditar(p)}
-                    title="Editar"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink active:scale-90"
+                    <span className="font-semibold text-ink">{formato(p.precio)}</span>
+                  </span>
+                  <span
+                    className={`text-center font-semibold ${
+                      p.stock_total === 0 ? 'text-ink-2/40' : 'text-ink'
+                    }`}
                   >
-                    <EditIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalDelete(p)}
-                    title="Eliminar"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-red-50 hover:text-red-700 active:scale-90"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
-                </span>
-              </li>
-            ))}
+                    {p.stock_total}
+                  </span>
+                  <span className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => alternarPortada(p)}
+                      disabled={!puedePortada || portadaGuardando === p.id}
+                      title={
+                        !p.categoria_id
+                          ? 'Asigna una categoría al producto'
+                          : !p.imagen_url
+                            ? 'El producto necesita una imagen'
+                            : esPortada
+                              ? 'Quitar como portada de la categoría'
+                              : 'Usar como portada de la categoría'
+                      }
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors active:scale-90 disabled:cursor-not-allowed disabled:opacity-30 ${
+                        esPortada
+                          ? 'text-amber-500 hover:bg-amber-50'
+                          : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
+                      }`}
+                    >
+                      <StarIcon filled={esPortada} className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStickerProducto(p)}
+                      title="Imprimir stickers"
+                      aria-label={`Imprimir stickers de ${p.nombre}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink active:scale-90"
+                    >
+                      <PrinterIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => abrirEditar(p)}
+                      title="Editar"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink active:scale-90"
+                    >
+                      <EditIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalDelete(p)}
+                      title="Eliminar"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2/70 transition-colors hover:bg-red-50 hover:text-red-700 active:scale-90"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
@@ -662,23 +1039,139 @@ export default function Productos() {
                         Si llenas el <span className="font-medium">precio normal</span> con un valor
                         mayor al <span className="font-medium">precio en promoción</span>, el
                         producto se muestra con el precio normal tachado y aparece en la página{' '}
-                        <span className="font-medium">Promociones</span>. Si lo dejas vacío, el
+                        <span className="font-medium">Ofertas exclusivas</span>. Si lo dejas vacío, el
                         producto se vende a precio normal.
                       </p>
 
-                      <div>
-                        <label htmlFor="p-sku" className="mb-1.5 block text-sm font-medium text-ink">
-                          SKU
-                        </label>
-                        <input
-                          id="p-sku"
-                          type="text"
-                          value={campos.sku}
-                          onChange={(e) => setCampo('sku', e.target.value)}
-                          placeholder="Ej. CAM-P11-01"
-                          className={inputCls}
-                        />
-                      </div>
+                      {prendaActual ? (
+                        <div className="rounded-xl border border-line bg-surface-2/30 p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-ink-2">
+                              Código del producto (automático)
+                            </span>
+                            <span className="rounded-full bg-ink px-2 py-0.5 font-mono text-[10px] text-white">
+                              {prendaActual}
+                            </span>
+                          </div>
+
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="flex gap-1">
+                              <select
+                                value={codigo.marcaId}
+                                onChange={(e) => setCodigo({ ...codigo, marcaId: e.target.value })}
+                                className={selectCls}
+                              >
+                                <option value="">Marca…</option>
+                                {marcas.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.codigo} · {m.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAltaError(null)
+                                  setAlta({ tipo: 'marca', codigo: siguienteCodigo(marcas.map((m) => m.codigo)), nombre: '' })
+                                }}
+                                title="Agregar marca"
+                                className="flex w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-ink-2 transition-colors hover:border-ink hover:text-ink"
+                              >
+                                <PlusIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            <div className="flex gap-1">
+                              <select
+                                value={codigo.estiloId}
+                                onChange={(e) => setCodigo({ ...codigo, estiloId: e.target.value })}
+                                className={selectCls}
+                              >
+                                <option value="">Estilo…</option>
+                                {estilosPrenda.map((es) => (
+                                  <option key={es.id} value={es.id}>
+                                    {es.codigo} · {es.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAltaError(null)
+                                  setAlta({ tipo: 'estilo', prenda: prendaActual, codigo: siguienteCodigo(estilosPrenda.map((e) => e.codigo)), nombre: '' })
+                                }}
+                                title="Agregar estilo"
+                                className="flex w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-ink-2 transition-colors hover:border-ink hover:text-ink"
+                              >
+                                <PlusIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            <select
+                              value={codigo.calidad}
+                              onChange={(e) => setCodigo({ ...codigo, calidad: e.target.value })}
+                              className={selectCls}
+                            >
+                              <option value="">Calidad…</option>
+                              {CALIDADES.map((c) => (
+                                <option key={c.value} value={c.value}>
+                                  {c.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            <div className="flex gap-1">
+                              <select
+                                value={codigo.colorId}
+                                onChange={(e) => setCodigo({ ...codigo, colorId: e.target.value })}
+                                className={selectCls}
+                              >
+                                <option value="">Color…</option>
+                                {colores.map((co) => (
+                                  <option key={co.id} value={co.id}>
+                                    {co.codigo} · {co.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAltaError(null)
+                                  setAlta({ tipo: 'color', codigo: siguienteCodigo(colores.map((c) => c.codigo)), nombre: '' })
+                                }}
+                                title="Agregar color"
+                                className="flex w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-ink-2 transition-colors hover:border-ink hover:text-ink"
+                              >
+                                <PlusIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                            <span className="text-xs text-ink-2">SKU</span>
+                            <span className="font-mono text-sm font-semibold text-ink">
+                              {campos.sku || '— completa los 4 —'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label htmlFor="p-sku" className="mb-1.5 block text-sm font-medium text-ink">
+                            SKU
+                          </label>
+                          <input
+                            id="p-sku"
+                            type="text"
+                            value={campos.sku}
+                            onChange={(e) => cambiarSku(e.target.value)}
+                            placeholder="Ej. JEA-REF-01"
+                            className={inputCls}
+                          />
+                          <p className="mt-1 text-xs text-ink-2/70">
+                            Esta categoría no tiene código automático: escribe el SKU a mano.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </Seccion>
 
@@ -745,8 +1238,8 @@ export default function Productos() {
                     titulo="Tallas y variantes"
                     descripcion={
                       esOpcionalTallas
-                        ? 'Puedes dejarlo en talla única o activar tallas. Cada variante lleva su propio código de barras.'
-                        : 'Se generan según la categoría: edita, quita o agrega las tallas que necesites. Cada variante lleva su propio código de barras.'
+                        ? 'Puedes marcarlo como Unitalla o usar tallas. El código de barras se llena solo con SKU-talla.'
+                        : 'Se generan según la categoría: edita, quita o agrega las tallas que necesites. El código de barras se llena solo con SKU-talla.'
                     }
                   >
                     {campos.categoria_id ? (
@@ -759,7 +1252,7 @@ export default function Productos() {
                           {esOpcionalTallas ? (
                             <div className="mb-3 inline-flex w-full rounded-lg border border-line bg-surface-2 p-0.5">
                               {[
-                                { valor: false, label: 'Talla única' },
+                                { valor: false, label: 'Unitalla' },
                                 { valor: true, label: 'Con tallas' },
                               ].map((op) => (
                                 <button
@@ -781,7 +1274,7 @@ export default function Productos() {
                           ) : (
                             <p className="mb-2 text-xs text-ink-2">
                               {tallasActivas.length === 0
-                                ? 'Talla única'
+                                ? 'Unitalla'
                                 : `${tallasActivas.length} tallas automáticas`}
                             </p>
                           )}
@@ -847,9 +1340,9 @@ export default function Productos() {
                                 <input
                                   type="text"
                                   value={v.talla || ''}
-                                  onChange={(e) => cambiarVariante(idx, 'talla', e.target.value || null)}
-                                  placeholder="Única"
-                                  title="Talla (puedes editarla, vacío = talla única)"
+                                  onChange={(e) => cambiarTalla(idx, e.target.value || null)}
+                                  placeholder="Unitalla"
+                                  title="Talla (puedes editarla; vacío = Unitalla)"
                                   className={`${inputCls} text-center`}
                                 />
                                 <input
@@ -865,7 +1358,7 @@ export default function Productos() {
                                   value={v.stock_inicial}
                                   onChange={(e) => cambiarVariante(idx, 'stock_inicial', e.target.value)}
                                   placeholder={form.id ? `Actual: ${v.stock_total ?? 0}` : '0'}
-                                  title="Stock inicial por sede (se aplica a las 4 sedes). Vacío en edición = no modifica el stock actual."
+                                  title="Stock por sede (se aplica a las sedes seleccionadas). En edición: se SUMA al stock actual. Vacío = no modifica."
                                   className={`${inputCls} text-right`}
                                 />
                                 <button
@@ -895,7 +1388,7 @@ export default function Productos() {
                           {variantesForm.length > 0 && (
                             <p className="mt-3 text-xs text-ink-2">
                               {form.id
-                                ? 'El stock inicial vacío = no modifica el stock actual de la talla. Si lo escribes, se aplica a las sedes seleccionadas.'
+                                ? 'El stock vacío = no modifica el stock actual. Si escribes un número, se SUMA al stock actual de las sedes seleccionadas.'
                                 : 'El stock inicial se aplica a las sedes seleccionadas; vacío = comienza en 0.'}
                             </p>
                           )}
@@ -963,7 +1456,7 @@ export default function Productos() {
                                 key={i}
                                 className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-ink-2"
                               >
-                                {v.talla || 'Única'}
+                                {v.talla || 'Unitalla'}
                               </span>
                             ))}
                           </div>
@@ -1030,6 +1523,49 @@ export default function Productos() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Alta rápida de marca / estilo / color desde el formulario */}
+      {alta && (
+        <AltaCodigo
+          titulo={alta.tipo === 'marca' ? 'marca' : alta.tipo === 'estilo' ? 'estilo' : 'color'}
+          codigo={alta.codigo}
+          nombre={alta.nombre}
+          setCodigo={(v) => setAlta((a) => (a ? { ...a, codigo: v } : a))}
+          setNombre={(v) => setAlta((a) => (a ? { ...a, nombre: v } : a))}
+          prenda={alta.prenda}
+          setPrenda={(v) => setAlta((a) => (a ? { ...a, prenda: v } : a))}
+          conPrenda={alta.tipo === 'estilo'}
+          onGuardar={guardarAlta}
+          onClose={() => setAlta(null)}
+          guardando={altaGuardando}
+          error={altaError}
+        />
+      )}
+
+      {stickerProducto && (
+        <Suspense fallback={null}>
+          <StickerProductoModal
+            producto={stickerProducto}
+            onClose={() => setStickerProducto(null)}
+          />
+        </Suspense>
+      )}
+
+      {imprimirCategoria && (
+        <Suspense fallback={null}>
+          <StickerCategoriaModal
+            categoriaInicial={filtroCategoria}
+            subcategoriaInicial={filtroSubcategoria}
+            onClose={() => setImprimirCategoria(false)}
+          />
+        </Suspense>
+      )}
+
+      {configEtiquetas && (
+        <Suspense fallback={null}>
+          <ConfiguracionEtiquetasModal onClose={() => setConfigEtiquetas(false)} />
+        </Suspense>
       )}
     </div>
   )

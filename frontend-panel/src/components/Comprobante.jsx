@@ -3,6 +3,7 @@
 // imprimirComprobante() (src/utils/print.js) en ventana para térmica 80mm.
 
 import { formato } from '../utils/print'
+import BrandLogos from './BrandLogos'
 
 const METODO_LABEL = {
   efectivo: 'Efectivo',
@@ -10,6 +11,7 @@ const METODO_LABEL = {
   addi: 'Addi',
   sistecredito: 'Sistecredito',
   bold: 'Bold',
+  wompi: 'Wompi',
 }
 
 export function Comprobante({ data }) {
@@ -23,9 +25,12 @@ export function Comprobante({ data }) {
   return (
     <div className="rounded-xl bg-white">
       <div className="border-b border-dashed border-line pb-4 text-center">
+        <div className="mb-3 flex justify-center">
+          <BrandLogos />
+        </div>
         <p className="font-display text-2xl font-semibold tracking-wide text-ink">PRAGA</p>
         <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-ink-2">
-          Medellín · Factura interna
+          Medellín
         </p>
       </div>
 
@@ -59,11 +64,24 @@ export function Comprobante({ data }) {
           <span className="w-24 text-right">Subtotal</span>
         </div>
         <ul className="space-y-2 border-t border-line pt-3">
-          {data.items.map((item) => (
-            <li key={item.variante_id ?? item.producto_id} className="flex items-center gap-3 text-sm">
+          {data.items.map((item, idx) => (
+            <li
+              key={`${item.detalle_id ?? item.variante_id ?? item.producto_id ?? 'x'}-${idx}`}
+              className="flex items-center gap-3 text-sm"
+            >
               <span className="min-w-0 flex-1 truncate text-ink">
                 {item.nombre}
                 {item.talla ? <span className="text-ink-2"> · {item.talla}</span> : null}
+                {item.es_relampago ? (
+                  <span className="ml-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                    · Relámpago
+                  </span>
+                ) : null}
+                {item.es_relampago && item.nota ? (
+                  <span className="block text-[11px] font-normal text-ink-2/70">
+                    {item.nota}
+                  </span>
+                ) : null}
               </span>
               <span className="w-14 shrink-0 text-center text-ink-2">
                 {item.cantidad} × {formato(item.precio_final ?? item.precio_unitario)}
@@ -96,10 +114,6 @@ export function Comprobante({ data }) {
           ))}
         </div>
       )}
-
-      <p className="mt-4 text-center text-[11px] text-ink-2/70">
-        Factura interna — no constituye facturación ante la DIAN.
-      </p>
     </div>
   )
 }

@@ -13,6 +13,7 @@ import {
   MenuIcon,
   PackageIcon,
   ReceiptIcon,
+  ScanIcon,
   UserIcon,
   SwapIcon,
   TagIcon,
@@ -30,7 +31,9 @@ const navItemsComunes = [
 
 // Gestión (inventario y devoluciones): solo admin/dueno
 const navItemsGestion = [
+  { to: '/escaner', label: 'Escáner', icon: ScanIcon },
   { to: '/inventario', label: 'Inventario General', icon: LayersIcon },
+  { to: '/codigos', label: 'Códigos (SKU)', icon: TagIcon },
   { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
 ]
 
@@ -47,6 +50,7 @@ const duenoItems = [
 
 // Gestión del dueño (además del panel del dueño)
 const duenoGestionItems = [
+  { to: '/escaner', label: 'Escáner', icon: ScanIcon },
   { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
 ]
 

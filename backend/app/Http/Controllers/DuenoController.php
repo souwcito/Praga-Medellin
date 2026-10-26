@@ -41,6 +41,12 @@ class DuenoController extends Controller
                 'producto_id' => $p->id,
                 'nombre' => $p->nombre,
                 'nombre_interno' => $p->nombre_interno,
+                'sku' => $p->sku,
+                'variantes' => $p->variantes->map(fn ($v) => [
+                    'id' => $v->id,
+                    'talla' => $v->talla,
+                    'codigo_barras' => $v->codigo_barras,
+                ])->values(),
                 'categoria' => optional($p->categoria)->nombre,
                 'subcategoria' => optional($p->subcategoria)->nombre,
                 'catalogo' => optional($p->categoria)->catalogo,
@@ -122,7 +128,7 @@ class DuenoController extends Controller
             : null;
         $producto->save();
 
-        $this->bumpCache();
+        // El costo no se muestra en la tienda: no hace falta invalidar el catálogo.
 
         return response()->json(['ok' => true, 'id' => (int) $producto->id, 'costo' => $producto->costo]);
     }

@@ -13,13 +13,16 @@ const Pos = lazy(() => import('./pages/Pos'))
 const Comisiones = lazy(() => import('./pages/Comisiones'))
 const Ventas = lazy(() => import('./pages/Ventas'))
 const Inventario = lazy(() => import('./pages/Inventario'))
+const Escaner = lazy(() => import('./pages/Escaner'))
 const Productos = lazy(() => import('./pages/Productos'))
 const Pedidos = lazy(() => import('./pages/Pedidos'))
 const Clientes = lazy(() => import('./pages/Clientes'))
 const PlanSepare = lazy(() => import('./pages/PlanSepare'))
 const Devoluciones = lazy(() => import('./pages/Devoluciones'))
+const Codigos = lazy(() => import('./pages/Codigos'))
 const Dueno = lazy(() => import('./pages/Dueno'))
 const DuenoProductos = lazy(() => import('./pages/DuenoProductos'))
+const ImprimirEtiquetas = lazy(() => import('./pages/ImprimirEtiquetas'))
 
 function PageFallback() {
   return (
@@ -42,6 +45,14 @@ export default function App() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route
+            path="/imprimir/etiquetas"
+            element={
+              <ProtectedRoute>
+                <ImprimirEtiquetas />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             element={
@@ -66,6 +77,22 @@ export default function App() {
               element={
                 <ProtectedRoute requiresAdmin>
                   <Inventario />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/escaner"
+              element={
+                <ProtectedRoute requiresAdmin>
+                  <Escaner />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/codigos"
+              element={
+                <ProtectedRoute requiresAdmin>
+                  <Codigos />
                 </ProtectedRoute>
               }
             />

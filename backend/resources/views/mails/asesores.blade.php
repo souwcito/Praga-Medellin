@@ -53,9 +53,26 @@
           </tbody>
         </table>
 
+        @if (!empty($pedido->recompensas))
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;background:#f3f2f0;border-radius:8px;padding:8px;">
+          <tbody>
+            <tr><td style="padding:4px 8px;color:#666;">Envío gratis</td><td style="padding:4px 8px;font-weight:700;text-align:right;">{{ !empty($pedido->recompensas['envio_gratis']) ? 'SÍ' : 'No' }}</td></tr>
+            <tr><td style="padding:4px 8px;color:#666;">Fragancia de regalo</td><td style="padding:4px 8px;font-weight:700;text-align:right;">{{ !empty($pedido->recompensas['fragancia_gratis']) ? 'SÍ' : 'No' }}</td></tr>
+            <tr><td style="padding:4px 8px;color:#666;">Descuento 5%</td><td style="padding:4px 8px;font-weight:700;text-align:right;">{{ !empty($pedido->recompensas['descuento_5']) ? 'SÍ' : 'No' }}</td></tr>
+          </tbody>
+        </table>
+        @endif
+
+        @if (($pedido->subtotal ?? null) !== null && ($pedido->descuento ?? 0) > 0)
+        <div style="margin-top:12px;font-size:13px;color:#666;">
+          Subtotal $ {{ number_format($pedido->subtotal, 0, ',', '.') }} · Descuento −$ {{ number_format($pedido->descuento, 0, ',', '.') }}
+        </div>
+        @endif
+
         <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;">
           <span style="color:#666;font-size:14px;">
             Total @if (($pedido->metodo_pago ?? ''))· {{ $pedido->metodo_pago }} @endif
+            @if ($pedido->factura_numero) · {{ $pedido->factura_numero }} @endif
           </span>
           <span style="font-size:22px;font-weight:700;">$ {{ number_format($pedido->total, 0, ',', '.') }}</span>
         </div>

@@ -1,10 +1,11 @@
 // Capa de datos con React Query: caché compartida entre páginas (sedes,
 // empleados, catálogo se piden una sola vez), deduplicación y polling que se
 // pausa automáticamente cuando la pestaña no está visible.
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import {
   catalogApi,
   productosApi,
+  etiquetasApi,
   dashboardApi,
   comisionesApi,
   ventasApi,
@@ -13,6 +14,7 @@ import {
   pedidosApi,
   apartadosApi,
   duenoApi,
+  codigosApi,
 } from '../services/api'
 
 const TTL_CATALOGO = 30 * 1000 // 30 s
@@ -42,11 +44,12 @@ export const useInventarioSede = (sedeId, { refetchInterval } = {}) =>
     refetchInterval,
   })
 
-export const useInventarioCompleto = () =>
+export const useInventarioCompleto = (options = {}) =>
   useQuery({
     queryKey: ['inventario-completo'],
     queryFn: catalogApi.getInventarioCompleto,
     staleTime: TTL_INVENTARIO,
+    ...options,
   })
 
 export const useProductos = (params) =>
@@ -56,12 +59,46 @@ export const useProductos = (params) =>
     staleTime: 20000,
   })
 
+export const useStockProducto = (productoId) =>
+  useQuery({
+    queryKey: ['producto-stock', productoId],
+    queryFn: () => productosApi.getStock(productoId),
+    staleTime: 10000,
+    enabled: Boolean(productoId),
+  })
+
+export const useStickersCategoria = (params, { enabled } = {}) =>
+  useQuery({
+    queryKey: ['stickers-categoria', params],
+    queryFn: () => productosApi.getStickersCategoria(params),
+    staleTime: 10000,
+    enabled,
+  })
+
+// Configuración compartida de etiquetas (servidor). La configuración física
+// propia de cada PC/impresora se guarda en localStorage.
+export const useConfiguracionEtiquetas = () =>
+  useQuery({
+    queryKey: ['configuracion-etiquetas'],
+    queryFn: etiquetasApi.getConfig,
+    staleTime: 60000,
+  })
+
 export const useVentas = (params, { enabled } = {}) =>
   useQuery({
     queryKey: ['ventas', params],
     queryFn: () => ventasApi.getHistorial(params),
     staleTime: 15000,
+    placeholderData: keepPreviousData,
     enabled,
+  })
+
+export const useCalendarioVentas = (params) =>
+  useQuery({
+    queryKey: ['ventas-calendario', params],
+    queryFn: () => ventasApi.getCalendario(params),
+    staleTime: 15000,
+    placeholderData: keepPreviousData,
   })
 
 export const useDevoluciones = (params) =>
@@ -112,3 +149,26 @@ export const usePedidos = () =>
 
 export const useDuenoResumen = () =>
   useQuery({ queryKey: ['dueno-resumen'], queryFn: duenoApi.getResumen, staleTime: 15000 })
+
+// Catálogo de códigos (marcas, colores, estilos). Se filtran por catálogo:
+// hombre y mujer tienen listados independientes.
+export const useMarcas = (catalogo) =>
+  useQuery({
+    queryKey: ['marcas', catalogo || ''],
+    queryFn: () => codigosApi.getMarcas(catalogo),
+    staleTime: TTL_CATALOGO,
+  })
+
+export const useColores = (catalogo) =>
+  useQuery({
+    queryKey: ['colores', catalogo || ''],
+    queryFn: () => codigosApi.getColores(catalogo),
+    staleTime: TTL_CATALOGO,
+  })
+
+export const useEstilos = (prenda, catalogo) =>
+  useQuery({
+    queryKey: ['estilos', prenda || '', catalogo || ''],
+    queryFn: () => codigosApi.getEstilos(prenda, catalogo),
+    staleTime: TTL_CATALOGO,
+  })

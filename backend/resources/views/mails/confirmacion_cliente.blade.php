@@ -39,8 +39,15 @@
           </tbody>
         </table>
 
+        @if (($pedido->subtotal ?? null) !== null && ($pedido->descuento ?? 0) > 0)
+        <div style="margin-top:12px;font-size:14px;color:#666;">
+          <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>$ {{ number_format($pedido->subtotal, 0, ',', '.') }}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>Descuento (5%)</span><span>−$ {{ number_format($pedido->descuento, 0, ',', '.') }}</span></div>
+        </div>
+        @endif
+
         <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;">
-          <span style="color:#666;font-size:14px;">Total pagado</span>
+          <span style="color:#666;font-size:14px;">Total pagado @if ($pedido->factura_numero) · {{ $pedido->factura_numero }} @endif</span>
           <span style="font-size:22px;font-weight:700;">$ {{ number_format($pedido->total, 0, ',', '.') }}</span>
         </div>
 

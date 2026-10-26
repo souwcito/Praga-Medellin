@@ -9,9 +9,12 @@ class SedeController extends Controller
 {
     public function index()
     {
-        // Traemos todas las sedes de la base de datos, seleccionando solo las 3 columnas que pidió el socio
-        $sedes = Sede::select('id', 'nombre', 'direccion')->get();
-        
+        // Sedes físicas. Se excluye la sede virtual 'Online' (atribución de ventas
+        // web) para que no aparezca en los selectores de sede del POS/panel.
+        $sedes = Sede::select('id', 'nombre', 'direccion')
+            ->where('nombre', '!=', 'Online')
+            ->get();
+
         // Las devolvemos automáticamente en formato JSON
         return response()->json($sedes);
     }

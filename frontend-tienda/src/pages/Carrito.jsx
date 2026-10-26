@@ -1,11 +1,15 @@
 import { Link } from 'react-router-dom'
 import { useCart } from '../hooks/useCart'
 import { formato } from '../utils/formato'
+import { etiquetaTalla } from '../utils/tallas'
+import { calcularRecompensas } from '../utils/recompensas'
 import Seo from '../components/Seo'
+import Recompensas from '../components/Recompensas'
 import { ArrowRightIcon, CartIcon, MinusIcon, PlusIcon, TrashIcon } from '../components/icons'
 
 export default function Carrito() {
-  const { items, cambiarCantidad, quitar, vaciar, total, count } = useCart()
+  const { items, cambiarCantidad, quitar, vaciar, count } = useCart()
+  const recompensas = calcularRecompensas(items)
 
   return (
     <>
@@ -75,7 +79,9 @@ export default function Carrito() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-ink">{item.nombre}</p>
                         <p className="mt-0.5 text-xs text-ink-2">
-                          {item.talla ? `Talla ${item.talla} · ` : 'Talla única · '}
+                          {item.talla
+                            ? `Talla ${item.talla_label || etiquetaTalla(item.talla, item)} · `
+                            : 'Unitalla · '}
                           {formato(item.precio)}
                         </p>
                       </div>
@@ -120,26 +126,35 @@ export default function Carrito() {
             {/* Resumen */}
             <aside className="h-fit rounded-2xl border border-line bg-white p-5 lg:sticky lg:top-28">
               <h2 className="font-display text-xl font-semibold tracking-tight text-ink">Resumen</h2>
+              <Recompensas items={items} />
               <div className="mt-4 space-y-2 border-b border-line pb-4 text-sm">
                 <div className="flex justify-between text-ink-2">
                   <span>Subtotal</span>
-                  <span className="font-medium text-ink">{formato(total)}</span>
+                  <span className="font-medium text-ink">{formato(recompensas.subtotal)}</span>
                 </div>
+                {recompensas.descuento > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Descuento (5%)</span>
+                    <span className="font-medium">−{formato(recompensas.descuento)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-ink-2">
                   <span>Envío</span>
-                  <span>Se calcula en el checkout</span>
+                  <span className="text-right">
+                    {recompensas.envio_gratis ? 'Gratis' : 'Se coordina contigo'}
+                  </span>
                 </div>
               </div>
               <div className="mt-4 flex items-baseline justify-between">
                 <span className="text-sm font-medium text-ink-2">Total</span>
-                <span className="text-2xl font-bold text-ink">{formato(total)}</span>
+                <span className="text-2xl font-bold text-ink">{formato(recompensas.total)}</span>
               </div>
 
               <Link
                 to="/checkout"
                 className="group mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-metal-2 hover:shadow-lg active:scale-[0.98]"
               >
-                Finalizar compra
+                Pagar ahora
                 <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link

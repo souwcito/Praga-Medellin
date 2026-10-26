@@ -5,10 +5,11 @@ import { useCart } from '../hooks/useCart'
 import { useFavorites } from '../hooks/useFavorites'
 import SearchOverlay from './SearchOverlay'
 import BrandLogos from './BrandLogos'
+import { RecompensasBarra } from './Recompensas'
 import { CartIcon, ChevronDownIcon, HeartIcon, MenuIcon, SearchIcon, XIcon } from './icons'
 
 export default function Header() {
-  const { count, abrirCarrito } = useCart()
+  const { count, items, abrirCarrito } = useCart()
   const { count: favCount, abrirDrawer } = useFavorites()
   const navigate = useNavigate()
   const [menuAbierto, setMenuAbierto] = useState(false)
@@ -125,6 +126,8 @@ export default function Header() {
         </div>
       </div>
 
+      {count > 0 && <RecompensasBarra items={items} />}
+
       {/* Menú lateral de catálogos */}
       {menuAbierto && (
         <div className="fixed inset-0 z-50">
@@ -164,7 +167,7 @@ export default function Header() {
                   onClick={cerrar}
                   className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-red-700 transition-colors hover:bg-red-50"
                 >
-                  Promociones
+                  Ofertas exclusivas
                 </Link>
                 <Link
                   to="/fragancia-exclusiva"
@@ -172,6 +175,13 @@ export default function Header() {
                   className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
                 >
                   Fragancia Exclusiva
+                </Link>
+                <Link
+                  to="/guia-tallas"
+                  onClick={cerrar}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
+                >
+                  Guía de tallas de tenis y chanclas
                 </Link>
               </div>
 
