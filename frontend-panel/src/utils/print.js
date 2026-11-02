@@ -149,3 +149,120 @@ export function imprimirComprobante(data) {
   w.document.close()
   w.focus()
 }
+
+// Comprobante de entrega de un domicilio contra entrega (NO es factura).
+// Sirve para que el domiciliario marque qué se queda el cliente y qué devuelve.
+export function imprimirComprobanteEntrega(entrega) {
+  const fecha = new Date(entrega.fecha_entrega || entrega.fecha).toLocaleString('es-CO', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+
+  const filas = (entrega.items || [])
+    .map(
+      (i) => `
+      <tr>
+        <td>${escapar(i.nombre)}${i.talla ? ` (${escapar(i.talla)})` : ''}${i.sede_origen ? `<br><small>Sale de: ${escapar(i.sede_origen)}</small>` : ''}</td>
+        <td class="c">${i.cantidad}</td>
+        <td class="r">${formato(i.precio_unitario)}</td>
+      </tr>`,
+    )
+    .join('')
+
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Entrega ${entrega.numero}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; }
+  body {
+    width: 66mm;
+    min-height: 120mm;
+    margin: 0 auto;
+    padding: 6mm 2mm 8mm;
+    font-family: 'Segoe UI', Roboto, Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #111;
+  }
+  .logos { display: flex; align-items: center; justify-content: center; gap: 2mm; margin-bottom: 3mm; }
+  .logos img { width: 10mm; height: auto; display: block; }
+  .logos img.main { width: 13mm; }
+  .center { text-align: center; }
+  h1 { font-size: 20px; letter-spacing: 2px; font-weight: 800; }
+  .brand-sub { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #444; margin-top: 1px; }
+  .aviso { margin-top: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #8a4b00; }
+  .line { border-top: 1.5px dashed #444; margin: 11px 0; }
+  .row { display: flex; justify-content: space-between; gap: 10px; margin: 5px 0; }
+  .row span:first-child { color: #555; }
+  .row b, .row span:last-child { font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+  th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: #444; border-bottom: 1.5px solid #333; padding-bottom: 6px; }
+  td { padding: 6px 0; vertical-align: top; overflow-wrap: anywhere; }
+  th:first-child, td:first-child { width: 58%; padding-right: 4px; }
+  th.c, td.c { width: 14%; text-align: center; }
+  th.r, td.r { width: 28%; text-align: right; }
+  .check { margin-top: 10px; font-size: 12px; }
+  .check p { margin: 8px 0; }
+  .firma { margin-top: 22px; border-top: 1px solid #333; padding-top: 3px; font-size: 11px; text-align: center; color: #444; }
+  .total { margin-top: 7px; font-size: 19px; font-weight: 800; }
+  @media print { @page { margin: 0; } }
+</style>
+</head>
+<body>
+  <div class="logos">
+    <img src="${logoAkron}" alt="Akron" />
+    <img src="${logoPraga}" alt="Praga" class="main" />
+    <img src="${logoWoman}" alt="Praga Woman" />
+  </div>
+  <div class="center">
+    <h1>PRAGA</h1>
+    <p class="brand-sub">Medellín</p>
+    <p class="aviso">Comprobante de entrega · no es factura</p>
+  </div>
+  <div class="line"></div>
+  <div class="row"><span>Entrega</span><b>${escapar(entrega.numero)}</b></div>
+  <div class="row"><span>Fecha</span><span>${fecha}</span></div>
+  <div class="row"><span>Cliente</span><span>${escapar(entrega.cliente?.nombre || '—')}</span></div>
+  ${(entrega.telefono || entrega.cliente?.telefono) ? `<div class="row"><span>Teléfono</span><span>${escapar(entrega.telefono || entrega.cliente.telefono)}</span></div>` : ''}
+  ${entrega.direccion ? `<div class="row"><span>Dirección</span><span>${escapar(entrega.direccion)}</span></div>` : ''}
+  <div class="row"><span>Sede</span><span>${escapar(entrega.sede)}</span></div>
+  <div class="row"><span>Vendedor</span><span>${escapar(entrega.empleado?.nombre || '—')}</span></div>
+  <div class="line"></div>
+  <table>
+    <thead>
+      <tr><th>Producto</th><th class="c">Cant</th><th class="r">Valor</th></tr>
+    </thead>
+    <tbody>${filas}</tbody>
+  </table>
+  <div class="line"></div>
+  <div class="row total"><span>TOTAL</span><span>${formato(entrega.total)}</span></div>
+  <div class="check">
+    <p>Se queda con: ________________________________</p>
+    <p>Devuelve: ____________________________________</p>
+    <p>Firma cliente: _______________________________</p>
+  </div>
+  <p class="firma">Cobrar solo lo que se lleva · facturar en el panel</p>
+  <script>
+    window.addEventListener('load', function () {
+      var imgs = Array.prototype.slice.call(document.images);
+      var listas = imgs.map(function (img) {
+        return img.complete ? Promise.resolve() : new Promise(function (r) { img.onload = img.onerror = r; });
+      });
+      Promise.all(listas).then(function () {
+        setTimeout(function () { window.print(); }, 200);
+      });
+    });
+  </script>
+</body>
+</html>`
+
+  const w = window.open('', '_blank', 'width=360,height=640')
+  if (!w) return
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+}

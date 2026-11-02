@@ -41,6 +41,7 @@ class DevolucionController extends Controller
             'cambios.*.cantidad' => 'required|integer|min:1',
             'cambios.*.precio_unitario' => 'required|integer|min:0',
             'metodo_pago' => 'nullable|string',
+            'monto_pagado' => 'nullable|integer|min:0',
             'motivo' => 'nullable|string',
         ]);
 
@@ -48,6 +49,15 @@ class DevolucionController extends Controller
             DB::beginTransaction();
 
             $tipo = $request->tipo ?? 'cambio';
+            $esGestor = $this->esGestor($request);
+
+            // Los cajeros solo pueden cambiar prendas. La devolución de dinero
+            // queda reservada para administración/dueño.
+            if (!$esGestor && $tipo === 'reembolso') {
+                throw new \Exception(
+                    'Los cajeros solo pueden registrar cambios de prendas, no devoluciones de dinero.'
+                );
+            }
 
             // Sede de la que salen los productos del cambio: si no se indica, es
             // la misma sede donde se recibe la devolución.
@@ -107,6 +117,7 @@ class DevolucionController extends Controller
             }
 
             $diferencia = $totalCambio - $totalDevuelto;
+            $montoPagado = $request->filled('monto_pagado') ? (int) $request->monto_pagado : null;
 
             if ($tipo === 'reembolso') {
                 if (count($cambiosDetalle) > 0) {
@@ -115,15 +126,32 @@ class DevolucionController extends Controller
                 if (!$request->metodo_pago) {
                     throw new \Exception('Indica el método por el que se entrega el dinero al cliente.');
                 }
+                $montoPagado = null;
             } else {
                 if (count($cambiosDetalle) === 0) {
                     throw new \Exception('Debes agregar al menos un producto de cambio.');
                 }
                 if ($diferencia < 0) {
-                    throw new \Exception('El cambio debe ser de igual o mayor valor que lo devuelto.');
+                    throw new \Exception(
+                        $esGestor
+                            ? 'El cambio debe ser de igual o mayor valor que lo devuelto.'
+                            : 'No se devuelve dinero: el producto nuevo debe ser de igual o mayor valor que lo devuelto.'
+                    );
                 }
-                if ($diferencia > 0 && !$request->metodo_pago) {
-                    throw new \Exception('El método de pago es obligatorio cuando el cambio supera el valor devuelto.');
+                if ($diferencia > 0) {
+                    if (!$request->metodo_pago) {
+                        throw new \Exception('El método de pago es obligatorio cuando el cambio supera el valor devuelto.');
+                    }
+                    // Compatibilidad con clientes anteriores: si no envían el
+                    // monto, se asume que pagó la diferencia exacta.
+                    if ($montoPagado === null) {
+                        $montoPagado = $diferencia;
+                    }
+                    if ($montoPagado < $diferencia) {
+                        throw new \Exception('El monto que entregó el cliente no puede ser menor a la diferencia.');
+                    }
+                } else {
+                    $montoPagado = null;
                 }
             }
 
@@ -139,6 +167,7 @@ class DevolucionController extends Controller
                 'total_devuelto' => $totalDevuelto,
                 'total_cambio' => $totalCambio,
                 'diferencia' => $diferencia,
+                'monto_pagado' => $montoPagado,
                 'metodo_pago' => $tipo === 'reembolso' ? $request->metodo_pago : ($diferencia > 0 ? $request->metodo_pago : null),
                 'motivo' => $request->motivo ?? null,
             ]);
@@ -241,6 +270,7 @@ class DevolucionController extends Controller
     // Historial de devoluciones con paginación y filtros (estilo ventas)
     public function index(Request $request)
     {
+        $esGestor = $this->esGestor($request);
         $query = Devolucion::with(['empleado', 'sede', 'sedeCambio', 'venta', 'detalles.variante.producto'])->orderByDesc('id');
 
         if ($request->filled('periodo')) {
@@ -258,6 +288,10 @@ class DevolucionController extends Controller
         if ($request->filled('tipo')) {
             $query->where('tipo', $request->tipo);
         }
+        // Los cajeros solo ven y registran cambios de prendas.
+        if (!$esGestor) {
+            $query->where('tipo', 'cambio');
+        }
 
         $perPage = (int) ($request->per_page ?? 10);
         $paginated = $query->paginate($perPage);
@@ -266,7 +300,9 @@ class DevolucionController extends Controller
             'totalDevuelto' => (int) (clone $query)->sum('total_devuelto'),
             'totalCambio' => (int) (clone $query)->sum('total_cambio'),
             // Dinero entregado al cliente en reembolsos internos (descuenta de ingresos)
-            'totalReembolsado' => (int) (clone $query)->where('tipo', 'reembolso')->sum('total_devuelto'),
+            'totalReembolsado' => $esGestor
+                ? (int) (clone $query)->where('tipo', 'reembolso')->sum('total_devuelto')
+                : 0,
             'numDevoluciones' => (int) (clone $query)->count(),
         ];
 
@@ -287,12 +323,17 @@ class DevolucionController extends Controller
     }
 
     // Detalle de una devolución con sus artículos
-    public function show($id)
+    public function show(Request $request, $id)
     {
         $devolucion = Devolucion::with(['empleado', 'sede', 'sedeCambio', 'venta', 'detalles.variante.producto'])
             ->find($id);
 
         if (!$devolucion) {
+            return response()->json(['error' => 'Devolución no encontrada'], 404);
+        }
+
+        // Los cajeros no pueden ver devoluciones de dinero.
+        if (!$this->esGestor($request) && ($devolucion->tipo ?? 'cambio') === 'reembolso') {
             return response()->json(['error' => 'Devolución no encontrada'], 404);
         }
 
@@ -371,6 +412,13 @@ class DevolucionController extends Controller
         return array_values(array_filter($buckets, fn ($b) => $b['cantidad'] > 0));
     }
 
+    // Cajero = solo cambios de prendas; admin/dueño pueden reembolsar dinero.
+    private function esGestor(Request $request): bool
+    {
+        $rol = strtolower(trim((string) optional($request->user())->rol));
+        return in_array($rol, ['admin', 'dueno'], true);
+    }
+
     private function formatear(Devolucion $d, bool $conDetalle = false): array
     {
         $detalles = $d->detalles->map(function ($det) {
@@ -403,6 +451,12 @@ class DevolucionController extends Controller
             'total_devuelto' => (int) $d->total_devuelto,
             'total_cambio' => (int) $d->total_cambio,
             'diferencia' => (int) $d->diferencia,
+            'monto_pagado' => $d->monto_pagado !== null ? (int) $d->monto_pagado : null,
+            'vuelto' => (($d->tipo ?? 'cambio') === 'cambio'
+                && (int) $d->diferencia > 0
+                && $d->monto_pagado !== null)
+                ? max(0, (int) $d->monto_pagado - (int) $d->diferencia)
+                : 0,
             'reembolsado' => ($d->tipo ?? 'cambio') === 'reembolso' ? (int) $d->total_devuelto : null,
             'metodo_pago' => $d->metodo_pago,
             'motivo' => $d->motivo,

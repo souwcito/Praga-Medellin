@@ -60,8 +60,9 @@ const CAMPOS_INICIALES = {
 }
 
 // Categoría → código de prenda (PRENDA del SKU). Las categorías que NO están
-// aquí se manejan con SKU manual (Relojes, Mochos, Pantalonetas, Correas, etc.
-// y el Jeans de hombre).
+// aquí se manejan con SKU manual (Mochos, Pantalonetas, Correas, etc. y el
+// Jeans de hombre). Los relojes originales también van con SKU manual; solo la
+// línea "Relojes 1.1" usa el código automático (ver PRENDA_POR_SUBCATEGORIA).
 const PRENDA_POR_CATEGORIA = {
   // Hombre
   Gorras: 'GOR',
@@ -91,6 +92,12 @@ const PRENDA_POR_CATEGORIA = {
 // sigue con SKU manual.
 const PRENDA_POR_CATALOGO_CATEGORIA = {
   'mujer|Jeans': 'JEA',
+}
+
+// Subcategorías que usan SKU automático aunque su categoría no lo tenga.
+// Relojes 1.1: PRENDA (REL) + marca + estilo + calidad + color.
+const PRENDA_POR_SUBCATEGORIA = {
+  'Relojes 1.1': 'REL',
 }
 
 // Categorías donde el producto se puede marcar como "Unitalla" (una sola
@@ -314,6 +321,7 @@ export default function Productos() {
     return normalizarTallaPara(talla, catId, subId)
   }
   const prendaActual =
+    PRENDA_POR_SUBCATEGORIA[subcategoriaFormActual?.nombre] ||
     PRENDA_POR_CATALOGO_CATEGORIA[`${catalogoForm}|${categoriaFormActual?.nombre}`] ||
     PRENDA_POR_CATEGORIA[categoriaFormActual?.nombre] ||
     null
@@ -510,6 +518,14 @@ export default function Productos() {
       subcategoria_id: String(p.subcategoria_id || ''),
       imagenes: p.imagenes?.length ? p.imagenes : p.imagen_url ? [p.imagen_url] : [],
     })
+    const subEdit = subcategorias.find((s) => s.id === Number(p.subcategoria_id))
+    setCodigo({
+      marcaId: '',
+      estiloId: '',
+      // En Relojes 1.1 la calidad ya queda seleccionada.
+      calidad: subEdit?.nombre === 'Relojes 1.1' ? '3' : '',
+      colorId: '',
+    })
     setCatalogoForm(p.catalogo || 'hombre')
     setVariantesForm(construirVariantes(p.categoria_id, p.subcategoria_id, p.variantes))
     setForm(p)
@@ -544,6 +560,13 @@ export default function Productos() {
   function cambiarSubcategoria(e) {
     const valor = e.target.value
     setCampos((c) => ({ ...c, subcategoria_id: valor }))
+    const sub = subcategorias.find((s) => s.id === Number(valor))
+    // Relojes 1.1 siempre es calidad 1.1 (valor 3): se deja seleccionada.
+    setCodigo((c) => ({
+      ...c,
+      estiloId: '',
+      calidad: sub?.nombre === 'Relojes 1.1' ? '3' : '',
+    }))
     if (valor) {
       setVariantesForm(construirVariantes(campos.categoria_id, valor))
     } else {

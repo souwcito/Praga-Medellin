@@ -16,6 +16,7 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\DevolucionController;
 use App\Http\Controllers\ApartadoController;
+use App\Http\Controllers\EntregaController;
 use App\Http\Controllers\DuenoController;
 use App\Http\Controllers\MarcaController;
 use App\Http\Controllers\ColorController;
@@ -56,9 +57,11 @@ Route::post('/wompi/webhook', [PedidoController::class, 'webhook'])->middleware(
 Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
     Route::get('/empleados', [EmpleadoController::class, 'index']);
 
-    // Inventario: el POS usa /inventario (stock de una sede); el resto de la
-    // gestión de inventario y productos solo para admin/dueno.
+    // Inventario: el POS usa /inventario (stock de una sede) y
+    // /inventario/completo (stock de todas las sedes para vender entre sedes);
+    // la gestión de inventario y productos es solo para admin/dueno.
     Route::get('/inventario', [InventarioController::class, 'index']);
+    Route::get('/inventario/completo', [InventarioController::class, 'completo']);
 
     // Catálogo de códigos (marcas, estilos, colores) para armar el SKU. Lectura.
     Route::get('/marcas', [MarcaController::class, 'index']);
@@ -66,7 +69,7 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
     Route::get('/estilos', [EstiloController::class, 'index']);
 
     // Gestión (admin/dueno): crear/editar/borrar productos (precios), matriz
-    // completa de inventario, ajustes de stock, devoluciones e imágenes.
+    // completa de inventario, ajustes de stock e imágenes.
     Route::middleware('role:admin,dueno')->group(function () {
         // Productos (escritura)
         Route::post('/productos', [ProductoController::class, 'store']);
@@ -83,13 +86,7 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
         Route::put('/categorias/{id}/portada', [CategoriaController::class, 'setPortada']);
 
         // Inventario (gestión)
-        Route::get('/inventario/completo', [InventarioController::class, 'completo']);
         Route::post('/inventario/ajustes', [InventarioController::class, 'ajustes']);
-
-        // Devoluciones
-        Route::get('/devoluciones', [DevolucionController::class, 'index']);
-        Route::post('/devoluciones', [DevolucionController::class, 'store']);
-        Route::get('/devoluciones/{id}', [DevolucionController::class, 'show']);
 
         // Imágenes (se suben al editar un producto)
         Route::post('/imagenes', [ImagenController::class, 'store']);
@@ -115,6 +112,12 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
     Route::get('/ventas', [VentaController::class, 'index']);
     Route::get('/ventas/buscar', [VentaController::class, 'buscarPorFactura']);
 
+    // Devoluciones y cambios: cajeros solo cambios de prendas; admin/dueño
+    // también pueden registrar reembolsos internos.
+    Route::get('/devoluciones', [DevolucionController::class, 'index']);
+    Route::post('/devoluciones', [DevolucionController::class, 'store']);
+    Route::get('/devoluciones/{id}', [DevolucionController::class, 'show']);
+
     // Informes
     Route::get('/dashboard', [DashboardController::class, 'resumen']);
     Route::get('/comisiones', [ComisionController::class, 'index']);
@@ -132,6 +135,15 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->group(function () {
     Route::put('/apartados/{id}', [ApartadoController::class, 'update']);
     Route::post('/apartados/{id}/abonos', [ApartadoController::class, 'abonar']);
     Route::post('/apartados/{id}/cancelar', [ApartadoController::class, 'cancelar']);
+
+    // Domicilios contra entrega (entregas en prueba) — cajeros y admin.
+    // El contador va antes que /{id} para que no lo capture la ruta dinámica.
+    Route::get('/entregas/resumen', [EntregaController::class, 'resumen']);
+    Route::get('/entregas', [EntregaController::class, 'index']);
+    Route::post('/entregas', [EntregaController::class, 'store']);
+    Route::get('/entregas/{id}', [EntregaController::class, 'show']);
+    Route::post('/entregas/{id}/facturar', [EntregaController::class, 'facturar']);
+    Route::post('/entregas/{id}/cancelar', [EntregaController::class, 'cancelar']);
 });
 
 // 4. Panel del DUEÑO (solo rol 'dueno'): costos y valoración de mercancía

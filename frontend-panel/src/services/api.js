@@ -282,6 +282,16 @@ export const pedidosApi = {
   tomar: (id, tomadoPor) => request('POST', `/pedidos/${id}/tomar`, { tomado_por: tomadoPor }),
 }
 
+export const entregasApi = {
+  // Domicilios contra entrega / entregas en prueba (pendientes por facturar).
+  list: (params) => request('GET', '/entregas', params),
+  resumen: () => request('GET', '/entregas/resumen'),
+  create: (payload) => request('POST', '/entregas', payload),
+  detalle: (id) => request('GET', `/entregas/${id}`),
+  facturar: (id, payload) => request('POST', `/entregas/${id}/facturar`, payload),
+  cancelar: (id) => request('POST', `/entregas/${id}/cancelar`),
+}
+
 export const duenoApi = {
   // Panel del dueño: resumen por sede + lista de productos con costo/stock
   getResumen: () => request('GET', '/dueno/resumen'),
@@ -326,6 +336,7 @@ export default {
   clientesApi,
   apartadosApi,
   pedidosApi,
+  entregasApi,
   duenoApi,
   codigosApi,
 }

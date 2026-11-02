@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useCategorias } from '../hooks/useData'
+import { useCategorias, useEntregasResumen } from '../hooks/useData'
 import BrandLogos from './BrandLogos'
 import {
   CartIcon,
@@ -17,6 +17,7 @@ import {
   UserIcon,
   SwapIcon,
   TagIcon,
+  TruckIcon,
   XIcon,
 } from './icons'
 
@@ -24,17 +25,18 @@ import {
 const navItemsComunes = [
   { to: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
   { to: '/pos', label: 'Punto de venta', icon: CartIcon },
+  { to: '/entregas', label: 'Domicilios', icon: TruckIcon },
   { to: '/apartados', label: 'Plan Separe', icon: TagIcon },
   { to: '/ventas', label: 'Ventas', icon: ReceiptIcon },
+  { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
   { to: '/comisiones', label: 'Comisiones', icon: CoinsIcon },
 ]
 
-// Gestión (inventario y devoluciones): solo admin/dueno
+// Gestión (inventario): solo admin/dueno
 const navItemsGestion = [
   { to: '/escaner', label: 'Escáner', icon: ScanIcon },
   { to: '/inventario', label: 'Inventario General', icon: LayersIcon },
   { to: '/codigos', label: 'Códigos (SKU)', icon: TagIcon },
-  { to: '/devoluciones', label: 'Devoluciones', icon: SwapIcon },
 ]
 
 const comercioItems = [
@@ -79,6 +81,11 @@ function NavItem({ item, onNavigate }) {
           />
           <Icon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
           {item.label}
+          {item.badge > 0 && (
+            <span className="ml-auto rounded-full bg-metal px-1.5 py-0.5 text-[10px] font-bold leading-none text-dark">
+              {item.badge}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -132,6 +139,7 @@ function CatalogoGrupo({ catalogo, titulo, lista, abierto, alternar, onNavigate 
 export default function Layout() {
   const { user, logout } = useAuth()
   const { data: categorias = [] } = useCategorias()
+  const { data: entregasResumen } = useEntregasResumen()
   const [catalogoAbierto, setCatalogoAbierto] = useState(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
 
@@ -244,7 +252,15 @@ export default function Layout() {
                   Gestión
                 </p>
                 {navItemsComunes.map((item) => (
-                  <NavItem key={item.to} item={item} onNavigate={cerrarMenu} />
+                  <NavItem
+                    key={item.to}
+                    item={
+                      item.to === '/entregas'
+                        ? { ...item, badge: entregasResumen?.cantidad || 0 }
+                        : item
+                    }
+                    onNavigate={cerrarMenu}
+                  />
                 ))}
                 {esAdmin &&
                   navItemsGestion.map((item) => (

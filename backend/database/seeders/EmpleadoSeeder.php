@@ -11,11 +11,13 @@ class EmpleadoSeeder extends Seeder
     {
         // [nombre, sede_id, rol] — sedes: 1=Praga Woman, 2=Akron Store, 3=Praga Aranjuez, 4=Praga Andalucia
         $empleados = [
-            ['Michael', 3, 'cajero'],
+            ['María José', 3, 'cajero'],
             ['Miguel', 1, 'cajero'],
             ['Liseth', 4, 'cajero'],
+            ['Paulina', 4, 'cajero'],
+            ['Camila', 2, 'cajero'],
             ['Bibiana', 4, 'cajero'],
-            ['Sara', 2, 'cajero'],
+            ['Maicol', 3, 'cajero'],
             // Administrador que también factura en el POS (sede base: Aranjuez)
             ['Oscar', 3, 'administrador'],
         ];

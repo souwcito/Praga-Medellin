@@ -29,6 +29,94 @@ const fechaLarga = (iso) =>
     minute: '2-digit',
   })
 
+// Sedes de origen de las prendas de una venta. Puede haber más de una cuando
+// la factura mezcla productos de sedes distintas.
+function origenesVenta(v) {
+  const set = new Set()
+  for (const it of v.items || []) {
+    const sede = it.sede_origen || v.sede_venta
+    if (sede) set.add(sede)
+  }
+  return [...set]
+}
+
+const esMultiSede = (v) => origenesVenta(v).length > 1
+
+const claveItem = (it) => it.variante_id ?? `${it.nombre}|${it.talla ?? ''}`
+
+const nombreItem = (it) => `${it.nombre}${it.talla ? ` (${it.talla})` : ''}`
+
+// Estado final de la venta después de devoluciones/cambios: lo que el cliente
+// realmente se llevó.
+function itemsFinales(v) {
+  const mapa = new Map()
+
+  for (const it of v.items || []) {
+    const k = claveItem(it)
+    const prev = mapa.get(k)
+    mapa.set(k, {
+      ...it,
+      cantidad: (prev?.cantidad || 0) + Number(it.cantidad || 0),
+      es_cambio: false,
+    })
+  }
+
+  const devoluciones = [...(v.devoluciones || [])].sort(
+    (a, b) =>
+      new Date(a.fecha).getTime() - new Date(b.fecha).getTime() ||
+      Number(a.id) - Number(b.id),
+  )
+
+  for (const d of devoluciones) {
+    for (const it of d.items || []) {
+      const k = claveItem(it)
+      const prev = mapa.get(k)
+
+      if (it.tipo === 'devuelto') {
+        const cantidad = Math.max(0, (prev?.cantidad || 0) - Number(it.cantidad || 0))
+        if (cantidad > 0) mapa.set(k, { ...prev, cantidad })
+        else mapa.delete(k)
+      } else if (it.tipo === 'cambio') {
+        mapa.set(k, {
+          ...(prev || {}),
+          ...it,
+          cantidad: (prev?.cantidad || 0) + Number(it.cantidad || 0),
+          es_cambio: true,
+          // La prenda nueva sale de la sede del cambio.
+          sede_origen: it.sede_origen || d.sede_cambio || null,
+        })
+      }
+    }
+  }
+
+  return [...mapa.values()].filter((it) => it.cantidad > 0)
+}
+
+function totalFinalVenta(v) {
+  return itemsFinales(v).reduce(
+    (s, it) => s + (Number(it.precio_unitario) || 0) * Number(it.cantidad || 0),
+    0,
+  )
+}
+
+// Prendas del último movimiento: lo último que se llevó el cliente en un cambio.
+function ultimaPrenda(v) {
+  const devoluciones = [...(v.devoluciones || [])].sort(
+    (a, b) =>
+      new Date(b.fecha).getTime() - new Date(a.fecha).getTime() ||
+      Number(b.id) - Number(a.id),
+  )
+  const ultima = devoluciones[0]
+  if (!ultima || ultima.tipo !== 'cambio') return []
+  return (ultima.items || []).filter((it) => it.tipo === 'cambio')
+}
+
+function resumenUltima(v) {
+  const ultima = ultimaPrenda(v)
+  const lista = ultima.length ? ultima : itemsFinales(v)
+  return lista.map(nombreItem).join(', ') || '—'
+}
+
 const pad2 = (n) => String(n).padStart(2, '0')
 
 const hoyLocalISO = () => {
@@ -591,6 +679,9 @@ export default function Ventas() {
           <ul className="divide-y divide-line">
             {filas.map((v) => {
               const abierta = abiertaId === v.id
+              const ultima = v.tiene_devoluciones ? resumenUltima(v) : ''
+              const itemsMostrar = v.tiene_devoluciones ? itemsFinales(v) : v.items
+              const totalFinal = v.tiene_devoluciones ? totalFinalVenta(v) : null
               return (
                 <li key={v.id}>
                   <button
@@ -605,7 +696,25 @@ export default function Ventas() {
                       <span className="font-medium text-ink">{v.factura || '—'}</span>
                       <span className="text-ink">{fechaLarga(v.fecha)}</span>
                       <span className="truncate text-ink">{v.empleado.nombre}</span>
-                      <span className="truncate text-ink-2">{v.sede_venta}</span>
+                      <span className="min-w-0 text-ink-2">
+                        <span className="block truncate">{v.sede_venta}</span>
+                        {v.tiene_devoluciones && ultima !== '—' && (
+                          <span
+                            className="block truncate text-[10px] font-semibold text-emerald-700"
+                            title={`Última prenda: ${ultima}`}
+                          >
+                            Última: {ultima}
+                          </span>
+                        )}
+                        {esMultiSede(v) && (
+                          <span
+                            className="block truncate text-[10px] font-semibold text-amber-700"
+                            title={`Sale de: ${origenesVenta(v).join(', ')}`}
+                          >
+                            Sale de: {origenesVenta(v).join(' + ')}
+                          </span>
+                        )}
+                      </span>
                       <span className="flex flex-wrap justify-center gap-1">
                         {(v.pagos || []).map((p) => (
                           <span
@@ -616,13 +725,23 @@ export default function Ventas() {
                           </span>
                         ))}
                       </span>
-                      <span className="justify-self-center">
+                      <span className="flex flex-col items-center gap-1 justify-self-center">
                         <span className="inline-flex rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium capitalize text-ink-2">
                           {v.tipo}
                         </span>
+                        {v.tiene_devoluciones && (
+                          <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                            Devolución
+                          </span>
+                        )}
                       </span>
                       <span className="text-right">
                         <span className="font-semibold text-ink">{formato(v.total)}</span>
+                        {totalFinal != null && totalFinal !== v.total && (
+                          <span className="block text-[10px] font-semibold text-emerald-700">
+                            Final {formato(totalFinal)}
+                          </span>
+                        )}
                         {v.descuento_total > 0 && (
                           <span className="block text-[10px] font-medium text-emerald-700">
                             Dcto −{formato(v.descuento_total)}
@@ -643,7 +762,14 @@ export default function Ventas() {
                           <span className="truncate font-semibold text-ink">
                             {v.factura || '—'}
                           </span>
-                          <span className="shrink-0 font-bold text-ink">{formato(v.total)}</span>
+                          <div className="shrink-0 text-right">
+                            <span className="font-bold text-ink">{formato(v.total)}</span>
+                            {totalFinal != null && totalFinal !== v.total && (
+                              <span className="block text-[10px] font-semibold text-emerald-700">
+                                Final {formato(totalFinal)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <p className="mt-0.5 text-xs text-ink-2">{fechaLarga(v.fecha)}</p>
                         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
@@ -653,7 +779,25 @@ export default function Ventas() {
                           <span className="inline-flex shrink-0 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium capitalize">
                             {v.tipo}
                           </span>
+                          {v.tiene_devoluciones && (
+                            <span className="inline-flex shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                              Devolución
+                            </span>
+                          )}
+                          {esMultiSede(v) && (
+                            <span
+                              className="inline-flex shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
+                              title={`Sale de: ${origenesVenta(v).join(', ')}`}
+                            >
+                              Multi-sede
+                            </span>
+                          )}
                         </p>
+                        {v.tiene_devoluciones && ultima !== '—' && (
+                          <p className="mt-1 truncate text-[11px] font-semibold text-emerald-700">
+                            Última: {ultima}
+                          </p>
+                        )}
                       </div>
                       <ChevronDownIcon
                         className={`h-4 w-4 shrink-0 text-ink-2/70 transition-transform duration-200 ${abierta ? 'rotate-180' : ''}`}
@@ -771,13 +915,16 @@ export default function Ventas() {
                             </div>
                           )}
                           <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-2">
-                            Resumen de la venta
+                            {v.tiene_devoluciones
+                              ? 'Productos que se llevó finalmente'
+                              : 'Resumen de la venta'}
                             <span className="inline-flex rounded-full border border-line bg-white px-2 py-0.5 font-medium normal-case text-ink-2">
-                              {v.items.length} {v.items.length === 1 ? 'artículo' : 'artículos'}
+                              {itemsMostrar.length}{' '}
+                              {itemsMostrar.length === 1 ? 'artículo' : 'artículos'}
                             </span>
                           </p>
                           <ul className="space-y-2">
-                            {v.items.map((it, idx) => (
+                            {itemsMostrar.map((it, idx) => (
                               <li
                                 key={`${it.detalle_id ?? it.variante_id ?? 'x'}-${idx}`}
                                 className="flex items-center gap-3 rounded-xl border border-line bg-white p-2.5"
@@ -795,11 +942,28 @@ export default function Ventas() {
                                         Relámpago
                                       </span>
                                     )}
+                                    {it.es_cambio && (
+                                      <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+                                        Cambio
+                                      </span>
+                                    )}
                                   </p>
                                   <p className="text-xs text-ink-2">
                                     {it.talla ? `Talla ${it.talla} · ` : ''}
                                     {it.cantidad} × {formato(it.precio_unitario)}
                                   </p>
+                                  {!it.es_relampago && (
+                                    <p
+                                      className={`mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                        it.sede_origen && it.sede_origen !== v.sede_venta
+                                          ? 'bg-amber-50 text-amber-800'
+                                          : 'bg-surface-2 text-ink-2'
+                                      }`}
+                                    >
+                                      <StoreIcon className="h-3 w-3" />
+                                      Sale de: {it.sede_origen || v.sede_venta}
+                                    </p>
+                                  )}
                                   {it.es_relampago && it.nota && (
                                     <p className="text-[11px] text-ink-2/70">{it.nota}</p>
                                   )}
@@ -810,6 +974,53 @@ export default function Ventas() {
                               </li>
                             ))}
                           </ul>
+                                                    {(v.devoluciones || []).length > 0 && (
+                            <div className="mt-3 space-y-2">
+                              {v.devoluciones.map((d) => (
+                                <div
+                                  key={d.id}
+                                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-ink-2"
+                                >
+                                  <span className="font-semibold text-amber-800">
+                                    {d.tipo === 'reembolso'
+                                      ? 'Devolución de dinero'
+                                      : 'Devolución / cambio'}{' '}
+                                    · {d.numero_interno}
+                                  </span>
+                                  <span>{fechaLarga(d.fecha)}</span>
+                                  <span>Vendedor: {d.empleado}</span>
+                                  {d.tipo === 'cambio' && d.diferencia > 0 && (
+                                    <span>
+                                      Diferencia: <b className="text-ink">{formato(d.diferencia)}</b>
+                                      {d.metodo_pago
+                                        ? ` · ${METODO_LABEL[d.metodo_pago] || d.metodo_pago}`
+                                        : ''}
+                                      {d.monto_pagado != null
+                                        ? ` · Recibido ${formato(d.monto_pagado)}`
+                                        : ''}
+                                      {d.vuelto > 0 ? ` · Vuelto ${formato(d.vuelto)}` : ''}
+                                    </span>
+                                  )}
+                                  {d.tipo === 'reembolso' && (
+                                    <span>
+                                      Dinero entregado:{' '}
+                                      <b className="text-red-700">{formato(d.total_devuelto)}</b>
+                                      {d.metodo_pago
+                                        ? ` · ${METODO_LABEL[d.metodo_pago] || d.metodo_pago}`
+                                        : ''}
+                                    </span>
+                                  )}
+                                  {d.sede_cambio && d.sede_cambio !== v.sede_venta && (
+                                    <span>
+                                      Nuevo producto salió de:{' '}
+                                      <b className="text-ink">{d.sede_cambio}</b>
+                                    </span>
+                                  )}
+                                  {d.motivo && <span>Motivo: {d.motivo}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <div className="mt-3 flex flex-wrap items-center justify-end gap-3 rounded-xl bg-white px-4 py-3">
                             {v.descuento_total > 0 && (
                               <span className="text-xs text-emerald-700">
@@ -817,8 +1028,17 @@ export default function Ventas() {
                               </span>
                             )}
                             <span className="text-right">
-                              <span className="block text-xs text-ink-2">Total pagado</span>
-                              <span className="text-lg font-bold text-ink">{formato(v.total)}</span>
+                              <span className="block text-xs text-ink-2">
+                                {v.tiene_devoluciones ? 'Total de lo que se llevó' : 'Total pagado'}
+                              </span>
+                              <span className="text-lg font-bold text-ink">
+                                {formato(v.tiene_devoluciones ? totalFinal : v.total)}
+                              </span>
+                              {v.tiene_devoluciones && totalFinal !== v.total && (
+                                <span className="block text-[10px] text-ink-2">
+                                  Venta original: {formato(v.total)}
+                                </span>
+                              )}
                             </span>
                           </div>
                           {v.nota && (

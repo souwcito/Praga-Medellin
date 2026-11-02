@@ -34,6 +34,9 @@ class VentaController extends Controller
             'nota' => 'nullable|string|max:500',
             'items' => 'required|array',
             'items.*.variante_id' => 'nullable|integer|exists:variantes,id',
+            // Sede de la que sale físicamente la unidad. Si no viene, se usa la
+            // sede de facturación (comportamiento anterior).
+            'items.*.sede_origen_id' => 'nullable|integer|exists:sedes,id',
             'items.*.nombre' => 'nullable|string|max:255',
             'items.*.nota' => 'nullable|string|max:500',
             'items.*.cantidad' => 'required|integer|min:1',
@@ -80,6 +83,9 @@ class VentaController extends Controller
                 $esRelampago = empty($item['variante_id']);
                 $lineas[] = [
                     'variante_id' => $esRelampago ? null : (int) $item['variante_id'],
+                    'sede_origen_id' => $esRelampago
+                        ? null
+                        : (int) ($item['sede_origen_id'] ?? $request->sede_venta_id),
                     'nombre' => $esRelampago ? trim((string) ($item['nombre'] ?? '')) : null,
                     'nota' => $esRelampago
                         ? (trim((string) ($item['nota'] ?? '')) ?: null)
@@ -108,13 +114,12 @@ class VentaController extends Controller
             ]);
 
             $itemsSalida = [];
+            $sedesAfectadas = [];
             foreach ($lineas as $linea) {
                 DetalleVenta::create([
                     'venta_id' => $venta->id,
                     'variante_id' => $linea['variante_id'],
-                    'sede_origen_id' => $linea['variante_id'] !== null
-                        ? $venta->sede_venta_id
-                        : null,
+                    'sede_origen_id' => $linea['sede_origen_id'],
                     'nombre' => $linea['nombre'],
                     'nota' => $linea['nota'],
                     'cantidad' => $linea['cantidad'],
@@ -126,22 +131,28 @@ class VentaController extends Controller
                 $esRelampago = $linea['variante_id'] === null;
 
                 if (!$esRelampago) {
-                    $inv = Inventario::where('sede_id', $venta->sede_venta_id)
+                    // Cada línea descuenta el stock de SU sede de origen: una
+                    // misma factura puede sacar productos de varias sedes.
+                    $inv = Inventario::where('sede_id', $linea['sede_origen_id'])
                         ->where('variante_id', $linea['variante_id'])
+                        ->lockForUpdate()
                         ->first();
                     if (!$inv) {
-                        throw new \Exception('La variante no tiene inventario en esta sede.');
+                        $sedeNombre = optional(Sede::find($linea['sede_origen_id']))->nombre ?? 'la sede';
+                        throw new \Exception("La variante no tiene inventario en {$sedeNombre}.");
                     }
                     if ($inv->stock < $linea['cantidad']) {
-                        throw new \Exception('Stock insuficiente para la variante solicitada.');
+                        $sedeNombre = optional(Sede::find($linea['sede_origen_id']))->nombre ?? 'la sede';
+                        throw new \Exception("Stock insuficiente en {$sedeNombre} para la variante solicitada.");
                     }
                     $inv->stock -= $linea['cantidad'];
                     $inv->save();
+                    $sedesAfectadas[$linea['sede_origen_id']] = true;
 
                     $variante = Variante::with('producto')->find($linea['variante_id']);
                     $itemsSalida[] = [
                         'variante_id' => $linea['variante_id'],
-                        'sede_origen_id' => $venta->sede_venta_id,
+                        'sede_origen_id' => $linea['sede_origen_id'],
                         'nombre' => $variante->producto->nombre,
                         'talla' => $variante->talla,
                         'es_relampago' => false,
@@ -177,8 +188,11 @@ class VentaController extends Controller
                 ]);
             }
 
-            // La venta descuenta stock: invalida la caché del stock de esa sede
-            Cache::forget(InventarioController::claveSede($venta->sede_venta_id));
+            // La venta descuenta stock: invalida la caché del stock de cada sede
+            // de la que salió algún producto (puede ser más de una).
+            foreach (array_keys($sedesAfectadas) as $sedeAfectada) {
+                Cache::forget(InventarioController::claveSede((int) $sedeAfectada));
+            }
 
             $factura = Factura::create([
                 'venta_id' => $venta->id,
@@ -470,6 +484,7 @@ class VentaController extends Controller
 
             $sedeId = (int) $venta->sede_venta_id;
             $unidadesDevueltas = 0;
+            $sedesAfectadas = [];
 
             foreach ($venta->detalles as $detalle) {
                 // Las líneas de venta relámpago no tienen variante ni stock.
@@ -478,13 +493,16 @@ class VentaController extends Controller
                 }
 
                 $cantidad = (int) $detalle->cantidad;
+                // Cada unidad vuelve a la sede de la que salió (venta multi-sede).
+                $sedeOrigenId = (int) ($detalle->sede_origen_id ?: $sedeId);
 
                 $inv = Inventario::firstOrCreate(
-                    ['sede_id' => $sedeId, 'variante_id' => $detalle->variante_id],
+                    ['sede_id' => $sedeOrigenId, 'variante_id' => $detalle->variante_id],
                     ['stock' => 0],
                 );
                 $inv->stock = (int) $inv->stock + $cantidad;
                 $inv->save();
+                $sedesAfectadas[$sedeOrigenId] = true;
 
                 $unidadesDevueltas += $cantidad;
             }
@@ -501,6 +519,9 @@ class VentaController extends Controller
             DB::commit();
 
             Cache::forget(InventarioController::claveSede($sedeId));
+            foreach (array_keys($sedesAfectadas) as $sedeAfectada) {
+                Cache::forget(InventarioController::claveSede((int) $sedeAfectada));
+            }
             $this->bumpCache();
 
             return response()->json([
@@ -581,6 +602,8 @@ class VentaController extends Controller
             'empleado', 'sedeVenta', 'factura',
             'apartado.cliente', 'apartado.items.variante.producto',
             'pagos', 'detalles.variante.producto', 'detalles.sedeOrigen',
+            'devoluciones.detalles.variante.producto',
+            'devoluciones.empleado', 'devoluciones.sedeCambio',
         ])->orderByDesc('id');
 
         if ($request->filled('fecha') && !$this->fechaValida((string) $request->fecha)) {
@@ -609,7 +632,6 @@ class VentaController extends Controller
 
         // Datos para que el panel sepa si una venta se puede revertir sin hacer
         // una consulta por fila: ventas online de Wompi y ventas con devoluciones.
-        $idsPagina = $paginated->pluck('id')->all();
         $facturasPagina = $paginated->pluck('numero_interno')->filter()->values()->all();
         $online = collect();
         if ($facturasPagina && Schema::hasColumn('pedidos', 'factura_numero')) {
@@ -617,11 +639,7 @@ class VentaController extends Controller
                 ->pluck('factura_numero')
                 ->flip();
         }
-        $conDevoluciones = $idsPagina
-            ? Devolucion::whereIn('venta_id', $idsPagina)->pluck('venta_id')->flip()
-            : collect();
-
-        $data = $paginated->map(function ($v) use ($online, $conDevoluciones) {
+        $data = $paginated->map(function ($v) use ($online) {
             return [
                 'id' => $v->id,
                 // Los abonos del Plan Separe no tienen factura FAC-: se muestra el
@@ -636,7 +654,7 @@ class VentaController extends Controller
                 'tipo' => $v->tipo,
                 'online' => $online->has($v->numero_interno) ||
                     optional($v->sedeVenta)->nombre === 'Online',
-                'tiene_devoluciones' => $conDevoluciones->has($v->id),
+                'tiene_devoluciones' => $v->devoluciones->isNotEmpty(),
                 'total' => (int) $v->total,
                 'nota' => $v->nota,
                 'descuento_total' => (int) $v->detalles->sum(fn ($d) => $d->descuento),
@@ -664,6 +682,10 @@ class VentaController extends Controller
                         'imagen_url' => $producto ? $this->imagenUrl($producto->imagen_url) : null,
                     ];
                 })->values(),
+                // Devoluciones y cambios: qué devolvió el cliente y qué se llevó.
+                'devoluciones' => $v->devoluciones
+                    ->map(fn ($d) => $this->formatearDevolucion($d))
+                    ->values(),
                 // Plan Separe: resumen del plan (para quién y qué se apartó).
                 'plan_separe' => $v->apartado ? [
                     'numero_interno' => $v->apartado->numero_interno,
@@ -818,6 +840,47 @@ class VentaController extends Controller
                 'neto' => $resumenDia['total'] - $devolucionesDiaResumen['reembolsado'],
             ]),
         ]);
+    }
+
+    // Formato de una devolución/cambio para mostrarla dentro de la venta.
+    private function formatearDevolucion(Devolucion $d): array
+    {
+        $items = $d->detalles->map(function ($det) {
+            $variante = $det->variante;
+            $producto = $variante ? $variante->producto : null;
+            return [
+                'id' => $det->id,
+                'tipo' => $det->tipo,
+                'variante_id' => $det->variante_id,
+                'nombre' => $producto ? $producto->nombre : 'Producto ' . $det->variante_id,
+                'talla' => $variante ? $variante->talla : null,
+                'cantidad' => (int) $det->cantidad,
+                'precio_unitario' => (int) $det->precio_unitario,
+                'subtotal' => (int) $det->cantidad * (int) $det->precio_unitario,
+                'imagen_url' => $producto ? $this->imagenUrl($producto->imagen_url) : null,
+            ];
+        })->values();
+
+        return [
+            'id' => $d->id,
+            'numero_interno' => $d->numero_interno,
+            'tipo' => $d->tipo ?? 'cambio',
+            'fecha' => $d->created_at->toISOString(),
+            'empleado' => optional($d->empleado)->nombre ?? '—',
+            'sede_cambio' => optional($d->sedeCambio)->nombre,
+            'total_devuelto' => (int) $d->total_devuelto,
+            'total_cambio' => (int) $d->total_cambio,
+            'diferencia' => (int) $d->diferencia,
+            'monto_pagado' => $d->monto_pagado !== null ? (int) $d->monto_pagado : null,
+            'vuelto' => (($d->tipo ?? 'cambio') === 'cambio'
+                && (int) $d->diferencia > 0
+                && $d->monto_pagado !== null)
+                ? max(0, (int) $d->monto_pagado - (int) $d->diferencia)
+                : 0,
+            'metodo_pago' => $d->metodo_pago,
+            'motivo' => $d->motivo,
+            'items' => $items,
+        ];
     }
 
     private function resumenVentas($ventas): array

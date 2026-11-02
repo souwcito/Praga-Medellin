@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { devolucionesApi, ventasApi } from '../services/api'
 import { useSedes, useEmpleados, useInventarioSede, useVentas, useDevoluciones, useDevolucionDetalle } from '../hooks/useData'
+import { useAuth } from '../hooks/useAuth'
 import PeriodFilter from '../components/PeriodFilter'
 import Modal from '../components/Modal'
 import { buscarVariantePorCodigo, coincideCodigoEtiqueta, coincideCodigoExacto } from '../utils/codigoEtiqueta'
@@ -60,6 +61,8 @@ const METODOS_PAGO = [
 
 export default function Devoluciones() {
   const [tab, setTab] = useState('registrar')
+  const { user } = useAuth()
+  const esGestor = ['admin', 'dueno'].includes(user?.rol)
 
   return (
     <div className="animate-fade-up mx-auto max-w-7xl">
@@ -69,7 +72,9 @@ export default function Devoluciones() {
             Devoluciones
           </h1>
           <p className="mt-1 text-sm text-ink-2">
-            Cambios y devoluciones internas en punto físico, con control de inventario.
+            {esGestor
+              ? 'Cambios y devoluciones internas en punto físico, con control de inventario.'
+              : 'Cambios de prendas en punto físico: el producto nuevo debe ser de igual o mayor valor.'}
           </p>
         </div>
       </div>
@@ -93,7 +98,11 @@ export default function Devoluciones() {
         ))}
       </div>
 
-      {tab === 'registrar' ? <Registrar /> : <Historial />}
+      {tab === 'registrar' ? (
+        <Registrar puedeReembolsar={esGestor} />
+      ) : (
+        <Historial puedeReembolsar={esGestor} />
+      )}
     </div>
   )
 }
@@ -102,7 +111,7 @@ export default function Devoluciones() {
 // Pestaña: Registrar
 // ---------------------------------------------------------------------------
 
-function Registrar() {
+function Registrar({ puedeReembolsar }) {
   const queryClient = useQueryClient()
   const [tipo, setTipo] = useState('cambio') // 'cambio' | 'reembolso'
   const { data: sedes = [] } = useSedes()
@@ -123,6 +132,7 @@ function Registrar() {
   const [detalleVentaId, setDetalleVentaId] = useState(null)
 
   const [metodoPago, setMetodoPago] = useState('')
+  const [montoPagado, setMontoPagado] = useState('')
   const [motivo, setMotivo] = useState('')
   const [confirmando, setConfirmando] = useState(false)
   const [registroError, setRegistroError] = useState(null)
@@ -160,6 +170,12 @@ function Registrar() {
   )
   const diferencia = totalCambio - totalDevuelto
 
+  // Se propone la diferencia exacta como monto recibido; el cajero escribe
+  // cuánto entregó realmente el cliente (puede ser más y se calcula el vuelto).
+  useEffect(() => {
+    setMontoPagado(tipo === 'cambio' && diferencia > 0 ? String(diferencia) : '')
+  }, [tipo, diferencia])
+
   const tieneDevuelto = devueltos.some((i) => i.cantidad > 0)
   const puedeConfirmar =
     Boolean(sedeId && vendedorId && ventaInfo) &&
@@ -169,14 +185,19 @@ function Registrar() {
       : Boolean(sedeCambioId) &&
         cambioCart.length > 0 &&
         diferencia >= 0 &&
-        (diferencia === 0 || Boolean(metodoPago)))
+        (diferencia === 0 ||
+          (Boolean(metodoPago) &&
+            montoPagado !== '' &&
+            Number(montoPagado) >= diferencia)))
 
   function cambiarTipo(nuevoTipo) {
     if (nuevoTipo === tipo) return
+    if (nuevoTipo === 'reembolso' && !puedeReembolsar) return
     setTipo(nuevoTipo)
     setCambioCart([])
     setBusqueda('')
     setMetodoPago('')
+    setMontoPagado('')
     setRegistroError(null)
   }
 
@@ -347,6 +368,7 @@ function Registrar() {
         })),
         metodo_pago:
           tipo === 'reembolso' || diferencia > 0 ? metodoPago : undefined,
+        monto_pagado: tipo === 'cambio' && diferencia > 0 ? Number(montoPagado) : undefined,
         motivo: motivo.trim() || undefined,
       }
       const res = await devolucionesApi.registrar(payload)
@@ -355,6 +377,7 @@ function Registrar() {
       setDevueltos([])
       setCambioCart([])
       setMetodoPago('')
+      setMontoPagado('')
       setMotivo('')
       setFacturaInput('')
       queryClient.invalidateQueries({ queryKey: ['inventario', sedeId] })
@@ -379,7 +402,7 @@ function Registrar() {
       )}
 
       {/* Tipo de operación */}
-      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+      <div className={`mb-5 grid gap-3 ${puedeReembolsar ? 'sm:grid-cols-2' : ''}`}>
         <button
           type="button"
           onClick={() => cambiarTipo('cambio')}
@@ -406,31 +429,33 @@ function Registrar() {
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => cambiarTipo('reembolso')}
-          className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-all duration-200 ${
-            tipo === 'reembolso'
-              ? 'border-metal bg-metal-2 text-white shadow-sm'
-              : 'border-line bg-white text-ink hover:border-metal/40'
-          }`}
-        >
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              tipo === 'reembolso' ? 'bg-white/15 text-white' : 'bg-surface-2 text-ink-2'
+        {puedeReembolsar && (
+          <button
+            type="button"
+            onClick={() => cambiarTipo('reembolso')}
+            className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-all duration-200 ${
+              tipo === 'reembolso'
+                ? 'border-metal bg-metal-2 text-white shadow-sm'
+                : 'border-line bg-white text-ink hover:border-metal/40'
             }`}
           >
-            <CoinsIcon className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold">Devolución de dinero (interno)</span>
             <span
-              className={`block text-xs ${tipo === 'reembolso' ? 'text-white/70' : 'text-ink-2/70'}`}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                tipo === 'reembolso' ? 'bg-white/15 text-white' : 'bg-surface-2 text-ink-2'
+              }`}
             >
-              Caso extremo: entrega de dinero en caja que descuenta de ingresos.
+              <CoinsIcon className="h-5 w-5" />
             </span>
-          </span>
-        </button>
+            <span>
+              <span className="block text-sm font-semibold">Devolución de dinero (interno)</span>
+              <span
+                className={`block text-xs ${tipo === 'reembolso' ? 'text-white/70' : 'text-ink-2/70'}`}
+              >
+                Caso extremo: entrega de dinero en caja que descuenta de ingresos.
+              </span>
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Selectores de sede, vendedor y factura */}
@@ -1048,8 +1073,10 @@ function Registrar() {
                 {diferencia < 0 && (
                   <p className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                     <AlertIcon className="h-4 w-4 shrink-0" />
-                    El cambio no puede ser de menor valor que lo devuelto. Agrega productos por{' '}
-                    {formato(-diferencia)} más.
+                    {puedeReembolsar
+                      ? 'El cambio no puede ser de menor valor que lo devuelto. Agrega productos por '
+                      : 'No se devuelve dinero: agrega productos por '}
+                    {formato(-diferencia)} más para igualar o superar lo devuelto.
                   </p>
                 )}
               </>
@@ -1064,25 +1091,52 @@ function Registrar() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               {tipo === 'cambio' && diferencia > 0 && (
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
-                    Método de pago de la diferencia
-                  </span>
-                  <select
-                    value={metodoPago}
-                    onChange={(e) => setMetodoPago(e.target.value)}
-                    className={selectCls}
-                  >
-                    <option value="">Selecciona…</option>
-                    {METODOS_PAGO.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+                      Método de pago de la diferencia
+                    </span>
+                    <select
+                      value={metodoPago}
+                      onChange={(e) => setMetodoPago(e.target.value)}
+                      className={selectCls}
+                    >
+                      <option value="">Selecciona…</option>
+                      {METODOS_PAGO.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+                      ¿Cuánto dio el cliente?
+                    </span>
+                    <input
+                      type="number"
+                      min={diferencia}
+                      value={montoPagado}
+                      onChange={(e) => setMontoPagado(e.target.value)}
+                      placeholder={String(diferencia)}
+                      className={inputCls}
+                    />
+                    <span
+                      className={`mt-1 block text-xs font-medium ${
+                        Number(montoPagado) >= diferencia ? 'text-emerald-700' : 'text-red-700'
+                      }`}
+                    >
+                      {Number(montoPagado) > diferencia
+                        ? `Vuelto: ${formato(Number(montoPagado) - diferencia)}`
+                        : Number(montoPagado) >= diferencia
+                          ? `Diferencia exacta: ${formato(diferencia)}`
+                          : `Faltan ${formato(diferencia - (Number(montoPagado) || 0))}`}
+                    </span>
+                  </label>
+                </>
               )}
-              <label className={`block ${tipo === 'cambio' && diferencia > 0 ? '' : 'sm:col-span-2'}`}>
+              <label className="block sm:col-span-2">
                 <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
                   Motivo{' '}
                   <span className="normal-case text-ink-2/60">
@@ -1177,10 +1231,28 @@ function Registrar() {
                     <span className="font-semibold text-ink">{formato(resultado.total_cambio)}</span>
                   </div>
                   {resultado.diferencia > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-ink-2">Diferencia ({resultado.metodo_pago})</span>
-                      <span className="font-bold text-ink">{formato(resultado.diferencia)}</span>
-                    </div>
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-ink-2">Diferencia</span>
+                        <span className="font-bold text-ink">{formato(resultado.diferencia)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-ink-2">
+                          Recibido ({resultado.metodo_pago || '—'})
+                        </span>
+                        <span className="font-semibold text-ink">
+                          {formato(resultado.monto_pagado ?? resultado.diferencia)}
+                        </span>
+                      </div>
+                      {resultado.vuelto > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-ink-2">Vuelto</span>
+                          <span className="font-bold text-emerald-700">
+                            {formato(resultado.vuelto)}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -1209,7 +1281,7 @@ function Registrar() {
 // Pestaña: Historial
 // ---------------------------------------------------------------------------
 
-function Historial() {
+function Historial({ puedeReembolsar }) {
   const { data: sedes = [] } = useSedes()
   const { data: empleados = [] } = useEmpleados()
 
@@ -1293,7 +1365,7 @@ function Historial() {
         <p className="text-sm text-ink-2">
           {meta.total} operaciones · {formato(resumen.totalDevuelto)} devueltos ·{' '}
           {formato(resumen.totalCambio)} en cambio
-          {resumen.totalReembolsado > 0 && (
+          {resumen.totalReembolsado > 0 && puedeReembolsar && (
             <>
               {' '}
               · <span className="font-medium text-ink">{formato(resumen.totalReembolsado)} reembolsados</span>{' '}
@@ -1306,7 +1378,11 @@ function Historial() {
       </div>
 
       {/* Filtros */}
-      <div className="mb-4 grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div
+        className={`mb-4 grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 ${
+          puedeReembolsar ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+        }`}
+      >
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
             <StoreIcon className="h-4 w-4" /> Sede
@@ -1335,16 +1411,18 @@ function Historial() {
           </select>
         </label>
 
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
-            Tipo
-          </span>
-          <select value={tipo} onChange={cambiarTipo} className={selectCls}>
-            <option value="">Todos</option>
-            <option value="cambio">Cambio</option>
-            <option value="reembolso">Reembolso (interno)</option>
-          </select>
-        </label>
+        {puedeReembolsar && (
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+              Tipo
+            </span>
+            <select value={tipo} onChange={cambiarTipo} className={selectCls}>
+              <option value="">Todos</option>
+              <option value="cambio">Cambio</option>
+              <option value="reembolso">Reembolso (interno)</option>
+            </select>
+          </label>
+        )}
 
         <div className="hidden items-end sm:flex">
           <span className="text-sm text-ink-2">
@@ -1557,10 +1635,28 @@ function Historial() {
                         <span className="font-semibold text-ink">{formato(detalle.total_cambio)}</span>
                       </div>
                       {detalle.diferencia > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-ink-2">Diferencia</span>
-                          <span className="font-bold text-ink">{formato(detalle.diferencia)}</span>
-                        </div>
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-ink-2">Diferencia</span>
+                            <span className="font-bold text-ink">{formato(detalle.diferencia)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-ink-2">
+                              Recibido ({detalle.metodo_pago || '—'})
+                            </span>
+                            <span className="font-semibold text-ink">
+                              {formato(detalle.monto_pagado ?? detalle.diferencia)}
+                            </span>
+                          </div>
+                          {detalle.vuelto > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-ink-2">Vuelto</span>
+                              <span className="font-bold text-emerald-700">
+                                {formato(detalle.vuelto)}
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   )}

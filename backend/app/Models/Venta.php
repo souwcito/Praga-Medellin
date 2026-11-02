@@ -38,4 +38,10 @@ class Venta extends Model
     {
         return $this->hasMany(Pago::class);
     }
+
+    // Devoluciones y cambios registrados sobre esta venta.
+    public function devoluciones()
+    {
+        return $this->hasMany(Devolucion::class);
+    }
 }

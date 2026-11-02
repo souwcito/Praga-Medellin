@@ -1,10 +1,10 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ventasApi } from '../services/api'
+import { ventasApi, entregasApi } from '../services/api'
 import { useSedes, useEmpleados, useInventarioSede, useInventarioCompleto } from '../hooks/useData'
 import { Comprobante } from '../components/Comprobante'
 import Modal from '../components/Modal'
-import { imprimirComprobante } from '../utils/print'
+import { imprimirComprobante, imprimirComprobanteEntrega } from '../utils/print'
 import {
   buscarVariantePorCodigo,
   codigosVariante,
@@ -26,6 +26,7 @@ import {
   SearchIcon,
   StoreIcon,
   TrashIcon,
+  TruckIcon,
   UserIcon,
   XIcon,
 } from '../components/icons'
@@ -39,6 +40,13 @@ const formato = (n) =>
 
 const selectCls =
   'select-field w-full rounded-lg border border-line bg-white px-3 py-2 pr-9 text-sm text-ink transition-colors focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
+
+// Valor para <input type="datetime-local"> en hora local.
+const ahoraLocal = () => {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
 
 const inputCls =
   'w-full rounded-2xl border border-line bg-white py-3 pl-11 pr-4 text-sm placeholder:text-ink-2/50 transition-all duration-200 hover:border-ink-2/40 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25'
@@ -58,7 +66,8 @@ const descuentoLinea = (item) => (item.precio - precioFinalItem(item)) * item.ca
 
 // Las líneas relámpago no tienen variante: se identifican por un uid local.
 const esRelampago = (item) => item?.tipo === 'relampago'
-const lineKey = (item) => (esRelampago(item) ? item.uid : item.variante_id)
+const lineKey = (item) =>
+  esRelampago(item) ? item.uid : `${item.variante_id}-${item.sede_origen_id}`
 
 // Tarjeta de producto (memoizada: el grid no se re-renderiza al escribir en el carrito)
 // Al pasar el cursor sobre la foto aparece el botón "Ver fotos"; hay que hacer clic
@@ -123,6 +132,11 @@ const ProductoCard = memo(function ProductoCard({ v, i, onAgregar, onVer }) {
         <p className="mt-0.5 text-[11px] text-ink-2/70">
           Cód. {referenciaEtiquetaProducto(v)}
         </p>
+        {v.es_otra_sede && (
+          <p className="mt-1 inline-flex w-fit items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-ink-2">
+            <StoreIcon className="h-3 w-3" /> {v.sede_origen_nombre}
+          </p>
+        )}
         <div className="mt-auto flex items-center justify-between pt-3">
           <span className="text-sm font-bold text-ink">{formato(v.precio)}</span>
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-white transition-all duration-200 group-hover:bg-metal group-active:scale-90">
@@ -271,8 +285,20 @@ export default function Pos() {
   const [avisoEscaneo, setAvisoEscaneo] = useState(null)
 
   const [busqueda, setBusqueda] = useState('')
+  // Sede desde la que se están viendo/agregando productos. Vacío = la sede de
+  // facturación. Permite armar una venta con prendas de varias sedes.
+  const [sedeBusqueda, setSedeBusqueda] = useState('')
   const [cart, setCart] = useState([])
   const [confirmando, setConfirmando] = useState(false)
+
+  const sedeNombre = sedes.find((s) => s.id === Number(sedeId))?.nombre
+  const sedeBusquedaNombre = sedes.find(
+    (s) => s.id === Number(sedeBusqueda || sedeId),
+  )?.nombre
+  const cargandoGrid =
+    sedeBusqueda && Number(sedeBusqueda) !== Number(sedeId)
+      ? cargandoCompleto
+      : cargando
 
   // Venta relámpago: línea libre que no existe en inventario.
   const [relampagoAbierto, setRelampagoAbierto] = useState(false)
@@ -291,6 +317,19 @@ export default function Pos() {
   const [nota, setNota] = useState('')
   const [galeria, setGaleria] = useState(null)
 
+  // Domicilio contra entrega (se crea desde el mismo carrito del POS).
+  const [domicilioAbierto, setDomicilioAbierto] = useState(false)
+  const [domicilioForm, setDomicilioForm] = useState({
+    cliente_nombre: '',
+    telefono: '',
+    direccion: '',
+    fecha_entrega: '',
+    nota: '',
+  })
+  const [domicilioError, setDomicilioError] = useState(null)
+  const [domicilioResult, setDomicilioResult] = useState(null)
+  const [creandoDomicilio, setCreandoDomicilio] = useState(false)
+
   const searchRef = useRef(null)
 
   // Limpia el buscador visual y el estado. El input es no controlado para que
@@ -300,25 +339,117 @@ export default function Pos() {
     if (searchRef.current) searchRef.current.value = ''
   }, [])
 
-  const agregar = useCallback((variante) => {
-    setCart((prev) => {
-      const existente = prev.find((i) => i.variante_id === variante.variante_id)
-      if (existente) {
-        if (existente.cantidad >= variante.stock) return prev
-        return prev.map((i) =>
-          i.variante_id === variante.variante_id ? { ...i, cantidad: i.cantidad + 1 } : i,
+  const agregar = useCallback(
+    (variante) => {
+      const sedeOrigenId = Number(variante.sede_origen_id || sedeId)
+      setCart((prev) => {
+        const existente = prev.find(
+          (i) =>
+            !esRelampago(i) &&
+            i.variante_id === variante.variante_id &&
+            Number(i.sede_origen_id) === sedeOrigenId,
         )
-      }
-      return [...prev, { ...variante, cantidad: 1 }]
-    })
-    searchRef.current?.focus()
-  }, [])
+
+        // Opciones de origen (sede + stock) de esta variante. Si el inventario
+        // completo todavía no llegó, se usa el stock de la sede seleccionada.
+        const origenes = variante.origenes?.length
+          ? variante.origenes
+          : (() => {
+              const completo = inventarioCompleto.find(
+                (v) => v.variante_id === variante.variante_id,
+              )
+              const lista = (completo?.stock || [])
+                .filter((o) => Number(o.cantidad) > 0)
+                .map((o) => ({
+                  sede_id: Number(o.sede_id),
+                  sede: o.sede,
+                  cantidad: Number(o.cantidad),
+                }))
+              if (lista.length) return lista
+              return [
+                {
+                  sede_id: sedeOrigenId,
+                  sede:
+                    variante.sede_origen_nombre ||
+                    sedes.find((s) => s.id === sedeOrigenId)?.nombre ||
+                    '',
+                  cantidad: Number(variante.stock || 0),
+                },
+              ]
+            })()
+
+        const origen = origenes.find((o) => Number(o.sede_id) === sedeOrigenId)
+        const stock = Number(origen?.cantidad ?? variante.stock ?? 0)
+
+        if (existente) {
+          if (existente.cantidad >= stock) return prev
+          return prev.map((i) =>
+            lineKey(i) === lineKey(existente) ? { ...i, cantidad: i.cantidad + 1 } : i,
+          )
+        }
+
+        return [
+          ...prev,
+          {
+            ...variante,
+            sede_origen_id: sedeOrigenId,
+            sede_origen_nombre:
+              origen?.sede ||
+              variante.sede_origen_nombre ||
+              sedes.find((s) => s.id === sedeOrigenId)?.nombre ||
+              '',
+            origenes,
+            stock,
+            cantidad: 1,
+          },
+        ]
+      })
+      searchRef.current?.focus()
+    },
+    [inventarioCompleto, sedeId, sedes],
+  )
 
   // Resuelve un código escaneado contra la sede actual y, si no está, contra
   // todo el inventario para poder decir si existe, en qué sede está o si no
   // tiene stock. Así nunca responde "no existe" a un producto que sí existe.
   const resolverEscaneo = useCallback(
     (codigo) => {
+      const objetivo = Number(sedeBusqueda || sedeId)
+      const buscandoOtraSede =
+        Boolean(sedeBusqueda) && objetivo !== Number(sedeId)
+
+      // Si el cajero está viendo otra sede, el escaneo agrega desde esa sede.
+      if (buscandoOtraSede) {
+        const completo = buscarVariantePorCodigo(inventarioCompleto, codigo)
+        if (completo) {
+          const stockObjetivo = (completo.stock || []).find(
+            (s) => Number(s.sede_id) === objetivo,
+          )
+          const cantidadObjetivo = Number(stockObjetivo?.cantidad || 0)
+          const nombreCompleto = `${completo.nombre}${completo.talla ? ` · ${completo.talla}` : ''}`
+          if (cantidadObjetivo > 0) {
+            return {
+              variante: {
+                ...completo,
+                stock: cantidadObjetivo,
+                sede_origen_id: objetivo,
+                sede_origen_nombre: sedeBusquedaNombre,
+                imagenes:
+                  completo.imagenes?.length
+                    ? completo.imagenes
+                    : completo.imagen_url
+                      ? [completo.imagen_url]
+                      : [],
+              },
+              aviso: `${nombreCompleto} se agregó desde ${sedeBusquedaNombre}.`,
+            }
+          }
+          return {
+            error: `${nombreCompleto} no tiene stock en ${sedeBusquedaNombre}.`,
+          }
+        }
+      }
+
       const enSede = buscarVariantePorCodigo(variantes, codigo)
       if (enSede) return { variante: enSede }
 
@@ -352,12 +483,19 @@ export default function Pos() {
       // Si la sede actual sí tiene stock pero el listado del POS aún no lo
       // refleja (caché de 20 s), se agrega usando el inventario completo.
       if (cantidadActual > 0) {
-        return { variante: { ...completo, stock: cantidadActual } }
+        return {
+          variante: {
+            ...completo,
+            stock: cantidadActual,
+            sede_origen_id: Number(sedeId),
+            sede_origen_nombre: sedeActual,
+          },
+        }
       }
 
       if (!sedeId) {
         return {
-          error: `${nombre} existe. Selecciona la sede de la venta para venderlo.`,
+          error: `${nombre} existe. Selecciona la sede de facturación para venderlo.`,
         }
       }
 
@@ -365,13 +503,29 @@ export default function Pos() {
         return { error: `${nombre} existe, pero no tiene stock en ninguna sede.` }
       }
 
+      // Venta multi-sede: si no está en la sede de facturación, se agrega desde
+      // la sede que sí lo tiene (se avisa al cajero de dónde sale).
+      const mejor = [...sedesConStock].sort(
+        (a, b) => Number(b.cantidad) - Number(a.cantidad),
+      )[0]
+
       return {
-        error: `${nombre} no tiene stock en ${sedeActual || 'la sede seleccionada'}. Está en: ${sedesConStock
-          .map((s) => s.sede)
-          .join(', ')}.`,
+        variante: {
+          ...completo,
+          stock: Number(mejor.cantidad),
+          sede_origen_id: Number(mejor.sede_id),
+          sede_origen_nombre: mejor.sede,
+          imagenes:
+            completo.imagenes?.length
+              ? completo.imagenes
+              : completo.imagen_url
+                ? [completo.imagen_url]
+                : [],
+        },
+        aviso: `${nombre} no está en ${sedeActual || 'la sede de facturación'}. Se agregó desde ${mejor.sede}.`,
       }
     },
-    [variantes, inventarioCompleto, cargandoCompleto, errorCompleto, sedes, sedeId],
+    [variantes, inventarioCompleto, cargandoCompleto, errorCompleto, sedes, sedeId, sedeBusqueda, sedeBusquedaNombre],
   )
 
   const procesarCodigo = useCallback(
@@ -382,7 +536,7 @@ export default function Pos() {
       const resultado = resolverEscaneo(valor)
       if (resultado.variante) {
         agregar(resultado.variante)
-        setAvisoEscaneo(null)
+        setAvisoEscaneo(resultado.aviso || null)
       } else {
         setAvisoEscaneo(resultado.error || 'No se encontró el código escaneado.')
       }
@@ -399,31 +553,65 @@ export default function Pos() {
     setGaleria({ nombre: v.nombre, imagenes: imgs, index: 0 })
   }, [])
 
+  // Productos del grid según la sede elegida en "Ver productos de otra sede".
+  // La sede de facturación no cambia: solo cambia de dónde se agregan prendas.
+  const variantesGrid = useMemo(() => {
+    const objetivo = Number(sedeBusqueda || sedeId)
+    if (!objetivo) return []
+
+    if (objetivo === Number(sedeId)) {
+      return variantes.map((v) => ({
+        ...v,
+        sede_origen_id: Number(sedeId),
+        sede_origen_nombre: sedeNombre,
+        es_otra_sede: false,
+      }))
+    }
+
+    const nombreSede = sedes.find((s) => s.id === objetivo)?.nombre
+    const lista = []
+    inventarioCompleto.forEach((v) => {
+      const enSede = (v.stock || []).find(
+        (o) => Number(o.sede_id) === objetivo && Number(o.cantidad) > 0,
+      )
+      if (!enSede) return
+      lista.push({
+        ...v,
+        stock: Number(enSede.cantidad),
+        sede_origen_id: objetivo,
+        sede_origen_nombre: nombreSede || enSede.sede,
+        es_otra_sede: true,
+        imagenes: v.imagenes?.length ? v.imagenes : v.imagen_url ? [v.imagen_url] : [],
+      })
+    })
+    return lista
+  }, [variantes, inventarioCompleto, sedeId, sedeNombre, sedeBusqueda, sedes])
+
   // La búsqueda con useDeferredValue mantiene la UI fluida mientras se filtra
   const busquedaDeferred = useDeferredValue(busqueda)
 
   const variantesFiltradas = useMemo(() => {
     const q = busquedaDeferred.trim().toLowerCase()
-    if (!q) return variantes
+    if (!q) return variantesGrid
 
     // Un código escaneado debe llevar a la variante exacta, no a todas las que
     // contengan el texto (por ejemplo, SKU-9 frente a SKU-9.5).
     const qCodigo = normalizarCodigo(busquedaDeferred).toLowerCase()
     const exactas = qCodigo
-      ? variantes.filter((v) =>
+      ? variantesGrid.filter((v) =>
           codigosVariante(v).some((codigo) => codigo.toLowerCase() === qCodigo),
         )
       : []
 
     if (exactas.length > 0) return exactas
 
-    return variantes.filter(
+    return variantesGrid.filter(
       (v) =>
         v.nombre.toLowerCase().includes(q) ||
         coincideCodigoEtiqueta(v, q) ||
         (v.talla || '').toLowerCase().includes(q),
     )
-  }, [variantes, busquedaDeferred])
+  }, [variantesGrid, busquedaDeferred])
 
   // Captura el escáner aunque el foco no esté en el buscador (por ejemplo,
   // después de cerrar un modal o hacer clic en un botón). Si el foco está en
@@ -435,7 +623,15 @@ export default function Pos() {
     const onKeyDown = (event) => {
       // No agregar productos mientras hay un modal abierto (resumen, recibo,
       // venta relámpago o galería): se evita sumar algo que el usuario no ve.
-      if (modalAbierto || resumenAbierto || relampagoAbierto || galeria) return
+      if (
+        modalAbierto ||
+        resumenAbierto ||
+        relampagoAbierto ||
+        galeria ||
+        domicilioAbierto ||
+        domicilioResult
+      )
+        return
 
       const el = event.target
       const escribiendo =
@@ -478,6 +674,8 @@ export default function Pos() {
     resumenAbierto,
     relampagoAbierto,
     galeria,
+    domicilioAbierto,
+    domicilioResult,
   ])
 
   const total = useMemo(
@@ -494,16 +692,16 @@ export default function Pos() {
     [pagos, sumaPagos, total],
   )
 
-  const sedeNombre = sedes.find((s) => s.id === Number(sedeId))?.nombre
   const puedeConfirmar = Boolean(sedeId && vendedorId && cart.length > 0)
 
   function cambiarSede(e) {
     const value = e.target.value
     setSedeId(value)
+    setSedeBusqueda('')
     setError(null)
     setAvisoEscaneo(null)
-    // Al cambiar de sede se limpia la venta: evita mezclar stock de sedes distintas
-    setCart([])
+    // El carrito se conserva: las líneas ya agregadas mantienen su sede de
+    // origen y el cambio solo define dónde se factura.
     limpiarBusqueda()
     searchRef.current?.focus()
   }
@@ -533,6 +731,26 @@ export default function Pos() {
 
   function eliminar(key) {
     setCart((prev) => prev.filter((i) => lineKey(i) !== key))
+  }
+
+  // Cambia la sede de la que sale una línea (cuando hay stock en varias sedes).
+  function cambiarOrigen(key, valor) {
+    setCart((prev) =>
+      prev.map((i) => {
+        if (lineKey(i) !== key) return i
+        const origen = (i.origenes || []).find(
+          (o) => Number(o.sede_id) === Number(valor),
+        )
+        if (!origen) return i
+        return {
+          ...i,
+          sede_origen_id: Number(origen.sede_id),
+          sede_origen_nombre: origen.sede,
+          stock: Number(origen.cantidad),
+          cantidad: Math.max(1, Math.min(i.cantidad, Number(origen.cantidad))),
+        }
+      }),
+    )
   }
 
   function cambiarPrecioFinal(key, value) {
@@ -618,6 +836,75 @@ export default function Pos() {
     setResumenAbierto(true)
   }
 
+  // Domicilio contra entrega: no se cobra ahora; el stock sale de la sede y
+  // queda pendiente en "Domicilios" hasta que el cliente decida.
+  function abrirDomicilio() {
+    if (!puedeConfirmar) return
+    setError(null)
+    if (cart.some(esRelampago)) {
+      setError(
+        'La venta relámpago no se puede enviar a domicilio (no tiene inventario). Factúrala aparte.',
+      )
+      return
+    }
+    setDomicilioError(null)
+    setDomicilioForm({
+      cliente_nombre: '',
+      telefono: '',
+      direccion: '',
+      fecha_entrega: ahoraLocal(),
+      nota: '',
+    })
+    setDomicilioAbierto(true)
+  }
+
+  async function confirmarDomicilio() {
+    if (!puedeConfirmar) return
+    if (!domicilioForm.cliente_nombre.trim()) {
+      setDomicilioError('Escribe el nombre del cliente.')
+      return
+    }
+
+    setCreandoDomicilio(true)
+    setDomicilioError(null)
+    try {
+      const sedesVendidas = new Set(
+        cart.map((i) => i.sede_origen_id).filter((id) => Boolean(id)),
+      )
+      const creada = await entregasApi.create({
+        cliente_nombre: domicilioForm.cliente_nombre.trim(),
+        telefono: domicilioForm.telefono.trim() || null,
+        direccion: domicilioForm.direccion.trim() || null,
+        sede_id: Number(sedeId),
+        empleado_id: Number(vendedorId),
+        fecha_entrega: domicilioForm.fecha_entrega || null,
+        nota: domicilioForm.nota.trim() || null,
+        items: cart.map((i) => ({
+          variante_id: i.variante_id,
+          sede_origen_id: i.sede_origen_id,
+          cantidad: i.cantidad,
+          precio_final: precioFinalItem(i),
+        })),
+      })
+
+      setDomicilioResult(creada)
+      setDomicilioAbierto(false)
+      setCart([])
+      limpiarBusqueda()
+      queryClient.invalidateQueries({ queryKey: ['inventario', sedeId] })
+      sedesVendidas.forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: ['inventario', String(id)] })
+      })
+      queryClient.invalidateQueries({ queryKey: ['inventario-completo'] })
+      queryClient.invalidateQueries({ queryKey: ['entregas'] })
+      queryClient.invalidateQueries({ queryKey: ['entregas-resumen'] })
+    } catch (err) {
+      setDomicilioError(err?.error || err?.message || 'No se pudo crear el domicilio.')
+    } finally {
+      setCreandoDomicilio(false)
+    }
+  }
+
   async function confirmarVenta() {
     if (!puedeConfirmar || !pagosValidos) return
     setConfirmando(true)
@@ -638,6 +925,7 @@ export default function Pos() {
               }
             : {
                 variante_id: i.variante_id,
+                sede_origen_id: i.sede_origen_id,
                 cantidad: i.cantidad,
                 precio_unitario: i.precio,
                 precio_final: precioFinalItem(i),
@@ -646,6 +934,9 @@ export default function Pos() {
         pagos: pagos.map((p) => ({ metodo_pago: p.metodo_pago, monto: Number(p.monto) || 0 })),
         nota: nota.trim() || null,
       }
+      const sedesVendidas = new Set(
+        cart.map((i) => i.sede_origen_id).filter((id) => Boolean(id)),
+      )
       const result = await ventasApi.createVenta(payload)
       setVentaResult(result)
       setResumenAbierto(false)
@@ -653,8 +944,12 @@ export default function Pos() {
       setCart([])
       limpiarBusqueda()
       setNota('')
-      // Invalida el stock visible de la sede: se re-trae al instante
+      // Invalida el stock visible de cada sede de la que salió la venta.
       queryClient.invalidateQueries({ queryKey: ['inventario', sedeId] })
+      sedesVendidas.forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: ['inventario', String(id)] })
+      })
+      queryClient.invalidateQueries({ queryKey: ['inventario-completo'] })
     } catch (err) {
       setError(err?.error || err?.message || 'No se pudo registrar la venta')
     } finally {
@@ -691,7 +986,7 @@ export default function Pos() {
       <div className="mb-6 grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
-            <StoreIcon className="h-4 w-4" /> Sede de la venta
+            <StoreIcon className="h-4 w-4" /> Sede de facturación
           </span>
           <select value={sedeId} onChange={cambiarSede} className={selectCls}>
             <option value="">Selecciona una sede…</option>
@@ -737,7 +1032,7 @@ export default function Pos() {
 
         <div className="hidden sm:block lg:flex lg:flex-col lg:justify-end">
           <span className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-2">
-            Stock disponible
+            Sede de facturación
           </span>
           {sedeNombre ? (
             <p className="animate-fade-in text-sm font-medium text-ink" key={sedeId}>
@@ -754,17 +1049,53 @@ export default function Pos() {
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-2">
-              Productos con stock
+              Productos en {sedeBusquedaNombre || 'la sede de facturación'}
             </p>
-            <button
-              type="button"
-              onClick={abrirRelampago}
-              className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition-colors hover:border-amber-400 hover:bg-amber-100 active:scale-[0.98]"
-            >
-              <BoltIcon className="h-4 w-4" />
-              Venta relámpago
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-2 text-xs font-medium text-ink-2">
+                <StoreIcon className="h-4 w-4" />
+                Ver productos de
+                <select
+                  value={sedeBusqueda}
+                  onChange={(e) => {
+                    setSedeBusqueda(e.target.value)
+                    setAvisoEscaneo(null)
+                    limpiarBusqueda()
+                  }}
+                  disabled={!sedeId}
+                  className="rounded-lg border border-line bg-white px-2 py-1 text-xs font-semibold text-ink focus:border-metal focus:outline-none disabled:opacity-50"
+                >
+                  <option value="">{sedeNombre || 'Sede de facturación'}</option>
+                  {sedes
+                    .filter((s) => s.id !== Number(sedeId))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={abrirRelampago}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition-colors hover:border-amber-400 hover:bg-amber-100 active:scale-[0.98]"
+              >
+                <BoltIcon className="h-4 w-4" />
+                Venta relámpago
+              </button>
+            </div>
           </div>
+
+          {Boolean(sedeBusqueda) && Number(sedeBusqueda) !== Number(sedeId) && (
+            <p className="animate-fade-in mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Estás agregando prendas de <strong>{sedeBusquedaNombre}</strong>. La factura se
+                emite en <strong>{sedeNombre || 'la sede de facturación'}</strong>; cada línea
+                guarda de qué sede salió.
+              </span>
+            </p>
+          )}
 
           <div className="relative mb-4">
             <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-2/60" />
@@ -798,7 +1129,7 @@ export default function Pos() {
             </div>
           )}
 
-          {cargando ? (
+          {cargandoGrid ? (
             <div className="grid h-64 place-items-center text-sm text-ink-2/70">
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-2/30 border-t-ink-2" />
@@ -813,7 +1144,7 @@ export default function Pos() {
             <div className="animate-fade-in grid h-64 place-items-center rounded-2xl border border-dashed border-line text-sm text-ink-2/70">
               {busqueda
                 ? 'Sin resultados para esa búsqueda.'
-                : 'Esta sede no tiene productos con stock.'}
+                : `${sedeBusquedaNombre || 'Esta sede'} no tiene productos con stock.`}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
@@ -896,6 +1227,30 @@ export default function Pos() {
                           ? 'Venta relámpago · sin stock'
                           : `${item.talla ? `Talla ${normalizarTallaVisible(item.talla)} · ` : ''}${formato(item.precio)} · stock ${item.stock}`}
                       </p>
+                      {!flash && (item.origenes?.length || 0) > 1 && (
+                        <label className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-2">
+                          Sale de
+                          <select
+                            value={item.sede_origen_id}
+                            onChange={(e) => cambiarOrigen(key, e.target.value)}
+                            className="rounded-md border border-line bg-white px-1.5 py-0.5 text-[11px] text-ink focus:border-metal focus:outline-none"
+                          >
+                            {item.origenes.map((o) => (
+                              <option key={o.sede_id} value={o.sede_id}>
+                                {o.sede} ({o.cantidad})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {!flash &&
+                        !(item.origenes?.length > 1) &&
+                        item.sede_origen_nombre &&
+                        item.sede_origen_nombre !== sedeNombre && (
+                          <p className="mt-1 text-[11px] font-medium text-metal-2">
+                            Sale de: {item.sede_origen_nombre}
+                          </p>
+                        )}
                       {flash && item.nota && (
                         <p className="text-[11px] text-ink-2/70">{item.nota}</p>
                       )}
@@ -985,6 +1340,18 @@ export default function Pos() {
               <CheckIcon className="h-5 w-5" />
               Confirmar venta
             </button>
+            <button
+              type="button"
+              onClick={abrirDomicilio}
+              disabled={!puedeConfirmar}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-white py-3 text-sm font-semibold text-ink transition-colors hover:border-metal hover:bg-surface-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <TruckIcon className="h-5 w-5" />
+              Enviar a domicilio (contra entrega)
+            </button>
+            <p className="mt-1.5 text-center text-[11px] text-ink-2/60">
+              Queda pendiente por facturar; el stock sale de la sede.
+            </p>
           </footer>
         </aside>
       </div>
@@ -1015,7 +1382,7 @@ export default function Pos() {
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
               <dl className="mb-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
                 <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-ink-2">Sede</dt>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-ink-2">Sede de facturación</dt>
                   <dd className="font-medium text-ink">{sedeNombre || '—'}</dd>
                 </div>
                 <div>
@@ -1056,6 +1423,13 @@ export default function Pos() {
                             · Relámpago
                           </span>
                         )}
+                        {!flash &&
+                          item.sede_origen_nombre &&
+                          item.sede_origen_nombre !== sedeNombre && (
+                            <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-metal-2">
+                              · sale de {item.sede_origen_nombre}
+                            </span>
+                          )}
                       </span>
                       <span className="shrink-0 text-xs text-ink-2">
                         {item.cantidad} × {formato(precioFinalItem(item))}
@@ -1174,6 +1548,203 @@ export default function Pos() {
                     Confirmar venta
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: enviar el carrito a domicilio contra entrega */}
+      {domicilioAbierto && (
+        <Modal className="animate-fade-in z-[60] flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+          <div className="animate-scale-in w-full max-w-md rounded-2xl bg-white p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-2 text-ink">
+                  <TruckIcon className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="font-display text-lg font-semibold tracking-tight text-ink">
+                    Enviar a domicilio
+                  </h3>
+                  <p className="text-xs text-ink-2">
+                    Contra entrega · solo el nombre es obligatorio.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDomicilioAbierto(false)}
+                disabled={creandoDomicilio}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-2/70 hover:bg-surface-2 hover:text-ink"
+              >
+                <XIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            {domicilioError && (
+              <p className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <AlertIcon className="h-4 w-4 shrink-0" />
+                {domicilioError}
+              </p>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                confirmarDomicilio()
+              }}
+              className="space-y-3"
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+                  Nombre del cliente *
+                </span>
+                <input
+                  type="text"
+                  value={domicilioForm.cliente_nombre}
+                  onChange={(e) =>
+                    setDomicilioForm((prev) => ({ ...prev, cliente_nombre: e.target.value }))
+                  }
+                  placeholder="Ej. Laura Gómez"
+                  autoFocus
+                  maxLength={255}
+                  className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+                    Teléfono <span className="normal-case text-ink-2/60">(opcional)</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={domicilioForm.telefono}
+                    onChange={(e) =>
+                      setDomicilioForm((prev) => ({ ...prev, telefono: e.target.value }))
+                    }
+                    placeholder="300 000 0000"
+                    maxLength={30}
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+                    Fecha de entrega
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={domicilioForm.fecha_entrega}
+                    onChange={(e) =>
+                      setDomicilioForm((prev) => ({ ...prev, fecha_entrega: e.target.value }))
+                    }
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                  />
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+                  Dirección <span className="normal-case text-ink-2/60">(opcional)</span>
+                </span>
+                <input
+                  type="text"
+                  value={domicilioForm.direccion}
+                  onChange={(e) =>
+                    setDomicilioForm((prev) => ({ ...prev, direccion: e.target.value }))
+                  }
+                  placeholder="Ej. Calle 80 # 45-12"
+                  maxLength={255}
+                  className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2">
+                  Nota <span className="normal-case text-ink-2/60">(opcional)</span>
+                </span>
+                <input
+                  type="text"
+                  value={domicilioForm.nota}
+                  onChange={(e) =>
+                    setDomicilioForm((prev) => ({ ...prev, nota: e.target.value }))
+                  }
+                  placeholder="Ej. prueba talla 40 y 41"
+                  maxLength={500}
+                  className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink-2/50 focus:border-metal focus:outline-none focus:ring-2 focus:ring-metal/25"
+                />
+              </label>
+
+              <div className="rounded-xl border border-line bg-surface-2/50 px-3 py-2.5 text-sm">
+                <div className="flex items-center justify-between text-ink">
+                  <span>{cart.length} producto{cart.length === 1 ? '' : 's'}</span>
+                  <span className="font-semibold">{formato(total)}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-ink-2">
+                  Se factura en {sedeNombre || 'la sede'} · vendedor{' '}
+                  {empleados.find((e) => e.id === Number(vendedorId))?.nombre || '—'}
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setDomicilioAbierto(false)}
+                  disabled={creandoDomicilio}
+                  className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creandoDomicilio}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-ink py-2.5 text-sm font-semibold text-white transition-colors hover:bg-metal-2 active:scale-[0.98] disabled:opacity-50"
+                >
+                  <TruckIcon className="h-4 w-4" />
+                  {creandoDomicilio ? 'Creando…' : 'Crear domicilio'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </Modal>
+      )}
+
+      {/* Resultado: domicilio creado */}
+      {domicilioResult && (
+        <Modal className="animate-fade-in z-[60] flex items-center justify-center overflow-y-auto bg-dark/70 p-4">
+          <div className="animate-scale-in w-full max-w-sm rounded-2xl bg-white p-6 text-center">
+            <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+              <TruckIcon className="h-7 w-7" />
+            </span>
+            <h3 className="font-display text-xl font-semibold tracking-tight text-ink">
+              Domicilio creado
+            </h3>
+            <p className="mt-1 text-sm font-semibold text-ink">{domicilioResult.numero}</p>
+            <p className="mt-1 text-sm text-ink-2">
+              {domicilioResult.cliente?.nombre} · {domicilioResult.unidades} unidad
+              {domicilioResult.unidades === 1 ? '' : 'es'} ·{' '}
+              {formato(domicilioResult.total)}
+            </p>
+            <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-ink-2">
+              Queda en <strong>Domicilios</strong> como pendiente por facturar. Lo que el cliente
+              devuelva vuelve al stock.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDomicilioResult(null)}
+                className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-ink-2 hover:bg-surface-2"
+              >
+                Seguir vendiendo
+              </button>
+              <button
+                type="button"
+                onClick={() => imprimirComprobanteEntrega(domicilioResult)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-ink py-2.5 text-sm font-medium text-white hover:bg-metal-2"
+              >
+                <PrinterIcon className="h-4 w-4" />
+                Imprimir
               </button>
             </div>
           </div>

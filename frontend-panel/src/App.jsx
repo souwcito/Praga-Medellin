@@ -18,6 +18,7 @@ const Productos = lazy(() => import('./pages/Productos'))
 const Pedidos = lazy(() => import('./pages/Pedidos'))
 const Clientes = lazy(() => import('./pages/Clientes'))
 const PlanSepare = lazy(() => import('./pages/PlanSepare'))
+const Entregas = lazy(() => import('./pages/Entregas'))
 const Devoluciones = lazy(() => import('./pages/Devoluciones'))
 const Codigos = lazy(() => import('./pages/Codigos'))
 const Dueno = lazy(() => import('./pages/Dueno'))
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/pos" element={<Pos />} />
             <Route path="/apartados" element={<PlanSepare />} />
+            <Route path="/entregas" element={<Entregas />} />
             <Route
               path="/productos"
               element={
@@ -100,14 +102,7 @@ export default function App() {
             <Route path="/comisiones" element={<Comisiones />} />
             <Route path="/pedidos" element={<Pedidos />} />
             <Route path="/clientes" element={<Clientes />} />
-            <Route
-              path="/devoluciones"
-              element={
-                <ProtectedRoute requiresAdmin>
-                  <Devoluciones />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/devoluciones" element={<Devoluciones />} />
 
             {/* Panel del dueño (rol 'dueno') */}
             <Route

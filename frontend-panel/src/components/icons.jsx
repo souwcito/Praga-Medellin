@@ -45,6 +45,17 @@ export const PackageIcon = (p) => (
   </Icon>
 )
 
+// Domicilios / entregas
+export const TruckIcon = (p) => (
+  <Icon {...p}>
+    <path d="M14 17V5a1 1 0 0 0-1-1H2v12a1 1 0 0 0 1 1h1" />
+    <path d="M14 8h4l4 4v4a1 1 0 0 1-1 1h-1" />
+    <circle cx="7.5" cy="18" r="2" />
+    <circle cx="17.5" cy="18" r="2" />
+    <path d="M9.5 18h6" />
+  </Icon>
+)
+
 export const LayersIcon = (p) => (
   <Icon {...p}>
     <path d="m12 2 8.5 4.5L12 11 3.5 6.5z" />

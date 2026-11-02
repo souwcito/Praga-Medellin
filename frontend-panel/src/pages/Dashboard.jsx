@@ -10,8 +10,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { useDashboard } from '../hooks/useData'
-import { AlertIcon } from '../components/icons'
+import { useDashboard, useEntregasResumen } from '../hooks/useData'
+import { AlertIcon, TruckIcon } from '../components/icons'
+import { Link } from 'react-router-dom'
 import PeriodFilter from '../components/PeriodFilter'
 
 const formato = (n) =>
@@ -50,6 +51,7 @@ function Card({ title, subtitle, delay = 0, children, className = '' }) {
 export default function Dashboard() {
   const [periodo, setPeriodo] = useState('mes')
   const { data, isLoading: loading, isError, error: errorRaw } = useDashboard(periodo)
+  const { data: entregasResumen } = useEntregasResumen()
   const error = errorRaw?.message || (isError ? 'Error cargando el dashboard' : null)
 
   function cambiarPeriodo(p) {
@@ -142,6 +144,33 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
+
+      {/* Alerta: domicilios entregados sin facturar */}
+      {entregasResumen?.cantidad > 0 && (
+        <Link
+          to="/entregas"
+          className="animate-fade-up mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 transition-colors hover:border-amber-300 hover:bg-amber-100/70"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+              <TruckIcon className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-ink">
+                {entregasResumen.cantidad} domicilio
+                {entregasResumen.cantidad === 1 ? '' : 's'} por facturar
+              </p>
+              <p className="text-xs text-amber-800">
+                {formato(entregasResumen.total)} a cobrar
+                {entregasResumen.dias_max > 0
+                  ? ` · el más antiguo lleva ${entregasResumen.dias_max} día${entregasResumen.dias_max === 1 ? '' : 's'}`
+                  : ' · todos son de hoy'}
+              </p>
+            </div>
+          </div>
+          <span className="text-sm font-semibold text-amber-900">Facturar ahora →</span>
+        </Link>
+      )}
 
       {/* Gráficas */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">

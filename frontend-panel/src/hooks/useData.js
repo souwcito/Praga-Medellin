@@ -13,6 +13,7 @@ import {
   clientesApi,
   pedidosApi,
   apartadosApi,
+  entregasApi,
   duenoApi,
   codigosApi,
 } from '../services/api'
@@ -146,6 +147,31 @@ export const useApartados = (params) =>
 
 export const usePedidos = () =>
   useQuery({ queryKey: ['pedidos'], queryFn: pedidosApi.getPedidos, staleTime: 30000 })
+
+// Domicilios contra entrega: listado, detalle y contador para menú/dashboard.
+export const useEntregas = (params) =>
+  useQuery({
+    queryKey: ['entregas', params],
+    queryFn: () => entregasApi.list(params),
+    staleTime: 10000,
+    keepPreviousData: true,
+  })
+
+export const useEntregaDetalle = (id) =>
+  useQuery({
+    queryKey: ['entrega', id],
+    queryFn: () => entregasApi.detalle(id),
+    enabled: Boolean(id),
+    staleTime: 5000,
+  })
+
+export const useEntregasResumen = () =>
+  useQuery({
+    queryKey: ['entregas-resumen'],
+    queryFn: entregasApi.resumen,
+    staleTime: 30000,
+    refetchInterval: 60000,
+  })
 
 export const useDuenoResumen = () =>
   useQuery({ queryKey: ['dueno-resumen'], queryFn: duenoApi.getResumen, staleTime: 15000 })

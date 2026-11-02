@@ -20,6 +20,7 @@ class Devolucion extends Model
         'total_devuelto',
         'total_cambio',
         'diferencia',
+        'monto_pagado',
         'metodo_pago',
         'motivo',
         'estado',

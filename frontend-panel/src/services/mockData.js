@@ -14,12 +14,14 @@ export const sedes = [
 // Vendedores de las 4 sedes. No inician sesión: el panel usa una cuenta única
 // y el vendedor se elige al facturar en el POS.
 export const empleados = [
-  { id: 1, nombre: 'Michael', sede_id: 1, rol: 'cajero' },
+  { id: 1, nombre: 'María José', sede_id: 1, rol: 'cajero' },
   { id: 2, nombre: 'Miguel', sede_id: 2, rol: 'cajero' },
   { id: 3, nombre: 'Liseth', sede_id: 3, rol: 'cajero' },
-  { id: 4, nombre: 'Bibiana', sede_id: 3, rol: 'cajero' },
-  { id: 5, nombre: 'Sara', sede_id: 4, rol: 'cajero' },
+  { id: 4, nombre: 'Paulina', sede_id: 3, rol: 'cajero' },
+  { id: 5, nombre: 'Camila', sede_id: 4, rol: 'cajero' },
   { id: 6, nombre: 'Oscar', sede_id: 3, rol: 'administrador' },
+  { id: 7, nombre: 'Bibiana', sede_id: 3, rol: 'cajero' },
+  { id: 8, nombre: 'Maicol', sede_id: 1, rol: 'cajero' },
 ]
 
 // ---------------------------------------------------------------------------
